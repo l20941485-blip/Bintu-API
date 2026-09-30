@@ -1,0 +1,1 @@
+"""Bintu Data Extraction API application package."""

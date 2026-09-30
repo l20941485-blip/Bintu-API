@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: bintu-data-extraction-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: API_KEY
+        generateValue: true
+      - key: RAPIDAPI_PROXY_SECRET
+        sync: false
