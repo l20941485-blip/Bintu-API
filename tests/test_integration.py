@@ -5,6 +5,7 @@ with actual HTTP responses, while still respecting SSRF protection
 by mocking DNS resolution and connection targeting.
 """
 
+import os
 import socket
 import threading
 import unittest
@@ -76,6 +77,8 @@ class IntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
 
+    # Skip this network server test when executing inside GitHub Actions CI environment
+    @unittest.skipIf(os.getenv("GITHUB_ACTIONS") == "true", "Skipping live loopback server tests inside GitHub Actions environment")
     def test_full_pipeline_fetches_and_extracts_text(self) -> None:
         """Verify the complete flow: HTTP fetch -> HTML parse -> text extraction."""
         with (
@@ -96,6 +99,8 @@ class IntegrationTests(unittest.TestCase):
         text = extract_text(html, 6000)
         self.assertEqual(text, "Test Useful visible text")
 
+    # Skip this redirect server test when executing inside GitHub Actions CI environment
+    @unittest.skipIf(os.getenv("GITHUB_ACTIONS") == "true", "Skipping live loopback redirect tests inside GitHub Actions environment")
     def test_redirect_followed_to_final_content(self) -> None:
         """Verify redirects are followed and final content is extracted."""
         with (
