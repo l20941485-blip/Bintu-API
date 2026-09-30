@@ -1,0 +1,27 @@
+# VCS and tooling
+.git
+.github
+
+# Local environments and caches
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+
+# Scratch output and secrets
+tests_out.txt
+*.out
+*.log
+.env
+
+# Development-only files that must not ship in the runtime image
+*.md
+Dockerfile
+docker-compose.yml
+render.yaml
+requirements-dev.txt
+test_*.py
+tests/
+smoke_check.py

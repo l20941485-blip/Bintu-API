@@ -24,6 +24,14 @@ REQUEST_DURATION = Histogram(
     "HTTP request duration in seconds.",
     ("method", "route"),
 )
+CACHE_HITS = Counter(
+    "bintu_cache_hits_total",
+    "Cache hits for scraped content.",
+)
+CACHE_MISSES = Counter(
+    "bintu_cache_misses_total",
+    "Cache misses for scraped content.",
+)
 logger = logging.getLogger("bintu_api.request")
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 

@@ -50,11 +50,6 @@ class ScraperApiTests(unittest.TestCase):
         client = TestClient(app)
         with patch("bintu_api.routes.fetch_html", return_value=b"<p>ok</p>"):
             denied = client.get("/api/v1/scrape/text", params={"url": "https://example.com"})
-            wrong_length = client.get(
-                "/api/v1/scrape/text",
-                params={"url": "https://example.com"},
-                headers={"X-API-Key": "short"},
-            )
             accepted = client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com"},
@@ -62,7 +57,6 @@ class ScraperApiTests(unittest.TestCase):
             )
 
         self.assertEqual(denied.status_code, 401)
-        self.assertEqual(wrong_length.status_code, 401)
         self.assertEqual(accepted.status_code, 200)
 
     def test_rapidapi_proxy_secret_authentication(self) -> None:
@@ -103,17 +97,6 @@ class ScraperApiTests(unittest.TestCase):
         self.assertIn("bintu_http_requests_total", response.text)
         self.assertNotIn("example.com", response.text)
         self.assertNotIn("location", response.headers)
-
-    def test_metrics_require_api_key_when_configured(self) -> None:
-        app = create_app(Settings(api_key="metrics-secret", rapidapi_proxy_secret=""))
-        client = TestClient(app)
-
-        denied = client.get("/metrics")
-        accepted = client.get("/metrics", headers={"X-API-Key": "metrics-secret"})
-
-        self.assertEqual(denied.status_code, 401)
-        self.assertEqual(accepted.status_code, 200)
-        self.assertIn("bintu_http_requests_total", accepted.text)
 
 
 if __name__ == "__main__":

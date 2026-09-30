@@ -5,3 +5,9 @@ venv/
 .env
 .pytest_cache/
 .coverage
+
+# Local test captures and scratch output
+tests_out.txt
+*.out
+*.log
+

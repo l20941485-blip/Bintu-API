@@ -8,6 +8,7 @@ from bintu_api.scraper import (
     TargetURLRejected,
     TooManyRedirects,
     UnsupportedMediaType,
+    UpstreamHTTPError,
     _PinnedHTTPConnection,
     _read_html_response,
     fetch_html,
@@ -154,6 +155,62 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             with self.assertRaises(TooManyRedirects):
                 fetch_html("http://target.example/", self.settings)
+
+    def test_plain_200_without_location_header_returns_body(self):
+        """Regression: a 200 with no Location header must not be treated as a redirect."""
+        connection = FakeConnection(
+            FakeResponse(status=200, headers={"Content-Type": "text/html"}, body=b"<p>hello</p>")
+        )
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", return_value=connection),
+        ):
+            body = fetch_html("http://target.example/", self.settings)
+
+        self.assertEqual(body, b"<p>hello</p>")
+        self.assertEqual(connection.request_args[2]["Accept-Encoding"], "identity")
+        self.assertTrue(connection.closed)
+
+    def test_redirect_makes_exactly_two_requests_and_returns_final_body(self):
+        """Regression: one Location header must trigger exactly one re-fetch."""
+        first = FakeConnection(
+            FakeResponse(status=302, headers={"Location": "/final"}, body=b"")
+        )
+        second = FakeConnection(FakeResponse(status=200, body=b"<p>final</p>"))
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
+        ):
+            body = fetch_html("http://target.example/start", self.settings)
+
+        self.assertEqual(body, b"<p>final</p>")
+        self.assertEqual(second.request_args[1], "/final")
+        self.assertTrue(first.closed)
+        self.assertTrue(second.closed)
+
+    def test_upstream_error_status_raises_upstream_http_error(self):
+        connection = FakeConnection(
+            FakeResponse(status=404, headers={"Content-Type": "text/html"}, body=b"")
+        )
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", return_value=connection),
+        ):
+            with self.assertRaises(UpstreamHTTPError) as raised:
+                fetch_html("http://target.example/missing", self.settings)
+
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_non_ascii_and_space_in_request_target_are_percent_encoded(self):
+        """http.client writes the request line as latin-1, so the target must be ASCII."""
+        connection = FakeConnection(FakeResponse(body=b"<p>ok</p>"))
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", return_value=connection),
+        ):
+            fetch_html("http://target.example/café?q=a b", self.settings)
+
+        self.assertEqual(connection.request_args[1], "/caf%C3%A9?q=a%20b")
 
 
 if __name__ == "__main__":

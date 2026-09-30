@@ -3,7 +3,7 @@ import ipaddress
 import re
 import socket
 import ssl
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
@@ -103,6 +103,9 @@ def _parse_target(url: str) -> tuple[object, str, int, str]:
     path = parsed.path or "/"
     if parsed.query:
         path = f"{path}?{parsed.query}"
+    # http.client encodes the request line as latin-1, so percent-encode anything
+    # outside ASCII (already-encoded %XX sequences are preserved as-is).
+    path = quote(path, safe="/?&=%:@+;,-._~!*'()$")
     return parsed, host, port, path
 
 
@@ -118,8 +121,14 @@ def _host_header(host: str, port: int, scheme: str) -> str:
 
 
 def fetch_html(url: str, settings: Settings) -> bytes:
+    """Fetch a public HTML page, following redirects and re-validating every hop.
+
+    Each hop performs a fresh DNS resolution and pins the connection to a
+    validated public address, so a public hostname can never redirect the
+    request into a private network (DNS rebinding included).
+    """
     current_url = url
-    for redirect_number in range(settings.max_redirects + 1):
+    for _ in range(settings.max_redirects + 1):
         parsed, host, port, path = _parse_target(current_url)
         address = resolve_public_addresses(host, port)[0]
         connection = _make_connection(parsed, host, address, port, settings.request_timeout_seconds)
@@ -129,22 +138,22 @@ def fetch_html(url: str, settings: Settings) -> bytes:
                 path,
                 headers={
                     "Accept": "text/html, application/xhtml+xml",
+                    "Accept-Encoding": "identity",
                     "Connection": "close",
                     "Host": _host_header(host, port, parsed.scheme),
                     "User-Agent": USER_AGENT,
                 },
             )
             response = connection.getresponse()
-            if response.status in REDIRECT_STATUSES:
+            status = response.status
+            if status in REDIRECT_STATUSES:
                 location = response.getheader("Location")
                 if not location:
-                    raise UpstreamHTTPError(response.status, "redirect without a Location header")
-                if redirect_number >= settings.max_redirects:
-                    raise TooManyRedirects("The target exceeded the redirect limit")
+                    raise UpstreamHTTPError(status, "redirect without a Location header")
                 current_url = urljoin(current_url, location)
                 continue
-            if response.status < 200 or response.status >= 300:
-                raise UpstreamHTTPError(response.status, response.reason or "upstream error")
+            if not 200 <= status < 300:
+                raise UpstreamHTTPError(status, response.reason or "upstream error")
             return _read_html_response(response, settings.max_html_bytes)
         finally:
             connection.close()
@@ -177,9 +186,31 @@ def _read_html_response(response, max_bytes: int) -> bytes:
         html_bytes.extend(chunk)
 
 
-def extract_text(html_bytes: bytes, max_characters: int) -> str:
+def extract_text(
+    html_bytes: bytes,
+    max_characters: int,
+    include_nav: bool = False,
+    include_header: bool = False,
+    include_footer: bool = False,
+) -> str:
+    """Extract visible text from HTML bytes.
+
+    Args:
+        html_bytes: Raw HTML content.
+        max_characters: Maximum number of characters to return.
+        include_nav: If True, preserve <nav> elements (removed by default).
+        include_header: If True, preserve <header> elements (removed by default).
+        include_footer: If True, preserve <footer> elements (removed by default).
+    """
     soup = BeautifulSoup(html_bytes, "html.parser")
-    for node in soup(["script", "style", "header", "footer", "nav"]):
+    tags_to_remove = ["script", "style"]
+    if not include_nav:
+        tags_to_remove.append("nav")
+    if not include_header:
+        tags_to_remove.append("header")
+    if not include_footer:
+        tags_to_remove.append("footer")
+    for node in soup(tags_to_remove):
         node.decompose()
     text = soup.get_text(separator=" ", strip=True)
     return re.sub(r"\s+", " ", text).strip()[:max_characters]

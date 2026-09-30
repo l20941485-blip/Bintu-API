@@ -4,7 +4,9 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    # Trust X-Forwarded-For only from Render's own proxy range; '*' would let any
+    # caller spoof the client IP and bypass the burst guard entirely.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='100.64.0.0/10'
     healthCheckPath: /healthz
     autoDeployTrigger: checksPass
     envVars:

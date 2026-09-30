@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - API_KEY=${API_KEY:-}
+      - RAPIDAPI_PROXY_SECRET=${RAPIDAPI_PROXY_SECRET:-}
+      - REDIS_URL=${REDIS_URL:-}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    profiles:
+      - redis

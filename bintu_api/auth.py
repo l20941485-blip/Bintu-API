@@ -7,14 +7,7 @@ from bintu_api.settings import Settings
 
 
 def _secret_matches(provided: str, expected: str) -> bool:
-    if not expected:
-        return False
-    provided_bytes = provided.encode("utf-8")
-    expected_bytes = expected.encode("utf-8")
-    # Python < 3.14 raises ValueError when lengths differ; keep that as a failed match.
-    if len(provided_bytes) != len(expected_bytes):
-        return False
-    return hmac.compare_digest(provided_bytes, expected_bytes)
+    return bool(expected) and hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
 def has_valid_proxy_secret(request: Request, settings: Settings) -> bool:
