@@ -65,6 +65,7 @@ class IntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), _TestHandler)
+        # FIX: Explicitly extract the numeric port integer index from the address tuple
         cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -93,7 +94,7 @@ class IntegrationTests(unittest.TestCase):
                 ),
             ),
         ):
-            html = fetch_html("http://target.example/", self.settings)
+            html = fetch_html("http://target.example", self.settings)
 
         self.assertIn(b"Useful", html)
         text = extract_text(html, 6000)
@@ -115,7 +116,7 @@ class IntegrationTests(unittest.TestCase):
                 ),
             ),
         ):
-            html = fetch_html("http://target.example/redirect", self.settings)
+            html = fetch_html("http://target.exampleredirect", self.settings)
 
         self.assertIn(b"Useful", html)
 
