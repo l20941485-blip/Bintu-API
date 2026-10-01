@@ -16,8 +16,8 @@ from bintu_api.scraper import extract_text, fetch_html
 from bintu_api.settings import Settings
 
 
-def _dns_result(address: str, family: int = socket.AF_INET):
-    return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, 80))
+def _dns_result(address: str, family: int = socket.AF_INET, port: int = 80):
+    return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, port))
 
 
 # Captured before any patching happens. `bintu_api.scraper.socket` is the same
@@ -25,6 +25,13 @@ def _dns_result(address: str, family: int = socket.AF_INET):
 # function; a side_effect that called socket.create_connection(...) would then
 # recurse into the mock instead of opening a socket.
 _REAL_CREATE_CONNECTION = socket.create_connection
+_REAL_GETADDRINFO = socket.getaddrinfo
+
+
+def _resolve_test_dns(host: str, port: int, *args, **kwargs):
+    if host == "target.example":
+        return [_dns_result("93.184.216.34", port=port)]
+    return _REAL_GETADDRINFO(host, port, *args, **kwargs)
 
 
 class _TestHandler(BaseHTTPRequestHandler):
@@ -64,8 +71,9 @@ class _TestHandler(BaseHTTPRequestHandler):
 class IntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        # Bind to localhost
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), _TestHandler)
-        # FIX: Explicitly extract the numeric port integer index from the address tuple
+        # FIX: Extract only the port number integer (index 1) from the address tuple
         cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -85,7 +93,7 @@ class IntegrationTests(unittest.TestCase):
         with (
             patch(
                 "bintu_api.scraper.socket.getaddrinfo",
-                return_value=[_dns_result("93.184.216.34")],
+                side_effect=_resolve_test_dns,
             ),
             patch(
                 "bintu_api.scraper.socket.create_connection",
@@ -107,7 +115,7 @@ class IntegrationTests(unittest.TestCase):
         with (
             patch(
                 "bintu_api.scraper.socket.getaddrinfo",
-                return_value=[_dns_result("93.184.216.34")],
+                side_effect=_resolve_test_dns,
             ),
             patch(
                 "bintu_api.scraper.socket.create_connection",
@@ -116,7 +124,7 @@ class IntegrationTests(unittest.TestCase):
                 ),
             ),
         ):
-            html = fetch_html("http://target.exampleredirect", self.settings)
+            html = fetch_html("http://target.example/redirect", self.settings)
 
         self.assertIn(b"Useful", html)
 
@@ -163,6 +171,7 @@ class IntegrationTests(unittest.TestCase):
         """Verify text is truncated to max_characters."""
         html = b"<html><body><main>" + b"x" * 100 + b"</main></body></html>"
         text = extract_text(html, 50)
+        # FIX: Removed the double len() call bug
         self.assertEqual(len(text), 50)
 
 
