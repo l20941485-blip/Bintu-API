@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
       - name: Run offline tests
-         env:
+        env:
           API_KEY: ci_test_placeholder_key_string_32_chars_long
           BINTU_API_KEY: ci_test_placeholder_key_string_32_chars_long
           BINTU_BASE_URL: http://127.0.0.1:8000
