@@ -2,6 +2,47 @@
 
 A small FastAPI service that extracts readable text from public HTML pages. It limits upstream responses to 1 MiB, accepts HTML/XHTML only, pins outbound connections to validated public IPs, and applies a 60-request per-minute process-local burst limit.
 
+## Live API
+
+The service is live on Render and ready to test:
+
+- Base URL: https://bintu-api.onrender.com
+- OpenAPI docs: https://bintu-api.onrender.com/docs
+- Health check: https://bintu-api.onrender.com/healthz
+
+### Health check
+
+```bash
+curl https://bintu-api.onrender.com/healthz
+```
+
+Example response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Scrape text
+
+```bash
+curl -X GET \
+  "https://bintu-api.onrender.com/api/v1/scrape/text?url=https://example.com&include_nav=false&include_header=false&include_footer=false" \
+  -H "accept: application/json"
+```
+
+Example response:
+
+```json
+{
+  "url": "https://example.com",
+  "text": "Example Domain This domain is for use in documentation examples without needing permission. This is not a service, avoid relying on it for testing and monitoring purposes. Learn more"
+}
+```
+
+If the service is configured with an API key, include it as `X-API-Key` in the request headers.
+
 ## Run Locally
 
 Use Python 3.12. Install the application and test dependencies, then start the service:
