@@ -1,3 +1,4 @@
+import gzip
 import io
 import socket
 import unittest
@@ -7,11 +8,13 @@ from bintu_api.scraper import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
+    UnsupportedContentEncoding,
     UnsupportedMediaType,
     UpstreamHTTPError,
     _PinnedHTTPConnection,
     _read_html_response,
     fetch_html,
+    fetch_html_document,
     resolve_public_addresses,
 )
 from bintu_api.settings import Settings
@@ -141,6 +144,34 @@ class ScraperNetworkTests(unittest.TestCase):
 
         self.assertEqual(response._body.tell(), 0)
 
+    def test_html_reader_decodes_gzip_with_decoded_size_limit(self):
+        body = gzip.compress(b"<p>compressed HTML</p>")
+        response = FakeResponse(
+            headers={"Content-Type": "text/html", "Content-Encoding": "gzip"},
+            body=body,
+        )
+
+        self.assertEqual(_read_html_response(response, 4096), b"<p>compressed HTML</p>")
+
+    def test_html_reader_rejects_gzip_expansion_over_limit(self):
+        body = gzip.compress(b"x" * 4097)
+        response = FakeResponse(
+            headers={"Content-Type": "text/html", "Content-Encoding": "gzip"},
+            body=body,
+        )
+
+        with self.assertRaises(PayloadTooLarge):
+            _read_html_response(response, 4096)
+
+    def test_html_reader_rejects_unsupported_content_encoding(self):
+        response = FakeResponse(
+            headers={"Content-Type": "text/html", "Content-Encoding": "br"},
+            body=b"compressed",
+        )
+
+        with self.assertRaises(UnsupportedContentEncoding):
+            _read_html_response(response, 4096)
+
     def test_redirect_limit_is_enforced(self):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
         self.settings = self.settings.__class__(
@@ -170,6 +201,21 @@ class ScraperNetworkTests(unittest.TestCase):
         self.assertEqual(body, b"<p>hello</p>")
         self.assertEqual(connection.request_args[2]["Accept-Encoding"], "identity")
         self.assertTrue(connection.closed)
+
+    def test_fetch_html_document_keeps_response_charset(self):
+        response = FakeResponse(
+            headers={"Content-Type": "text/html; charset=iso-8859-1"},
+            body=b"<p>caf\xe9</p>",
+        )
+        connection = FakeConnection(response)
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", return_value=connection),
+        ):
+            document = fetch_html_document("http://target.example/", self.settings)
+
+        self.assertEqual(document.body, b"<p>caf\xe9</p>")
+        self.assertEqual(document.charset, "iso-8859-1")
 
     def test_redirect_makes_exactly_two_requests_and_returns_final_body(self):
         """Regression: one Location header must trigger exactly one re-fetch."""

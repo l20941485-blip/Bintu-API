@@ -1,0 +1,5 @@
+# Language registry
+Label | Language
+--- | ---
+测试 | Chinese
+испытание | Russian

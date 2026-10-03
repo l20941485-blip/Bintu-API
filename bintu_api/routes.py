@@ -17,10 +17,11 @@ from bintu_api.scraper import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
+    UnsupportedContentEncoding,
     UnsupportedMediaType,
     UpstreamHTTPError,
-    extract_text,
-    fetch_html,
+    extract_text_result,
+    fetch_html_document,
 )
 
 
@@ -58,6 +59,13 @@ def version_info(request: Request) -> VersionResponse:
 @router.get(
     "/api/v1/scrape/text",
     response_model=ScrapeTextResponse,
+    summary="Extract readable text from a public web page",
+    description=(
+        "Fetches a public HTML or XHTML page and returns readable text. "
+        "The service prefers article or main content, formats headings and tables, "
+        "and reports whether the configured text limit truncated the result. "
+        "It does not execute JavaScript or bypass access controls."
+    ),
     responses={
         status_code: {"model": ErrorResponse}
         for status_code in (400, 401, 413, 415, 429, 502, 504)
@@ -82,21 +90,27 @@ def scrape_text(
         if cached is not None:
             CACHE_HITS.inc()
             logger.info("cache_hit url_hash=%s", cache_key[:12])
-            html_bytes = cached
+            document = cached
         else:
             CACHE_MISSES.inc()
             logger.info("cache_miss url_hash=%s", cache_key[:12])
-            html_bytes = fetch_html(url, settings)
-            cache.set(cache_key, html_bytes)
+            document = fetch_html_document(url, settings)
+            cache.set(cache_key, document)
 
-        text = extract_text(
-            html_bytes,
+        extracted = extract_text_result(
+            document.body,
             settings.max_text_characters,
             include_nav=include_nav,
             include_header=include_header,
             include_footer=include_footer,
+            from_encoding=document.charset,
+            base_url=document.final_url or url,
         )
-        return ScrapeTextResponse(url=url, text=text)
+        return ScrapeTextResponse(
+            url=url,
+            text=extracted.text,
+            truncated=extracted.truncated,
+        )
     except HTTPException:
         raise
     except TargetURLRejected as error:
@@ -115,6 +129,15 @@ def scrape_text(
                 "code": "unsupported_media_type",
                 "message": str(error),
                 "hint": "Only HTML and XHTML pages are supported",
+            },
+        ) from error
+    except UnsupportedContentEncoding as error:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "unsupported_content_encoding",
+                "message": str(error),
+                "hint": "The target returned an unsupported or invalid compressed response",
             },
         ) from error
     except PayloadTooLarge as error:

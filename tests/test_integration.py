@@ -10,9 +10,10 @@ import socket
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from unittest.mock import patch
 
-from bintu_api.scraper import extract_text, fetch_html
+from bintu_api.scraper import extract_text, extract_text_result, fetch_html
 from bintu_api.settings import Settings
 
 
@@ -106,7 +107,7 @@ class IntegrationTests(unittest.TestCase):
 
         self.assertIn(b"Useful", html)
         text = extract_text(html, 6000)
-        self.assertEqual(text, "Test Useful visible text")
+        self.assertEqual(text, "# Test\nUseful visible text")
 
     # Skip this redirect server test when executing inside GitHub Actions CI environment
     @unittest.skipIf(os.getenv("GITHUB_ACTIONS") == "true", "Skipping live loopback redirect tests inside GitHub Actions environment")
@@ -179,9 +180,123 @@ class IntegrationTests(unittest.TestCase):
 
         self.assertEqual(
             text,
-            "Page title\nFirst paragraph!\nSecond paragraph\ncontinued here."
+            "# Page title\nFirst paragraph!\nSecond paragraph\ncontinued here."
             "\nFirst item\nSecond item",
         )
+
+    def test_extract_text_deduplicates_matching_document_title(self) -> None:
+        html = (
+            b"<html><head><title>Page title</title></head>"
+            b"<body><h1>Page title</h1><p>Content.</p></body></html>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "# Page title\nContent.")
+
+    def test_extract_text_formats_heading_levels(self) -> None:
+        html = b"<h1>Main title</h1><h2>Section</h2><h3>Subsection</h3>"
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "# Main title\n## Section\n### Subsection")
+
+    def test_extract_text_prefers_article_over_surrounding_page_content(self) -> None:
+        html = (
+            b"<html><body><main><aside>Sidebar noise</aside>"
+            b"<article><h1>Article heading</h1><p>Article content.</p></article>"
+            b"<aside>Related links</aside></main></body></html>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "# Article heading\nArticle content.")
+
+    def test_extract_text_uses_main_when_article_is_missing(self) -> None:
+        html = (
+            b"<html><body><aside>Outside sidebar</aside>"
+            b"<main><h1>Main heading</h1><p>Main content.</p></main>"
+            b"<aside>More sidebar</aside></body></html>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "# Main heading\nMain content.")
+
+    def test_extract_text_falls_back_to_document_when_no_main_content(self) -> None:
+        html = b"<html><body><h1>Fallback heading</h1><p>Fallback content.</p></body></html>"
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "# Fallback heading\nFallback content.")
+
+    def test_extract_text_removes_hidden_and_common_boilerplate(self) -> None:
+        html = (
+            b"<article><h1>Story</h1><p>Useful article text.</p>"
+            b"<div class='share-tools'><button>Share</button></div>"
+            b"<div class='related-content'>Related story</div>"
+            b"<div hidden>Hidden text</div><div style='display: none'>Invisible</div>"
+            b"<custom-element>Text in attribute-less element</custom-element>"
+            b"</article>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(
+            text,
+            "# Story\nUseful article text.\nText in attribute-less element",
+        )
+
+    def test_extract_text_preserves_links_as_absolute_destinations(self) -> None:
+        html = b"<main><p>Read <a href='/guide/start?lang=en'>the guide</a>.</p></main>"
+
+        extracted = extract_text_result(
+            html,
+            6000,
+            base_url="https://example.com/redirected/page",
+        )
+
+        self.assertEqual(
+            extracted.text,
+            "Read the guide (https://example.com/guide/start?lang=en).",
+        )
+        self.assertFalse(extracted.truncated)
+
+    def test_extract_text_marks_truncation_and_ends_at_word_boundary(self) -> None:
+        extracted = extract_text_result(b"<p>one two three four</p>", 10)
+
+        self.assertEqual(extracted.text, "one two")
+        self.assertTrue(extracted.truncated)
+
+    def test_extract_text_uses_declared_charset_for_unicode(self) -> None:
+        html = '<meta charset="utf-8"><p>إختبار — café</p>'.encode("utf-8")
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "إختبار — café")
+
+    def test_extract_text_formats_table_rows(self) -> None:
+        html = (
+            b"<table><thead><tr><th>Domain</th><th>Language</th></tr></thead>"
+            b"<tbody><tr><td>xn--kgbechtv</td><td>Arabic</td></tr>"
+            b"<tr><td>xn--hgbk6aj7f53bba</td><td>Persian</td></tr></tbody></table>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(
+            text,
+            "Domain | Language\n--- | ---\nxn--kgbechtv | Arabic\nxn--hgbk6aj7f53bba | Persian",
+        )
+
+    def test_quality_fixtures_match_golden_output(self) -> None:
+        fixture_dir = Path(__file__).parent / "fixtures" / "extraction_quality"
+        for html_path in sorted(fixture_dir.glob("*.html")):
+            with self.subTest(fixture=html_path.name):
+                expected_path = html_path.with_suffix(".txt")
+                expected = expected_path.read_text(encoding="utf-8").rstrip("\n")
+                actual = extract_text(html_path.read_bytes(), 6000)
+                self.assertEqual(actual, expected)
 
     def test_extract_text_respects_max_characters(self) -> None:
         """Verify text is truncated to max_characters."""

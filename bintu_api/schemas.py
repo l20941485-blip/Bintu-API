@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ErrorDetail(BaseModel):
@@ -23,10 +23,15 @@ class HealthResponse(BaseModel):
 
 class ScrapeTextResponse(BaseModel):
     url: str
-    # Length is enforced by extract_text() against settings.max_text_characters;
+    # Length is enforced by extract_text_result() against settings.max_text_characters;
     # duplicating the limit here as a pydantic constraint would turn a raised
     # limit into a response-serialization 500.
-    text: str
+    text: str = Field(
+        description="Readable extracted text, limited by the service's configured character cap."
+    )
+    truncated: bool = Field(
+        description="True when extracted content exceeded the character cap and text was shortened."
+    )
 
 
 class VersionResponse(BaseModel):

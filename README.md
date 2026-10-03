@@ -1,6 +1,6 @@
 # Bintu Data Extraction API
 
-A small FastAPI service that extracts readable text from public HTML pages. It limits upstream responses to 1 MiB, accepts HTML/XHTML only, pins outbound connections to validated public IPs, and applies a 60-request per-minute process-local burst limit.
+Bintu is a FastAPI-based API for extracting readable text from public HTML pages. It limits upstream responses to 1 MiB, accepts HTML/XHTML only, pins outbound connections to validated public IPs, and applies a 60-request per-minute process-local burst limit.
 
 ## Live API
 
@@ -26,22 +26,102 @@ Example response:
 
 ### Scrape text
 
-```bash
-curl -X GET \
-  "https://bintu-api.onrender.com/api/v1/scrape/text?url=https://example.com&include_nav=false&include_header=false&include_footer=false" \
-  -H "accept: application/json"
+For direct access to the deployed service, set your API key in PowerShell. The secure prompt avoids echoing the key as you type:
+
+```powershell
+$env:BINTU_BASE_URL = "https://bintu-api.onrender.com"
+$secure = Read-Host "Paste your Render API_KEY" -AsSecureString
+$env:BINTU_API_KEY = [System.Net.NetworkCredential]::new("", $secure).Password
+Remove-Variable secure
 ```
 
-Example response:
+Send an authenticated scrape request:
 
-```json
-{
-  "url": "https://example.com",
-  "text": "Example Domain This domain is for use in documentation examples without needing permission. This is not a service, avoid relying on it for testing and monitoring purposes. Learn more"
+```powershell
+$target = "https://www.iana.org/domains/reserved"
+$encodedUrl = [uri]::EscapeDataString($target)
+$headers = @{ "X-API-Key" = $env:BINTU_API_KEY }
+
+try {
+    $result = Invoke-RestMethod `
+        -Uri "$env:BINTU_BASE_URL/api/v1/scrape/text?url=$encodedUrl" `
+        -Headers $headers
+    $result | ConvertTo-Json -Depth 5
+}
+catch {
+    $response = $_.Exception.Response
+    if ($response) {
+        $statusCode = [int]$response.StatusCode
+        $retryAfter = $response.Headers["Retry-After"]
+        Write-Host "HTTP $statusCode; Retry-After: $retryAfter"
+        $reader = [System.IO.StreamReader]::new($response.GetResponseStream())
+        try { $reader.ReadToEnd() } finally { $reader.Dispose() }
+    }
+    else {
+        throw
+    }
 }
 ```
 
-If the service is configured with an API key, include it as `X-API-Key` in the request headers.
+Successful response:
+
+```json
+{
+  "url": "https://www.iana.org/domains/reserved",
+  "text": "# IANA-managed Reserved Domains\n## Example domains\n...",
+  "truncated": false
+}
+```
+
+`truncated` is `true` if the extracted text exceeded the configured character limit. The API returns the requested URL in `url`.
+
+For `curl.exe` in PowerShell, the same request can be made with:
+
+```powershell
+curl.exe --get "$env:BINTU_BASE_URL/api/v1/scrape/text" `
+  --data-urlencode "url=https://www.iana.org/domains/reserved" `
+  --header "X-API-Key: $env:BINTU_API_KEY" `
+  --header "Accept: application/json"
+```
+
+The Render `API_KEY` is available in the service's Environment settings. Keep it private, do not commit it, and do not put it in a URL. The examples above keep it in the current PowerShell process environment. If no API key or proxy secret is configured (as in the default local development setup), authentication is not required. Interactive API docs are available at [`/docs`](https://bintu-api.onrender.com/docs).
+
+### Common errors
+
+Errors use a JSON `detail` object with `code`, `message`, and, when applicable, `hint`. For example, a missing or invalid key returns HTTP 401:
+
+```json
+{
+  "detail": {
+    "code": "invalid_api_key",
+    "message": "A valid API key is required."
+  }
+}
+```
+
+An invalid or unsafe URL returns HTTP 400:
+
+```json
+{
+  "detail": {
+    "code": "invalid_or_unsafe_url",
+    "message": "URL must be an absolute HTTP or HTTPS URL",
+    "hint": "URL must start with http:// or https:// and be publicly accessible"
+  }
+}
+```
+
+| HTTP status | Error code(s) | What to do |
+|---|---|---|
+| 400 | `invalid_or_unsafe_url` | Use a well-formed public HTTP or HTTPS URL. Private-network destinations are blocked. |
+| 401 | `invalid_api_key` | Send the current `X-API-Key` configured in Render. |
+| 413 | `payload_too_large` | The HTML exceeds 1 MiB after decompression. |
+| 415 | `unsupported_media_type` | The target must return HTML or XHTML. |
+| 429 | `burst_rate_limit_exceeded` | Pause for the seconds specified in the `Retry-After` response header, then retry. |
+| 502 | `upstream_http_error`, `upstream_connection_error`, `unsupported_content_encoding`, or `too_many_redirects` | The target returned an error, could not be reached, used unsupported compression, or redirected too many times. |
+| 504 | `upstream_timeout` | The target did not respond in time. |
+
+The 429 response also includes a `Retry-After` header. Avoid repeatedly retrying 4xx responses; correct the request or wait as indicated.
 
 ## Run Locally
 
@@ -75,9 +155,9 @@ docker-compose up
 
 `GET /version` returns service configuration (no secrets exposed).
 
-`GET /metrics` exposes Prometheus request counts, error counts, latency histograms, and cache hit/miss counters. It is protected by the same credentials as the API, so send `X-API-Key` (or the RapidAPI proxy header) when a key is configured. `X-Request-ID` is returned on every response; valid caller-provided IDs are preserved, otherwise the API generates one.
+`GET /metrics` exposes Prometheus request counts, error counts, latency histograms, and cache hit/miss counters. Metrics use route templates rather than request URLs and do not include scraped content. Application request logs include a request ID, method, route template, status, and duration; they do not log target URLs or page text. The Render and Docker launch configurations disable Uvicorn access logs because access-log request lines can include the `url` query parameter. It is protected by the same credentials as the API, so send `X-API-Key` (or the RapidAPI proxy header) when a key is configured. `X-Request-ID` is returned on every response; valid caller-provided IDs are preserved, otherwise the API generates one.
 
-`GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL and extracted text, with headings, paragraphs, list items, and other block elements separated by line breaks. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only. It does not execute JavaScript or bypass access controls.
+`GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL, extracted text, and a `truncated` boolean. `truncated` is `true` only when extracted content exceeded the configured text limit. When available, the extractor prefers `<article>` content, then `<main>`, and otherwise falls back to the full document. It omits hidden elements and common controls or page furniture, and renders links as `link text (absolute URL)`. Headings are marked with Markdown `#` prefixes, paragraphs and other block elements are separated by line breaks, and table cells within each row are joined with ` | ` with a separator beneath header rows. If the document title duplicates its first heading, it is omitted. Character encoding is detected from the upstream HTTP charset and HTML metadata. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only. It does not execute JavaScript or bypass access controls.
 
 ### Query Parameters
 
@@ -88,16 +168,12 @@ docker-compose up
 | `include_header` | bool | false | Preserve `<header>` elements in output |
 | `include_footer` | bool | false | Preserve `<footer>` elements in output |
 
-### Error Responses
-
-Expected errors use a structured `detail` object with `code`, `message`, and optional `hint` fields. Common status codes are 400 for invalid URLs, 401 for invalid credentials, 413 for pages above 1 MiB, 415 for non-HTML content, 429 for the local burst guard, 502 for target HTTP/connection failures, and 504 for target timeouts. Every 429 response carries a `Retry-After` header so well-behaved clients can back off.
-
 ### Service Limits
 
 - Request timeout: 10 seconds per connection attempt.
 - Redirects: at most 5, with URL and DNS validation repeated for every destination.
-- HTML body: at most 1 MiB, read in chunks no larger than 4 KiB.
-- Text response: at most 6,000 characters.
+- HTML body: at most 1 MiB after decompression, read in chunks no larger than 4 KiB. Gzip-encoded HTML is supported with the same decoded-size limit.
+- Text response: at most 6,000 characters; `truncated` is true when the content exceeds the limit. Truncated text ends at the last available word boundary.
 - Local abuse guard: 60 requests per client identity per 60 seconds, in process memory only. Behind Render, a client IP is honored only from Render's proxy range (`100.64.0.0/10`), so the guard cannot be bypassed by spoofing `X-Forwarded-For`. Set `REDIS_URL` to share the counter across instances; the window TTL is set once per window, and if Redis is unreachable the guard falls back to process memory rather than failing requests.
 - Cache: 5-minute TTL for successful responses, bounded to 64 entries per instance with least-recently-used eviction, so memory stays bounded even when callers keep requesting novel URLs. `CACHE_TTL_SECONDS=0` disables caching.
 - Paid subscription quotas and billing: configured and enforced by RapidAPI, not by this service.
@@ -141,5 +217,7 @@ Integration tests run a real local HTTP server on a loopback port to exercise th
 ```powershell
 python -m unittest tests.test_integration -v
 ```
+
+The synthetic golden fixtures in `tests/fixtures/extraction_quality/` cover article, navigation-heavy, and table-heavy HTML without relying on third-party sites. Update a fixture and its expected `.txt` output only after reviewing an intentional extraction change.
 
 GitHub Actions runs the offline test suite for pushes and pull requests. Render is configured to deploy linked commits only after CI checks pass. After deploying, verify real upstream fetching with `python smoke_check.py` (set `BINTU_BASE_URL` and `BINTU_API_KEY`); mocked tests cannot catch upstream HTTP regressions on their own.
