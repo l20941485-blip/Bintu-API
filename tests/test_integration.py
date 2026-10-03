@@ -275,6 +275,15 @@ class IntegrationTests(unittest.TestCase):
 
         self.assertEqual(text, "إختبار — café")
 
+    def test_extract_text_cleans_invisible_word_separators(self) -> None:
+        html = (
+            "<meta charset='utf-8'><main><p>kept \u200bin the cockpit</p></main>"
+        ).encode("utf-8")
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(text, "kept in the cockpit")
+
     def test_extract_text_formats_table_rows(self) -> None:
         html = (
             b"<table><thead><tr><th>Domain</th><th>Language</th></tr></thead>"
@@ -287,6 +296,22 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(
             text,
             "Domain | Language\n--- | ---\nxn--kgbechtv | Arabic\nxn--hgbk6aj7f53bba | Persian",
+        )
+
+    def test_extract_text_prefers_common_div_main_container(self) -> None:
+        html = (
+            b"<html><body><nav>Site navigation</nav>"
+            b"<div id='main'><h1>HTML Tables</h1><p>Example data</p>"
+            b"<table><tr><th>Company</th><th>Country</th></tr>"
+            b"<tr><td>Acme</td><td>Gambia</td></tr></table></div>"
+            b"</body></html>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(
+            text,
+            "# HTML Tables\nExample data\nCompany | Country\n--- | ---\nAcme | Gambia",
         )
 
     def test_quality_fixtures_match_golden_output(self) -> None:

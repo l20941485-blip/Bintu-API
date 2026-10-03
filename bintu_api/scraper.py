@@ -381,7 +381,24 @@ def extract_text_result(
     if soup.title:
         soup.title.decompose()
 
-    content_root = soup.find("article") or soup.find("main") or soup
+    content_root = (
+        soup.find("article")
+        or soup.find("main")
+        or soup.find(attrs={"role": re.compile(r"^main$", re.IGNORECASE)})
+        or soup.find(
+            id=re.compile(
+                r"^(?:main|content|article|post|entry)(?:[-_](?:main|content|article|body))?$",
+                re.IGNORECASE,
+            )
+        )
+        or soup.find(
+            class_=re.compile(
+                r"^(?:main|content|article|post|entry)(?:[-_](?:main|content|article|body))?$",
+                re.IGNORECASE,
+            )
+        )
+        or soup
+    )
     content_roots = [content_root]
     if content_root is not soup:
         for tag_name, should_include in (
@@ -448,6 +465,7 @@ def extract_text_result(
     text = boundary.join(root.get_text(separator=" ", strip=True) for root in content_roots)
     lines = []
     for line in text.split(boundary):
+        line = re.sub(r"[\u200b\u2060\ufeff]", " ", line)
         line = re.sub(r"\s+", " ", line).strip()
         line = re.sub(r"\s+([,.;:!?])", r"\1", line)
         if line:
