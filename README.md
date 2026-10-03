@@ -77,7 +77,7 @@ docker-compose up
 
 `GET /metrics` exposes Prometheus request counts, error counts, latency histograms, and cache hit/miss counters. It is protected by the same credentials as the API, so send `X-API-Key` (or the RapidAPI proxy header) when a key is configured. `X-Request-ID` is returned on every response; valid caller-provided IDs are preserved, otherwise the API generates one.
 
-`GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL and extracted text. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only. It does not execute JavaScript or bypass access controls.
+`GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL and extracted text, with headings, paragraphs, list items, and other block elements separated by line breaks. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only. It does not execute JavaScript or bypass access controls.
 
 ### Query Parameters
 

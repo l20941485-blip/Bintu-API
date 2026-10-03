@@ -167,6 +167,22 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("Footer content", text_all)
         self.assertIn("Nav content", text_all)
 
+    def test_extract_text_preserves_block_boundaries(self) -> None:
+        html = (
+            b"<h1>Page title</h1>"
+            b"<p>First <strong>paragraph</strong>!</p>"
+            b"<p>Second paragraph<br>continued here.</p>"
+            b"<ul><li>First item</li><li>Second item</li></ul>"
+        )
+
+        text = extract_text(html, 6000)
+
+        self.assertEqual(
+            text,
+            "Page title\nFirst paragraph!\nSecond paragraph\ncontinued here."
+            "\nFirst item\nSecond item",
+        )
+
     def test_extract_text_respects_max_characters(self) -> None:
         """Verify text is truncated to max_characters."""
         html = b"<html><body><main>" + b"x" * 100 + b"</main></body></html>"

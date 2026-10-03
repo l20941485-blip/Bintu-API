@@ -13,6 +13,45 @@ from bintu_api.settings import Settings
 READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 USER_AGENT = "BintuAPI/1.0 (+https://rapidapi.com; public web text extraction)"
+BLOCK_TAGS = {
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "br",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "tr",
+    "ul",
+}
 
 
 class TargetURLRejected(ValueError):
@@ -212,5 +251,18 @@ def extract_text(
         tags_to_remove.append("footer")
     for node in soup(tags_to_remove):
         node.decompose()
+    boundary = "\x00BINTU_BLOCK_BOUNDARY\x00"
+    while boundary in soup.get_text():
+        boundary += "\x00"
+    for node in soup.find_all(BLOCK_TAGS):
+        node.insert_before(boundary)
+        node.insert_after(boundary)
+
     text = soup.get_text(separator=" ", strip=True)
-    return re.sub(r"\s+", " ", text).strip()[:max_characters]
+    lines = []
+    for line in text.split(boundary):
+        line = re.sub(r"\s+", " ", line).strip()
+        line = re.sub(r"\s+([,.;:!?])", r"\1", line)
+        if line:
+            lines.append(line)
+    return "\n".join(lines)[:max_characters]
