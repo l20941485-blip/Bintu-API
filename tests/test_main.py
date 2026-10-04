@@ -1,3 +1,5 @@
+import io
+import json
 import unittest
 from unittest.mock import patch
 
@@ -188,6 +190,91 @@ class ScraperApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["text"], "ok")
         self.assertIn("rapidapi:subscriber-7", app.state.rate_limiter._buckets)
+
+    def test_mobile_scrape_requires_a_valid_supabase_session(self) -> None:
+        settings = Settings(
+            api_key="owner-key",
+            rapidapi_proxy_secret="",
+            supabase_url="https://project.supabase.co",
+            supabase_anon_key="public-anon-key",
+        )
+        client = TestClient(create_app(settings))
+        response = client.post(
+            "/api/v1/mobile/scrape/text",
+            json={"url": "https://example.com"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_session")
+
+    def test_mobile_scrape_verifies_email_and_applies_user_rate_limit(self) -> None:
+        settings = Settings(
+            api_key="owner-key",
+            rapidapi_proxy_secret="",
+            supabase_url="https://project.supabase.co",
+            supabase_anon_key="public-anon-key",
+        )
+        app = create_app(settings)
+        client = TestClient(app)
+        auth_response = io.BytesIO(
+            json.dumps(
+                {"id": "user-123", "email_confirmed_at": "2026-10-04T09:00:00Z"}
+            ).encode()
+        )
+        with (
+            patch("bintu_api.auth.urlopen", return_value=auth_response) as verify,
+            patch(
+                "bintu_api.routes.fetch_html_document",
+                return_value=FetchedHTML(body=b"<main>mobile text</main>", charset=None),
+            ) as fetch,
+        ):
+            response = client.post(
+                "/api/v1/mobile/scrape/text",
+                json={"url": "https://example.com"},
+                headers={"Authorization": "Bearer user-access-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["text"], "mobile text")
+        self.assertEqual(
+            verify.call_args.args[0].get_header("Authorization"),
+            "Bearer user-access-token",
+        )
+        self.assertEqual(
+            verify.call_args.args[0].get_header("Apikey"),
+            "public-anon-key",
+        )
+        self.assertIn("supabase:user-123", app.state.rate_limiter._buckets)
+        fetch.assert_called_once()
+
+    def test_mobile_scrape_rejects_unverified_email(self) -> None:
+        settings = Settings(
+            api_key="owner-key",
+            rapidapi_proxy_secret="",
+            supabase_url="https://project.supabase.co",
+            supabase_anon_key="public-anon-key",
+        )
+        client = TestClient(create_app(settings))
+        with patch("bintu_api.auth.urlopen", return_value=io.BytesIO(b'{"id":"user-123"}')):
+            response = client.post(
+                "/api/v1/mobile/scrape/text",
+                json={"url": "https://example.com"},
+                headers={"Authorization": "Bearer user-access-token"},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["code"], "email_not_verified")
+
+    def test_mobile_scrape_returns_service_unavailable_when_auth_is_unconfigured(self) -> None:
+        client = TestClient(self.app)
+        response = client.post(
+            "/api/v1/mobile/scrape/text",
+            json={"url": "https://example.com"},
+            headers={"Authorization": "Bearer user-access-token"},
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"]["code"], "mobile_auth_not_configured")
 
     def test_paid_quotas_are_not_enforced_by_local_limiter(self) -> None:
         self.assertIn("RapidAPI owns paid-plan quota enforcement", self.app.state.rate_limiter.__class__.__doc__)

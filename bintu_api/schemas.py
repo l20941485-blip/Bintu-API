@@ -34,6 +34,13 @@ class ScrapeTextResponse(BaseModel):
     )
 
 
+class MobileScrapeTextRequest(BaseModel):
+    url: str
+    include_nav: bool = False
+    include_header: bool = False
+    include_footer: bool = False
+
+
 class VersionResponse(BaseModel):
     service: str
     version: str

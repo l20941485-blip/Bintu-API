@@ -184,6 +184,8 @@ docker-compose up
 |---|---|---|
 | `API_KEY` | (empty) | API key for direct access |
 | `RAPIDAPI_PROXY_SECRET` | (empty) | Secret for RapidAPI proxy authentication |
+| `SUPABASE_URL` | (empty) | Supabase project URL used to verify mobile user sessions |
+| `SUPABASE_ANON_KEY` | (empty) | Supabase publishable/anon key used for mobile session verification; never use a service-role/secret key |
 | `CACHE_TTL_SECONDS` | 300 | Cache TTL in seconds; `0` disables caching. Non-numeric or out-of-range values (allowed range 0-86400) fall back to 300 with a logged warning |
 | `REDIS_URL` | (empty) | Redis URL for multi-instance rate limiting |
 
@@ -203,6 +205,33 @@ RapidAPI handles subscriber authentication and billing at its gateway. In the Ra
 Configure subscription plans, monthly quotas, and pricing in RapidAPI. Start with a small free trial and paid tiers based on measured Render latency, failure rates, and upstream costs. The service's 60-per-minute guard is a burst limit, not a monthly quota or billing system. Marketplace placement and revenue are not guaranteed.
 
 Only scrape content you are authorized to access. Respect the target site's terms and robots policy. This API does not circumvent logins, CAPTCHAs, paywalls, or anti-bot controls.
+
+## Native Mobile MVP
+
+The Expo project in `mobile-app/` provides email sign-up/sign-in and a URL-to-readable-text screen for iOS and Android. User sessions are stored with the device's secure storage. The app sends its Supabase access token to `POST /api/v1/mobile/scrape/text`; the API verifies the user with Supabase, requires a verified email address, and applies the existing per-user burst limit. The Bintu `API_KEY` and RapidAPI provider secret are never sent to the app.
+
+### Configure the backend
+
+1. Create a Supabase project and enable email/password authentication. Keep email confirmation enabled.
+2. In Supabase project settings, copy the project URL and its publishable key (or legacy anon key). Do not use the `service_role` key or a secret key.
+3. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the Render service environment. Keep the existing generated `API_KEY` private.
+
+The mobile proxy remains unavailable until both Supabase settings are configured. Supabase must be reachable by the API at request time so the API can verify each session.
+
+### Run on an Android phone
+
+Install a current Node.js LTS release, install Expo Go on an Android phone, and from the `mobile-app/` directory:
+
+```powershell
+Copy-Item .env.example .env
+# Edit .env and set the Supabase project URL and publishable/anon key.
+npm install
+node .\node_modules\expo\bin\cli start
+```
+
+Scan the QR code shown by Expo Go. The `EXPO_PUBLIC_` Supabase key is a client/public key, not a service secret; the API verifies sessions and keeps the Bintu server key private. A local `.env` file is git-ignored. iOS simulator builds require macOS and Xcode; public app-store distribution has separate developer enrollment requirements and fees.
+
+This is an early MVP: the API's in-memory limiter resets on restart and does not provide account-abuse prevention or a monthly user quota. Review hosting and Supabase plan limits before inviting more users.
 
 ## Tests
 

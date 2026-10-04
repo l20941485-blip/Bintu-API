@@ -8,7 +8,13 @@ from bintu_api.settings import Settings
 
 class SettingsFromEnvTests(unittest.TestCase):
     def _from_env(self, environ: dict[str, str]) -> Settings:
-        base = {"API_KEY": "", "RAPIDAPI_PROXY_SECRET": "", "REDIS_URL": ""}
+        base = {
+            "API_KEY": "",
+            "RAPIDAPI_PROXY_SECRET": "",
+            "SUPABASE_URL": "",
+            "SUPABASE_ANON_KEY": "",
+            "REDIS_URL": "",
+        }
         base.update(environ)
         with patch.dict("os.environ", base, clear=True):
             return Settings.from_env()
@@ -36,6 +42,14 @@ class SettingsFromEnvTests(unittest.TestCase):
 
         self.assertEqual(settings.api_key, "secret")
         self.assertEqual(settings.rapidapi_proxy_secret, "proxy")
+
+    def test_supabase_configuration_is_trimmed(self) -> None:
+        settings = self._from_env(
+            {"SUPABASE_URL": " https://project.supabase.co/ ", "SUPABASE_ANON_KEY": " anon "}
+        )
+
+        self.assertEqual(settings.supabase_url, "https://project.supabase.co")
+        self.assertEqual(settings.supabase_anon_key, "anon")
 
 
 if __name__ == "__main__":

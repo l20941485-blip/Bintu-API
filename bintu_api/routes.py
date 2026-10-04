@@ -4,12 +4,13 @@ import socket
 
 from fastapi import APIRouter, HTTPException, Request
 
-from bintu_api.auth import rate_limit_identity, verify_api_access
+from bintu_api.auth import rate_limit_identity, verify_api_access, verify_supabase_user
 from bintu_api.observability import CACHE_HITS, CACHE_MISSES
 from bintu_api.schemas import (
     ErrorResponse,
     GatewayResponse,
     HealthResponse,
+    MobileScrapeTextRequest,
     ScrapeTextResponse,
     VersionResponse,
 )
@@ -79,9 +80,53 @@ def scrape_text(
     include_footer: bool = False,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
+    verify_api_access(request, settings)
+    return _scrape_text(
+        request,
+        url,
+        include_nav,
+        include_header,
+        include_footer,
+        rate_limit_identity(request, settings),
+    )
+
+
+@router.post(
+    "/api/v1/mobile/scrape/text",
+    response_model=ScrapeTextResponse,
+    summary="Extract readable text for a signed-in mobile app user",
+    description=(
+        "Requires an Authorization Bearer token from the configured Supabase project. "
+        "Only users with verified email addresses can use this endpoint."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (400, 401, 403, 413, 415, 429, 502, 503, 504)
+    },
+)
+def mobile_scrape_text(request: Request, payload: MobileScrapeTextRequest) -> ScrapeTextResponse:
+    user_id = verify_supabase_user(request, request.app.state.settings)
+    return _scrape_text(
+        request,
+        payload.url,
+        payload.include_nav,
+        payload.include_header,
+        payload.include_footer,
+        f"supabase:{user_id}",
+    )
+
+
+def _scrape_text(
+    request: Request,
+    url: str,
+    include_nav: bool,
+    include_header: bool,
+    include_footer: bool,
+    identity: str,
+) -> ScrapeTextResponse:
+    settings = request.app.state.settings
     try:
-        verify_api_access(request, settings)
-        request.app.state.rate_limiter.check(rate_limit_identity(request, settings))
+        request.app.state.rate_limiter.check(identity)
 
         # Check cache first
         cache_key = hashlib.sha256(url.encode()).hexdigest()

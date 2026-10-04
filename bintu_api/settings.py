@@ -39,6 +39,8 @@ def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int
 class Settings:
     api_key: str
     rapidapi_proxy_secret: str
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
     request_timeout_seconds: float = 10.0
     max_redirects: int = 5
     max_html_bytes: int = 1024 * 1024
@@ -59,6 +61,8 @@ class Settings:
         return cls(
             api_key=os.getenv("API_KEY", "").strip(),
             rapidapi_proxy_secret=os.getenv("RAPIDAPI_PROXY_SECRET", "").strip(),
+            supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
+            supabase_anon_key=os.getenv("SUPABASE_ANON_KEY", "").strip(),
             cache_ttl_seconds=_bounded_int_env(
                 "CACHE_TTL_SECONDS", DEFAULT_CACHE_TTL_SECONDS, minimum=0, maximum=86400
             ),
