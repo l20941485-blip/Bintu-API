@@ -1,5 +1,6 @@
 import "react-native-url-polyfill/auto";
 
+import * as Linking from "expo-linking";
 import { createClient, type SupportedStorage } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 
@@ -29,3 +30,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export const bintuApiUrl =
   process.env.EXPO_PUBLIC_BINTU_API_URL ?? "https://bintu-api.onrender.com";
+
+export const authRedirectUrl = Linking.createURL("auth/callback");

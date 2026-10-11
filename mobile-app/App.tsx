@@ -13,11 +13,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Linking from "expo-linking";
 import type { Session } from "@supabase/supabase-js";
 
-import { bintuApiUrl, supabase } from "./supabase";
+import { authRedirectUrl, bintuApiUrl, supabase } from "./supabase";
 
-type AuthMode = "signIn" | "signUp";
+type AuthMode = "signIn" | "signUp" | "resetPassword";
 
 type ScrapeResult = {
   url: string;
@@ -66,6 +67,53 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    const handledAuthUrls = new Set<string>();
+
+    async function handleAuthUrl(incomingUrl: string | null): Promise<void> {
+      if (!incomingUrl || handledAuthUrls.has(incomingUrl)) return;
+      handledAuthUrls.add(incomingUrl);
+
+      try {
+        const parsed = new URL(incomingUrl);
+        const query = new URLSearchParams(parsed.search);
+        const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+        const getParam = (name: string) => fragment.get(name) ?? query.get(name);
+        const errorDescription = getParam("error_description");
+        if (errorDescription) {
+          throw new Error(errorDescription);
+        }
+
+        const type = getParam("type");
+        const accessToken = getParam("access_token");
+        const refreshToken = getParam("refresh_token");
+        const code = getParam("code");
+
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+        } else if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) throw error;
+        } else {
+          return;
+        }
+
+        if (!active) return;
+        if (type === "recovery") {
+          setPassword("");
+          setAuthMessage("");
+          setAuthMode("resetPassword");
+        } else {
+          setAuthMessage("Your email is verified. You can now use Bintu.");
+        }
+      } catch (error) {
+        if (active) setAuthMessage(getErrorMessage(error));
+      }
+    }
+
     void supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
       if (error) setAuthMessage(error.message);
@@ -76,6 +124,15 @@ export default function App() {
       setAuthMessage(getErrorMessage(error));
       setAuthReady(true);
     });
+
+    const linkingSubscription = Linking.addEventListener("url", ({ url }) => {
+      void handleAuthUrl(url);
+    });
+    void Linking.getInitialURL()
+      .then((url) => handleAuthUrl(url))
+      .catch((error: unknown) => {
+        if (active) setAuthMessage(getErrorMessage(error));
+      });
 
     const {
       data: { subscription },
@@ -98,6 +155,7 @@ export default function App() {
     return () => {
       active = false;
       subscription.unsubscribe();
+      linkingSubscription.remove();
       appStateSubscription.remove();
       supabase.auth.stopAutoRefresh();
     };
@@ -107,10 +165,17 @@ export default function App() {
     setBusy(true);
     setAuthMessage("");
     try {
-      if (authMode === "signUp") {
+      if (authMode === "resetPassword") {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setPassword("");
+        setAuthMode("signIn");
+        setAuthMessage("Your password has been reset. Sign in with your new password.");
+      } else if (authMode === "signUp") {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
+          options: { emailRedirectTo: authRedirectUrl },
         });
         if (error) throw error;
         if (!data.session) {
@@ -123,6 +188,29 @@ export default function App() {
         });
         if (error) throw error;
       }
+    } catch (error) {
+      setAuthMessage(getErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestPasswordReset(): Promise<void> {
+    setAuthMessage("");
+    if (!email.trim()) {
+      setAuthMessage("Enter your account email address first.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: authRedirectUrl,
+      });
+      if (error) throw error;
+      setAuthMessage(
+        "If an account exists for that email, a password reset link has been sent. Open it on this phone with Bintu available.",
+      );
     } catch (error) {
       setAuthMessage(getErrorMessage(error));
     } finally {
@@ -225,7 +313,40 @@ export default function App() {
             </View>
           </View>
 
-          {!session ? (
+          {authMode === "resetPassword" ? (
+            <View style={styles.card}>
+              <Text style={styles.eyebrow}>ACCOUNT SECURITY</Text>
+              <Text style={styles.title}>Choose a new password</Text>
+              <Text style={styles.muted}>
+                Enter a new password for {email || "your account"}.
+              </Text>
+              <TextInput
+                autoCapitalize="none"
+                onChangeText={setPassword}
+                placeholder="New password"
+                placeholderTextColor="#8e8b9a"
+                secureTextEntry
+                style={styles.input}
+                value={password}
+              />
+              {authMessage ? <Text style={styles.notice}>{authMessage}</Text> : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => void submitAuth()}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  (pressed || busy) && styles.buttonPressed,
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Save new password</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : !session ? (
             <View style={styles.card}>
               <Text style={styles.eyebrow}>YOUR READING SPACE</Text>
               <Text style={styles.title}>
@@ -270,6 +391,13 @@ export default function App() {
                     {authMode === "signIn" ? "Sign in" : "Create account"}
                   </Text>
                 )}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => void requestPasswordReset()}
+              >
+                <Text style={styles.switchText}>Forgot your password?</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"

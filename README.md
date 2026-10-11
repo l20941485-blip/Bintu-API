@@ -118,7 +118,7 @@ An invalid or unsafe URL returns HTTP 400:
 | 413 | `payload_too_large` | The HTML exceeds 1 MiB after decompression. |
 | 415 | `unsupported_media_type` | The target must return HTML or XHTML. |
 | 429 | `burst_rate_limit_exceeded` | Pause for the seconds specified in the `Retry-After` response header, then retry. |
-| 502 | `upstream_http_error`, `upstream_connection_error`, `unsupported_content_encoding`, or `too_many_redirects` | The target returned an error, could not be reached, used unsupported compression, or redirected too many times. |
+| 502 | `upstream_http_error`, `upstream_connection_error`, `upstream_render_error`, `unsupported_content_encoding`, or `too_many_redirects` | The target returned an error, could not be reached or rendered, used unsupported compression, or redirected too many times. |
 | 504 | `upstream_timeout` | The target did not respond in time. |
 
 The 429 response also includes a `Retry-After` header. Avoid repeatedly retrying 4xx responses; correct the request or wait as indicated.
@@ -157,13 +157,18 @@ docker-compose up
 
 `GET /metrics` exposes Prometheus request counts, error counts, latency histograms, and cache hit/miss counters. Metrics use route templates rather than request URLs and do not include scraped content. Application request logs include a request ID, method, route template, status, and duration; they do not log target URLs or page text. The Render and Docker launch configurations disable Uvicorn access logs because access-log request lines can include the `url` query parameter. It is protected by the same credentials as the API, so send `X-API-Key` (or the RapidAPI proxy header) when a key is configured. `X-Request-ID` is returned on every response; valid caller-provided IDs are preserved, otherwise the API generates one.
 
-`GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL, extracted text, and a `truncated` boolean. `truncated` is `true` only when extracted content exceeded the configured text limit. When available, the extractor prefers `<article>` or `<main>` content, then a `role="main"` or commonly named main/content container (such as `id="main"`), and otherwise falls back to the full document. It omits hidden elements and common controls or page furniture, and renders links as `link text (absolute URL)`. Headings are marked with Markdown `#` prefixes, paragraphs and other block elements are separated by line breaks, and table cells within each row are joined with ` | ` with a separator beneath header rows. If the document title duplicates its first heading, it is omitted. Character encoding is detected from the upstream HTTP charset and HTML metadata. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only. It does not execute JavaScript or bypass access controls.
+`GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL, extracted text, and a `truncated` boolean. `truncated` is `true` only when extracted content exceeded the configured text limit. When available, the extractor prefers `<article>` or `<main>` content, then a `role="main"` or commonly named main/content container (such as `id="main"`), and otherwise falls back to the full document. It omits hidden elements and common controls or page furniture, and renders links as `link text (absolute URL)`. Headings are marked with Markdown `#` prefixes, paragraphs and other block elements are separated by line breaks, and table cells within each row are joined with ` | ` with a separator beneath header rows. If the document title duplicates its first heading, it is omitted. Character encoding is detected from the upstream HTTP charset and HTML metadata. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only and does not bypass access controls.
+
+Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-driven pages. Rendering waits for `networkidle`, validates browser-requested HTTP destinations against public DNS addresses, and omits images, media, and fonts to reduce memory use. Non-rendered requests retain the existing lightweight transport that pins each connection to a validated public IP. Both modes use the same extractor, text limits, persistent cache, authentication, and rate limiting.
+
+`GET /mcp/tools` advertises the `bintu_scrape_text` tool, and `POST /mcp/tools/call` invokes it with `{"name":"bintu_scrape_text","arguments":{"url":"https://example.com","render_js":false}}`. The response follows the MCP tool content shape: `{"content":[{"type":"text","text":"..."}]}`. Tool calls use the same API authentication and rate limits as normal scrape requests.
 
 ### Query Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `url` | string | required | The URL to scrape |
+| `render_js` | bool | false | Render JavaScript using headless Chromium before extracting |
 | `include_nav` | bool | false | Preserve `<nav>` elements in output |
 | `include_header` | bool | false | Preserve `<header>` elements in output |
 | `include_footer` | bool | false | Preserve `<footer>` elements in output |
@@ -175,7 +180,7 @@ docker-compose up
 - HTML body: at most 1 MiB after decompression, read in chunks no larger than 4 KiB. Gzip-encoded HTML is supported with the same decoded-size limit.
 - Text response: at most 6,000 characters; `truncated` is true when the content exceeds the limit. Truncated text ends at the last available word boundary.
 - Local abuse guard: 60 requests per client identity per 60 seconds, in process memory only. Behind Render, a client IP is honored only from Render's proxy range (`100.64.0.0/10`), so the guard cannot be bypassed by spoofing `X-Forwarded-For`. Set `REDIS_URL` to share the counter across instances; the window TTL is set once per window, and if Redis is unreachable the guard falls back to process memory rather than failing requests.
-- Cache: 5-minute TTL for successful responses, bounded to 64 entries per instance with least-recently-used eviction, so memory stays bounded even when callers keep requesting novel URLs. `CACHE_TTL_SECONDS=0` disables caching.
+- Process-local HTML cache: 5-minute TTL, bounded to 64 entries per instance with least-recently-used eviction. `CACHE_TTL_SECONDS=0` disables this local cache. When configured, the separate Supabase Markdown cache retains successful extractions for 24 hours.
 - Paid subscription quotas and billing: configured and enforced by RapidAPI, not by this service.
 
 ## Configuration
@@ -186,13 +191,14 @@ docker-compose up
 | `RAPIDAPI_PROXY_SECRET` | (empty) | Secret for RapidAPI proxy authentication |
 | `SUPABASE_URL` | (empty) | Supabase project URL used to verify mobile user sessions |
 | `SUPABASE_ANON_KEY` | (empty) | Supabase publishable/anon key used for mobile session verification; never use a service-role/secret key |
-| `CACHE_TTL_SECONDS` | 300 | Cache TTL in seconds; `0` disables caching. Non-numeric or out-of-range values (allowed range 0-86400) fall back to 300 with a logged warning |
+| `SUPABASE_SERVICE_ROLE_KEY` | (empty) | Private server-side key for persistent scrape caching and RapidAPI usage accounting |
+| `CACHE_TTL_SECONDS` | 300 | Process-local HTML cache TTL in seconds; `0` disables that cache (Supabase's 24-hour cache is separate). Non-numeric or out-of-range values (allowed range 0-86400) fall back to 300 with a logged warning |
 | `REDIS_URL` | (empty) | Redis URL for multi-instance rate limiting |
 
 ## Deploy To Render
 
 1. Push this project to a GitHub repository.
-2. In Render, create a new Blueprint and select that repository. Render reads `render.yaml`, installs `requirements.txt`, and starts Uvicorn on the assigned port.
+2. In Render, create a new Blueprint and select that repository. Render reads `render.yaml`, installs `requirements.txt` and Chromium's system dependencies, then starts Uvicorn on the assigned port.
 3. Wait for `/healthz` to pass. Copy the generated `API_KEY` from the service environment for direct API access. Do not commit either secret.
 4. Test the deployed `/docs` page and make an authenticated scrape request before publishing.
 
@@ -215,8 +221,13 @@ The Expo project in `mobile-app/` provides email sign-up/sign-in and a URL-to-re
 1. Create a Supabase project and enable email/password authentication. Keep email confirmation enabled.
 2. In Supabase project settings, copy the project URL and its publishable key (or legacy anon key). Do not use the `service_role` key or a secret key.
 3. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the Render service environment. Keep the existing generated `API_KEY` private.
+4. To enable persistent scraping cache and RapidAPI usage counts, set the server-only `SUPABASE_SERVICE_ROLE_KEY` in Render. Run [`supabase_schema.sql`](./supabase_schema.sql) in the Supabase SQL editor to create the required tables and atomic usage-increment function. Never include the service-role key in the mobile app. Without this key, scraping continues with the existing bounded in-memory cache and database features are disabled.
+
+The persistent cache retains successful Markdown for 24 hours. Cache keys include the URL, rendering mode, and extraction options, and expired entries are ignored. RapidAPI usage counts are incremented only for requests carrying a valid configured RapidAPI proxy secret and a valid `X-RapidAPI-User` header; cached successful calls are counted too. Database failures are logged and fall back to scraping or return the successfully extracted content.
 
 The mobile proxy remains unavailable until both Supabase settings are configured. Supabase must be reachable by the API at request time so the API can verify each session.
+
+In Supabase **Authentication → URL Configuration → Redirect URLs**, allow the Expo Go callback `exp://**/--/auth/callback` and the installed-app callback `bintu://**`. The app sends an explicit callback URL for sign-up confirmation and password recovery, so those links open Bintu instead of the default `localhost:3000`. Expo Go redirects only work while the development server is running and reachable on the phone's network.
 
 ### Run on an Android phone
 
@@ -229,7 +240,7 @@ npm install
 node .\node_modules\expo\bin\cli start
 ```
 
-Scan the QR code shown by Expo Go. The `EXPO_PUBLIC_` Supabase key is a client/public key, not a service secret; the API verifies sessions and keeps the Bintu server key private. A local `.env` file is git-ignored. iOS simulator builds require macOS and Xcode; public app-store distribution has separate developer enrollment requirements and fees.
+Scan the QR code shown by Expo Go. The app handles confirmation and password-reset links and lets the user set a new password after following a recovery link. The `EXPO_PUBLIC_` Supabase key is a client/public key, not a service secret; the API verifies sessions and keeps the Bintu server key private. A local `.env` file is git-ignored. iOS simulator builds require macOS and Xcode; public app-store distribution has separate developer enrollment requirements and fees.
 
 This is an early MVP: the API's in-memory limiter resets on restart and does not provide account-abuse prevention or a monthly user quota. Review hosting and Supabase plan limits before inviting more users.
 

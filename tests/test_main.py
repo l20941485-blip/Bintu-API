@@ -1,10 +1,11 @@
 import io
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from bintu_api.database import CachedMarkdown
 from bintu_api.scraper import FetchedHTML, UpstreamHTTPError
 from bintu_api.settings import Settings
 from main import create_app
@@ -108,6 +109,139 @@ class ScraperApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["text"], "one two")
         self.assertTrue(response.json()["truncated"])
+
+    def test_javascript_rendering_uses_the_shared_extractor(self) -> None:
+        rendered = FetchedHTML(body=b"<main>Rendered content</main>", charset="utf-8")
+        with patch(
+            "bintu_api.routes.fetch_rendered_html_document",
+            new=AsyncMock(return_value=rendered),
+        ) as fetch:
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/app", "render_js": "true"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["text"], "Rendered content")
+        fetch.assert_awaited_once()
+
+    def test_javascript_timeout_maps_to_504(self) -> None:
+        with patch(
+            "bintu_api.routes.fetch_rendered_html_document",
+            new=AsyncMock(side_effect=TimeoutError),
+        ):
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/slow", "render_js": "true"},
+            )
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(response.json()["detail"]["code"], "upstream_timeout")
+
+    def test_mcp_lists_the_scrape_tool_schema(self) -> None:
+        response = self.client.get("/mcp/tools")
+
+        self.assertEqual(response.status_code, 200)
+        tool = response.json()["tools"][0]
+        self.assertEqual(tool["name"], "bintu_scrape_text")
+        self.assertEqual(tool["inputSchema"]["required"], ["url"])
+        self.assertEqual(tool["inputSchema"]["properties"]["render_js"]["type"], "boolean")
+
+    def test_mcp_tool_call_returns_the_mcp_text_content_shape(self) -> None:
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<main>MCP output</main>", charset=None),
+        ):
+            response = self.client.post(
+                "/mcp/tools/call",
+                json={
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com"},
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"content": [{"type": "text", "text": "MCP output"}]},
+        )
+
+    def test_mcp_rejects_unknown_tool_names(self) -> None:
+        response = self.client.post(
+            "/mcp/tools/call",
+            json={"name": "other_tool", "arguments": {"url": "https://example.com"}},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_supabase_cache_failure_falls_back_to_live_scraping(self) -> None:
+        self.app.state.supabase_client = object()
+        with (
+            patch(
+                "bintu_api.routes.get_cached_markdown",
+                new=AsyncMock(side_effect=RuntimeError("database unavailable")),
+            ),
+            patch(
+                "bintu_api.routes.fetch_html_document",
+                return_value=FetchedHTML(body=b"<main>Live fallback</main>", charset=None),
+            ) as fetch,
+        ):
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/fallback"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["text"], "Live fallback")
+        fetch.assert_called_once()
+
+    def test_supabase_cache_hit_skips_live_scraping(self) -> None:
+        self.app.state.supabase_client = object()
+        with (
+            patch(
+                "bintu_api.routes.get_cached_markdown",
+                new=AsyncMock(
+                    return_value=CachedMarkdown(markdown="Persistent result", truncated=False)
+                ),
+            ),
+            patch("bintu_api.routes.fetch_html_document") as fetch,
+        ):
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/cached"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["text"], "Persistent result")
+        fetch.assert_not_called()
+
+    def test_rapidapi_user_usage_is_incremented_on_success(self) -> None:
+        app = create_app(Settings(api_key="", rapidapi_proxy_secret="proxy-secret"))
+        app.state.supabase_client = object()
+        client = TestClient(app)
+        with (
+            patch(
+                "bintu_api.routes.get_cached_markdown",
+                new=AsyncMock(
+                    return_value=CachedMarkdown(markdown="Cached success", truncated=False)
+                ),
+            ),
+            patch(
+                "bintu_api.routes.increment_developer_usage",
+                new=AsyncMock(),
+            ) as increment,
+        ):
+            response = client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/usage"},
+                headers={
+                    "X-RapidAPI-Proxy-Secret": "proxy-secret",
+                    "X-RapidAPI-User": "subscriber-7",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        increment.assert_awaited_once_with(app.state.supabase_client, "subscriber-7")
 
     def test_openapi_documents_scrape_response_contract(self) -> None:
         response = self.client.get("/openapi.json")

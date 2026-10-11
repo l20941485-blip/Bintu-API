@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import asyncio
 import codecs
 import http.client
 import ipaddress
@@ -95,6 +98,10 @@ class UpstreamHTTPError(Exception):
 
 
 class TooManyRedirects(Exception):
+    pass
+
+
+class UpstreamRenderError(Exception):
     pass
 
 
@@ -230,6 +237,99 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
             connection.close()
 
     raise TooManyRedirects("The target exceeded the redirect limit")
+
+
+async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedHTML:
+    """Render a public page in Chromium and return its post-JavaScript HTML."""
+    from playwright.async_api import Error as PlaywrightError
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import Route, async_playwright
+
+    _, host, port, _ = _parse_target(url)
+    await asyncio.to_thread(resolve_public_addresses, host, port)
+    blocked_targets: list[Exception] = []
+    browser = None
+
+    async with async_playwright() as playwright:
+        try:
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = await browser.new_context(service_workers="block")
+            page = await context.new_page()
+
+            async def validate_request(route: Route) -> None:
+                request = route.request
+                if request.resource_type in {"image", "media", "font"}:
+                    await route.abort()
+                    return
+
+                request_url = urlsplit(request.url)
+                if request_url.scheme in {"data", "blob", "about"}:
+                    await route.continue_()
+                    return
+                if request_url.scheme not in {"http", "https"}:
+                    blocked_targets.append(
+                        TargetURLRejected("The page attempted to access a non-HTTP resource")
+                    )
+                    await route.abort()
+                    return
+
+                redirect_count = 0
+                redirected_request = request.redirected_from
+                while redirected_request is not None:
+                    redirect_count += 1
+                    redirected_request = redirected_request.redirected_from
+                if redirect_count > settings.max_redirects:
+                    blocked_targets.append(TooManyRedirects("The target exceeded the redirect limit"))
+                    await route.abort()
+                    return
+
+                try:
+                    _, request_host, request_port, _ = _parse_target(request.url)
+                    await asyncio.to_thread(resolve_public_addresses, request_host, request_port)
+                except TargetURLRejected as error:
+                    blocked_targets.append(error)
+                    await route.abort()
+                    return
+                await route.continue_()
+
+            await page.route("**/*", validate_request)
+            try:
+                response = await page.goto(
+                    url,
+                    wait_until="networkidle",
+                    timeout=int(settings.request_timeout_seconds * 1000),
+                )
+            except PlaywrightTimeoutError as error:
+                if blocked_targets:
+                    raise blocked_targets[0] from error
+                raise TimeoutError("The target did not finish rendering in time") from error
+            except PlaywrightError as error:
+                if blocked_targets:
+                    raise blocked_targets[0] from error
+                raise UpstreamRenderError("The target could not be rendered") from error
+
+            if blocked_targets:
+                raise blocked_targets[0]
+            if response is None:
+                raise UpstreamRenderError("The browser did not receive a page response")
+            if not 200 <= response.status < 300:
+                raise UpstreamHTTPError(response.status, response.status_text)
+            content_type = response.headers.get("content-type", "")
+            media_type = content_type.split(";", 1)[0].strip().lower()
+            if media_type not in {"text/html", "application/xhtml+xml"}:
+                raise UnsupportedMediaType("Only HTML and XHTML responses are supported")
+
+            html = await page.content()
+            body = html.encode("utf-8")
+            if len(body) > settings.max_html_bytes:
+                raise PayloadTooLarge("Rendered HTML may not exceed 1 MiB")
+            return FetchedHTML(body=body, charset="utf-8", final_url=page.url)
+        finally:
+            if browser is not None:
+                await browser.close()
 
 
 def _content_charset(content_type: str) -> str | None:

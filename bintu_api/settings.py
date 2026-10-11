@@ -41,6 +41,7 @@ class Settings:
     rapidapi_proxy_secret: str
     supabase_url: str = ""
     supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
     request_timeout_seconds: float = 10.0
     max_redirects: int = 5
     max_html_bytes: int = 1024 * 1024
@@ -52,8 +53,9 @@ class Settings:
     service_title: str = "Bintu Data Extraction API"
     service_version: str = "1.0.0"
     service_description: str = (
-        "Extract readable text from public HTML pages. Responses are bounded, "
-        "requests are rate-limited, and outbound connections are pinned to validated public IPs."
+        "Extract readable text from public HTML pages, optionally rendering JavaScript. "
+        "Responses are bounded, requests are rate-limited, and outbound connections are "
+        "validated against public IP addresses."
     )
 
     @classmethod
@@ -63,6 +65,7 @@ class Settings:
             rapidapi_proxy_secret=os.getenv("RAPIDAPI_PROXY_SECRET", "").strip(),
             supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
             supabase_anon_key=os.getenv("SUPABASE_ANON_KEY", "").strip(),
+            supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip(),
             cache_ttl_seconds=_bounded_int_env(
                 "CACHE_TTL_SECONDS", DEFAULT_CACHE_TTL_SECONDS, minimum=0, maximum=86400
             ),

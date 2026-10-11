@@ -1,10 +1,23 @@
+import asyncio
 import hashlib
 import logging
 import socket
 
 from fastapi import APIRouter, HTTPException, Request
 
-from bintu_api.auth import rate_limit_identity, verify_api_access, verify_supabase_user
+from bintu_api.auth import (
+    has_valid_proxy_secret,
+    rate_limit_identity,
+    verify_api_access,
+    verify_supabase_user,
+)
+from bintu_api.database import (
+    CachedMarkdown,
+    DATABASE_TIMEOUT_SECONDS,
+    get_cached_markdown,
+    increment_developer_usage,
+    upsert_cached_markdown,
+)
 from bintu_api.observability import CACHE_HITS, CACHE_MISSES
 from bintu_api.schemas import (
     ErrorResponse,
@@ -20,9 +33,11 @@ from bintu_api.scraper import (
     TooManyRedirects,
     UnsupportedContentEncoding,
     UnsupportedMediaType,
+    UpstreamRenderError,
     UpstreamHTTPError,
     extract_text_result,
     fetch_html_document,
+    fetch_rendered_html_document,
 )
 
 
@@ -65,29 +80,31 @@ def version_info(request: Request) -> VersionResponse:
         "Fetches a public HTML or XHTML page and returns readable text. "
         "The service prefers article or main content, formats headings and tables, "
         "and reports whether the configured text limit truncated the result. "
-        "It does not execute JavaScript or bypass access controls."
+        "JavaScript rendering is optional."
     ),
     responses={
         status_code: {"model": ErrorResponse}
         for status_code in (400, 401, 413, 415, 429, 502, 504)
     },
 )
-def scrape_text(
+async def scrape_text(
     request: Request,
     url: str,
     include_nav: bool = False,
     include_header: bool = False,
     include_footer: bool = False,
+    render_js: bool = False,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
-    return _scrape_text(
+    return await _scrape_text(
         request,
         url,
         include_nav,
         include_header,
         include_footer,
         rate_limit_identity(request, settings),
+        render_js,
     )
 
 
@@ -104,58 +121,114 @@ def scrape_text(
         for status_code in (400, 401, 403, 413, 415, 429, 502, 503, 504)
     },
 )
-def mobile_scrape_text(request: Request, payload: MobileScrapeTextRequest) -> ScrapeTextResponse:
-    user_id = verify_supabase_user(request, request.app.state.settings)
-    return _scrape_text(
+async def mobile_scrape_text(request: Request, payload: MobileScrapeTextRequest) -> ScrapeTextResponse:
+    user_id = await asyncio.to_thread(
+        verify_supabase_user, request, request.app.state.settings
+    )
+    return await _scrape_text(
         request,
         payload.url,
         payload.include_nav,
         payload.include_header,
         payload.include_footer,
         f"supabase:{user_id}",
+        payload.render_js,
     )
 
 
-def _scrape_text(
+async def _scrape_text(
     request: Request,
     url: str,
     include_nav: bool,
     include_header: bool,
     include_footer: bool,
     identity: str,
+    render_js: bool = False,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     try:
-        request.app.state.rate_limiter.check(identity)
+        await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
 
-        # Check cache first
-        cache_key = hashlib.sha256(url.encode()).hexdigest()
-        cache = request.app.state.cache
-        cached = cache.get(cache_key)
-        if cached is not None:
+        database_client = getattr(request.app.state, "supabase_client", None)
+        result: CachedMarkdown | None = None
+        if database_client is not None:
+            try:
+                result = await asyncio.wait_for(
+                    get_cached_markdown(
+                        database_client,
+                        url,
+                        render_js,
+                        include_nav,
+                        include_header,
+                        include_footer,
+                    ),
+                    timeout=DATABASE_TIMEOUT_SECONDS,
+                )
+            except Exception as error:
+                logger.warning("supabase_cache_lookup_failed error_type=%s", type(error).__name__)
+
+        cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
+        if result is not None:
             CACHE_HITS.inc()
-            logger.info("cache_hit url_hash=%s", cache_key[:12])
-            document = cached
+            logger.info("persistent_cache_hit url_hash=%s", cache_key[:12])
         else:
-            CACHE_MISSES.inc()
-            logger.info("cache_miss url_hash=%s", cache_key[:12])
-            document = fetch_html_document(url, settings)
-            cache.set(cache_key, document)
+            cache = request.app.state.cache
+            document = cache.get(cache_key)
+            if document is not None:
+                CACHE_HITS.inc()
+                logger.info("memory_cache_hit url_hash=%s", cache_key[:12])
+            else:
+                CACHE_MISSES.inc()
+                logger.info("cache_miss url_hash=%s", cache_key[:12])
+                if render_js:
+                    document = await fetch_rendered_html_document(url, settings)
+                else:
+                    # The existing transport pins each request to a validated public IP.
+                    # Keep it off the event loop rather than replacing that SSRF guard
+                    # with HTTPX's second, independently resolved DNS lookup.
+                    document = await asyncio.to_thread(fetch_html_document, url, settings)
+                cache.set(cache_key, document)
 
-        extracted = extract_text_result(
-            document.body,
-            settings.max_text_characters,
-            include_nav=include_nav,
-            include_header=include_header,
-            include_footer=include_footer,
-            from_encoding=document.charset,
-            base_url=document.final_url or url,
-        )
-        return ScrapeTextResponse(
-            url=url,
-            text=extracted.text,
-            truncated=extracted.truncated,
-        )
+            extracted = extract_text_result(
+                document.body,
+                settings.max_text_characters,
+                include_nav=include_nav,
+                include_header=include_header,
+                include_footer=include_footer,
+                from_encoding=document.charset,
+                base_url=document.final_url or url,
+            )
+            result = CachedMarkdown(markdown=extracted.text, truncated=extracted.truncated)
+            if database_client is not None:
+                try:
+                    await asyncio.wait_for(
+                        upsert_cached_markdown(
+                            database_client,
+                            url,
+                            render_js,
+                            include_nav,
+                            include_header,
+                            include_footer,
+                            result.markdown,
+                            result.truncated,
+                        ),
+                        timeout=DATABASE_TIMEOUT_SECONDS,
+                    )
+                except Exception as error:
+                    logger.warning("supabase_cache_upsert_failed error_type=%s", type(error).__name__)
+
+        if database_client is not None and has_valid_proxy_secret(request, settings):
+            rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
+            if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
+                try:
+                    await asyncio.wait_for(
+                        increment_developer_usage(database_client, rapidapi_user),
+                        timeout=DATABASE_TIMEOUT_SECONDS,
+                    )
+                except Exception as error:
+                    logger.warning("supabase_usage_increment_failed error_type=%s", type(error).__name__)
+
+        return ScrapeTextResponse(url=url, text=result.markdown, truncated=result.truncated)
     except HTTPException:
         raise
     except TargetURLRejected as error:
@@ -211,6 +284,15 @@ def _scrape_text(
                 "code": "too_many_redirects",
                 "message": str(error),
                 "hint": "The page has too many redirects",
+            },
+        ) from error
+    except UpstreamRenderError as error:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "upstream_render_error",
+                "message": str(error),
+                "hint": "The target page could not be rendered.",
             },
         ) from error
     except (TimeoutError, socket.timeout) as error:

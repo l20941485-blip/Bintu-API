@@ -39,6 +39,7 @@ class MobileScrapeTextRequest(BaseModel):
     include_nav: bool = False
     include_header: bool = False
     include_footer: bool = False
+    render_js: bool = False
 
 
 class VersionResponse(BaseModel):

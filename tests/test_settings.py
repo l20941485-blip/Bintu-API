@@ -13,6 +13,7 @@ class SettingsFromEnvTests(unittest.TestCase):
             "RAPIDAPI_PROXY_SECRET": "",
             "SUPABASE_URL": "",
             "SUPABASE_ANON_KEY": "",
+            "SUPABASE_SERVICE_ROLE_KEY": "",
             "REDIS_URL": "",
         }
         base.update(environ)
@@ -45,11 +46,16 @@ class SettingsFromEnvTests(unittest.TestCase):
 
     def test_supabase_configuration_is_trimmed(self) -> None:
         settings = self._from_env(
-            {"SUPABASE_URL": " https://project.supabase.co/ ", "SUPABASE_ANON_KEY": " anon "}
+            {
+                "SUPABASE_URL": " https://project.supabase.co/ ",
+                "SUPABASE_ANON_KEY": " anon ",
+                "SUPABASE_SERVICE_ROLE_KEY": " service-role ",
+            }
         )
 
         self.assertEqual(settings.supabase_url, "https://project.supabase.co")
         self.assertEqual(settings.supabase_anon_key, "anon")
+        self.assertEqual(settings.supabase_service_role_key, "service-role")
 
 
 if __name__ == "__main__":
