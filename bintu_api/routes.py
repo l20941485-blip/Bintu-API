@@ -3,9 +3,11 @@ import hashlib
 import logging
 import socket
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Security
 
 from bintu_api.auth import (
+    api_key_scheme,
+    bearer_scheme,
     has_valid_proxy_secret,
     rate_limit_identity,
     verify_api_access,
@@ -80,12 +82,13 @@ def version_info(request: Request) -> VersionResponse:
         "Fetches a public HTML or XHTML page and returns readable text. "
         "The service prefers article or main content, formats headings and tables, "
         "and reports whether the configured text limit truncated the result. "
-        "JavaScript rendering is optional."
+        "JavaScript rendering is disabled unless the service enables it."
     ),
     responses={
         status_code: {"model": ErrorResponse}
         for status_code in (400, 401, 413, 415, 429, 502, 504)
     },
+    dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def scrape_text(
     request: Request,
@@ -97,6 +100,15 @@ async def scrape_text(
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
+    if render_js and not settings.render_js_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "render_js_disabled",
+                "message": "JavaScript rendering is disabled on this service.",
+                "hint": "Retry with render_js=false for plain HTML extraction.",
+            },
+        )
     return await _scrape_text(
         request,
         url,
@@ -120,11 +132,22 @@ async def scrape_text(
         status_code: {"model": ErrorResponse}
         for status_code in (400, 401, 403, 413, 415, 429, 502, 503, 504)
     },
+    dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def mobile_scrape_text(request: Request, payload: MobileScrapeTextRequest) -> ScrapeTextResponse:
+    settings = request.app.state.settings
     user_id = await asyncio.to_thread(
         verify_supabase_user, request, request.app.state.settings
     )
+    if payload.render_js and not settings.render_js_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "render_js_disabled",
+                "message": "JavaScript rendering is disabled on this service.",
+                "hint": "Retry with render_js=false for plain HTML extraction.",
+            },
+        )
     return await _scrape_text(
         request,
         payload.url,

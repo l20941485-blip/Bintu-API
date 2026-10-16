@@ -57,6 +57,16 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertEqual(settings.supabase_anon_key, "anon")
         self.assertEqual(settings.supabase_service_role_key, "service-role")
 
+    def test_render_js_is_disabled_by_default(self) -> None:
+        self.assertFalse(self._from_env({}).render_js_enabled)
+
+    def test_render_js_requires_explicit_true(self) -> None:
+        self.assertTrue(self._from_env({"RENDER_JS_ENABLED": "true"}).render_js_enabled)
+        self.assertTrue(self._from_env({"RENDER_JS_ENABLED": " True "}).render_js_enabled)
+        self.assertFalse(self._from_env({"RENDER_JS_ENABLED": "1"}).render_js_enabled)
+        self.assertFalse(self._from_env({"RENDER_JS_ENABLED": "yes"}).render_js_enabled)
+        self.assertFalse(self._from_env({"RENDER_JS_ENABLED": "false"}).render_js_enabled)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

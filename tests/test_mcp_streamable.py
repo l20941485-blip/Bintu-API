@@ -1,0 +1,165 @@
+"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
+
+import json
+import unittest
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+from bintu_api.mcp import TOOL_INPUT_SCHEMA, TOOL_NAME
+from bintu_api.scraper import FetchedHTML
+from bintu_api.settings import Settings
+from main import create_app
+
+
+class McpStreamableTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.app = create_app(Settings(api_key="", rapidapi_proxy_secret=""))
+        self.client = TestClient(self.app)
+
+    def rpc(self, method: str, params: dict | None = None, request_id: int = 1):
+        return self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}},
+        )
+
+    def test_initialize_returns_supported_protocol_and_server_info(self) -> None:
+        response = self.rpc("initialize", {"protocolVersion": "2025-06-18"})
+
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["result"]
+        self.assertEqual(result["protocolVersion"], "2025-06-18")
+        self.assertIn("tools", result["capabilities"])
+        self.assertEqual(result["serverInfo"]["name"], "bintu")
+        self.assertEqual(result["serverInfo"]["version"], "1.0.0")
+
+    def test_initialize_falls_back_to_latest_for_unknown_version(self) -> None:
+        response = self.rpc("initialize", {"protocolVersion": "1999-01-01"})
+
+        self.assertEqual(response.json()["result"]["protocolVersion"], "2025-06-18")
+
+    def test_ping_returns_empty_result(self) -> None:
+        response = self.rpc("ping")
+
+        self.assertEqual(response.json(), {"jsonrpc": "2.0", "id": 1, "result": {}})
+
+    def test_tools_list_matches_the_legacy_schema(self) -> None:
+        response = self.rpc("tools/list")
+
+        tools = response.json()["result"]["tools"]
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0]["name"], TOOL_NAME)
+        self.assertEqual(tools[0]["inputSchema"], TOOL_INPUT_SCHEMA)
+
+    def test_notification_returns_202_with_empty_body(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.content, b"")
+
+    def test_tools_call_returns_text_content(self) -> None:
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<main>MCP stream</main>", charset=None),
+        ):
+            response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["content"], [{"type": "text", "text": "MCP stream"}])
+        self.assertFalse(payload["isError"])
+
+    def test_tools_call_render_js_disabled_is_in_band_tool_error(self) -> None:
+        response = self.rpc(
+            "tools/call",
+            {"name": TOOL_NAME, "arguments": {"url": "https://example.com", "render_js": True}},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(payload["isError"])
+        self.assertIn("render_js_disabled", payload["content"][0]["text"])
+
+    def test_tools_call_unknown_tool_is_invalid_params(self) -> None:
+        response = self.rpc("tools/call", {"name": "other", "arguments": {"url": "https://example.com"}})
+
+        error = response.json()["error"]
+        self.assertEqual(error["code"], -32602)
+
+    def test_tools_call_missing_url_is_invalid_params(self) -> None:
+        response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {}})
+
+        error = response.json()["error"]
+        self.assertEqual(error["code"], -32602)
+        self.assertIn("url", error["message"])
+
+    def test_unsafe_url_is_in_band_tool_error(self) -> None:
+        response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {"url": "nota-url"}})
+
+        payload = response.json()["result"]
+        self.assertTrue(payload["isError"])
+        self.assertIn("invalid_or_unsafe_url", payload["content"][0]["text"])
+
+    def test_unknown_method_is_method_not_found(self) -> None:
+        response = self.rpc("resources/list")
+
+        self.assertEqual(response.json()["error"]["code"], -32601)
+
+    def test_malformed_json_is_parse_error(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            content="{not json",
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], -32700)
+        self.assertIsNone(payload["id"])
+
+    def test_non_jsonrpc_payload_is_invalid_request(self) -> None:
+        response = self.client.post("/mcp", json={"hello": "world"})
+
+        self.assertEqual(response.json()["error"]["code"], -32600)
+
+    def test_wrong_content_type_is_unsupported_media_type(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            content=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}),
+            headers={"Content-Type": "text/plain"},
+        )
+
+        self.assertEqual(response.status_code, 415)
+
+    def test_api_key_is_required_when_configured(self) -> None:
+        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
+        client = TestClient(app)
+        unauthorized = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
+
+        self.assertEqual(unauthorized.status_code, 401)
+        authorized = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            headers={"X-API-Key": "owner-key"},
+        )
+        self.assertEqual(authorized.status_code, 200)
+
+    def test_get_and_delete_are_method_not_allowed(self) -> None:
+        for method in ("GET", "DELETE"):
+            with self.subTest(method=method):
+                response = self.client.request(method, "/mcp")
+                self.assertEqual(response.status_code, 405)
+                self.assertEqual(response.headers["allow"], "POST")
+
+    def test_legacy_helpers_still_work_alongside(self) -> None:
+        response = self.client.get("/mcp/tools")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["tools"][0]["name"], TOOL_NAME)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

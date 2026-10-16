@@ -6,12 +6,24 @@ from urllib.parse import urlsplit
 from urllib.request import Request as URLRequest, urlopen
 
 from fastapi import HTTPException
+from fastapi.security import APIKeyHeader, HTTPBearer
 from starlette.requests import Request
 
 from bintu_api.settings import Settings
 
 
 logger = logging.getLogger("bintu_api.auth")
+
+
+# SecurityBase instances used ONLY as OpenAPI documentation markers via
+# Security(...) in route dependencies: auto_error=False means they never
+# reject, runtime auth stays in verify_api_access / verify_supabase_user.
+# scheme_name controls the key FastAPI writes into components.securitySchemes,
+# which is what Swagger UI's Authorize dialog binds to.
+api_key_scheme = APIKeyHeader(
+    name="X-API-Key", scheme_name="ApiKeyAuth", description="Service API key.", auto_error=False
+)
+bearer_scheme = HTTPBearer(scheme_name="BearerAuth", description="Supabase session token.", auto_error=False)
 
 
 def _secret_matches(provided: str, expected: str) -> bool:

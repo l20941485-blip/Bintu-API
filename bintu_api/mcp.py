@@ -1,18 +1,49 @@
-"""Simple MCP-compatible tool discovery and invocation endpoints."""
+"""Simple MCP-compatible tool discovery and invocation endpoints.
+
+Two surfaces exist on purpose:
+
+- ``/mcp/tools`` and ``/mcp/tools/call``: minimal JSON helpers with the same
+  shapes as MCP content blocks; kept for the existing RapidAPI listing and
+  any integrations written against them.
+- ``/mcp`` (bintu_api.mcp_streamable): the standard MCP Streamable HTTP
+  endpoint (JSON-RPC 2.0, stateless) used by Claude connectors and Claude
+  Code. Tool definitions are shared via TOOL_NAME/TOOL_DESCRIPTION/
+  TOOL_INPUT_SCHEMA so both surfaces stay in lockstep.
+"""
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from bintu_api.auth import rate_limit_identity, verify_api_access
+from bintu_api.auth import (
+    api_key_scheme,
+    rate_limit_identity,
+    verify_api_access,
+)
 from bintu_api.routes import _scrape_text
 from bintu_api.settings import Settings
 
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
 TOOL_NAME = "bintu_scrape_text"
-TOOL_DESCRIPTION = "Extracts token-optimized Markdown from any public web page."
+TOOL_DESCRIPTION = "Extracts readable text from a public web page (plain HTML; JS rendering disabled unless enabled)."
+TOOL_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "url": {
+            "type": "string",
+            "description": "Public HTTP or HTTPS URL to extract.",
+        },
+        "render_js": {
+            "type": "boolean",
+            "default": False,
+            "description": "Render the page in Chromium before extracting text.",
+        },
+    },
+    "required": ["url"],
+    "additionalProperties": False,
+}
 
 
 class ToolCallRequest(BaseModel):
@@ -27,7 +58,10 @@ class ToolArguments(BaseModel):
     render_js: bool = False
 
 
-@router.get("/tools")
+@router.get(
+    "/tools",
+    dependencies=[Security(api_key_scheme, scopes=[])],
+)
 async def list_tools(request: Request) -> dict[str, Any]:
     verify_api_access(request, request.app.state.settings)
     return {
@@ -35,28 +69,16 @@ async def list_tools(request: Request) -> dict[str, Any]:
             {
                 "name": TOOL_NAME,
                 "description": TOOL_DESCRIPTION,
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "Public HTTP or HTTPS URL to extract.",
-                        },
-                        "render_js": {
-                            "type": "boolean",
-                            "default": False,
-                            "description": "Render the page in Chromium before extracting text.",
-                        },
-                    },
-                    "required": ["url"],
-                    "additionalProperties": False,
-                },
+                "inputSchema": TOOL_INPUT_SCHEMA,
             }
         ]
     }
 
 
-@router.post("/tools/call")
+@router.post(
+    "/tools/call",
+    dependencies=[Security(api_key_scheme, scopes=[])],
+)
 async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, list[dict[str, str]]]:
     settings: Settings = request.app.state.settings
     verify_api_access(request, settings)
@@ -66,6 +88,16 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, lis
         arguments = ToolArguments.model_validate(payload.arguments)
     except ValidationError as error:
         raise HTTPException(status_code=400, detail=error.errors()) from error
+
+    if arguments.render_js and not settings.render_js_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "render_js_disabled",
+                "message": "JavaScript rendering is disabled on this service.",
+                "hint": "Retry with render_js=false for plain HTML extraction.",
+            },
+        )
 
     result = await _scrape_text(
         request,

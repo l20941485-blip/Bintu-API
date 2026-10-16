@@ -84,7 +84,7 @@ curl.exe --get "$env:BINTU_BASE_URL/api/v1/scrape/text" `
   --header "Accept: application/json"
 ```
 
-The Render `API_KEY` is available in the service's Environment settings. Keep it private, do not commit it, and do not put it in a URL. The examples above keep it in the current PowerShell process environment. If no API key or proxy secret is configured (as in the default local development setup), authentication is not required. Interactive API docs are available at [`/docs`](https://bintu-api.onrender.com/docs).
+The Render `API_KEY` is available in the service's Environment settings. Keep it private, do not commit it, and do not put it in a URL. The examples above keep it in the current PowerShell process environment. If no API key or proxy secret is configured (as in the default local development setup), authentication is not required. Interactive API docs are available at [`/docs`](https://bintu-api.onrender.com/docs) — click **Authorize** (top right) and paste the key into `ApiKeyAuth`, or the Supabase session token into `BearerAuth` for the mobile endpoint, then use **Try it out** on any locked route.
 
 ### Common errors
 
@@ -113,7 +113,7 @@ An invalid or unsafe URL returns HTTP 400:
 
 | HTTP status | Error code(s) | What to do |
 |---|---|---|
-| 400 | `invalid_or_unsafe_url` | Use a well-formed public HTTP or HTTPS URL. Private-network destinations are blocked. |
+| 400 | `invalid_or_unsafe_url`, `render_js_disabled` | Use a well-formed public HTTP or HTTPS URL. Private-network destinations are blocked. `render_js=true` is disabled unless the service enables it — retry with `render_js=false`. |
 | 401 | `invalid_api_key` | Send the current `X-API-Key` configured in Render. |
 | 413 | `payload_too_large` | The HTML exceeds 1 MiB after decompression. |
 | 415 | `unsupported_media_type` | The target must return HTML or XHTML. |
@@ -161,6 +161,8 @@ docker-compose up
 
 Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-driven pages. Rendering waits for `networkidle`, validates browser-requested HTTP destinations against public DNS addresses, and omits images, media, and fonts to reduce memory use. Non-rendered requests retain the existing lightweight transport that pins each connection to a validated public IP. Both modes use the same extractor, text limits, persistent cache, authentication, and rate limiting.
 
+`POST /mcp` is a standard MCP Streamable HTTP endpoint (stateless JSON-RPC 2.0) for Claude custom connectors and Claude Code: it answers `initialize`, `ping`, `tools/list`, and `tools/call` for the single `bintu_scrape_text` tool, and requires `Content-Type: application/json` plus the same API key as normal requests. Point a Claude custom connector at `https://<your-host>/mcp` with an `X-API-Key` request header. Notifications get `202`; `GET`/`DELETE` return `405` since the server keeps no sessions or streams.
+
 `GET /mcp/tools` advertises the `bintu_scrape_text` tool, and `POST /mcp/tools/call` invokes it with `{"name":"bintu_scrape_text","arguments":{"url":"https://example.com","render_js":false}}`. The response follows the MCP tool content shape: `{"content":[{"type":"text","text":"..."}]}`. Tool calls use the same API authentication and rate limits as normal scrape requests.
 
 ### Query Parameters
@@ -179,6 +181,7 @@ Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-dri
 - Redirects: at most 5, with URL and DNS validation repeated for every destination.
 - HTML body: at most 1 MiB after decompression, read in chunks no larger than 4 KiB. Gzip-encoded HTML is supported with the same decoded-size limit.
 - Text response: at most 6,000 characters; `truncated` is true when the content exceeds the limit. Truncated text ends at the last available word boundary.
+- JavaScript rendering: disabled by default (`RENDER_JS_ENABLED=false`); `render_js=true` returns 400 `render_js_disabled`. Enable only on paid infra where Chromium boot cost is covered.
 - Local abuse guard: 60 requests per client identity per 60 seconds, in process memory only. Behind Render, a client IP is honored only from Render's proxy range (`100.64.0.0/10`), so the guard cannot be bypassed by spoofing `X-Forwarded-For`. Set `REDIS_URL` to share the counter across instances; the window TTL is set once per window, and if Redis is unreachable the guard falls back to process memory rather than failing requests.
 - Process-local HTML cache: 5-minute TTL, bounded to 64 entries per instance with least-recently-used eviction. `CACHE_TTL_SECONDS=0` disables this local cache. When configured, the separate Supabase Markdown cache retains successful extractions for 24 hours.
 - Paid subscription quotas and billing: configured and enforced by RapidAPI, not by this service.
@@ -193,7 +196,8 @@ Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-dri
 | `SUPABASE_ANON_KEY` | (empty) | Supabase publishable/anon key used for mobile session verification; never use a service-role/secret key |
 | `SUPABASE_SERVICE_ROLE_KEY` | (empty) | Private server-side key for persistent scrape caching and RapidAPI usage accounting |
 | `CACHE_TTL_SECONDS` | 300 | Process-local HTML cache TTL in seconds; `0` disables that cache (Supabase's 24-hour cache is separate). Non-numeric or out-of-range values (allowed range 0-86400) fall back to 300 with a logged warning |
-| `REDIS_URL` | (empty) | Redis URL for multi-instance rate limiting |
+| `REDIS_URL` | (empty) | Redis URL for multi-instance rate limiting. Empty or unreachable = per-process burst guard (fail-open), each instance enforcing its own window |
+| `RENDER_JS_ENABLED` | `false` | JavaScript rendering kill-switch. Only exact `true` enables Chromium; anything else returns 400 `render_js_disabled` for `render_js=true` |
 
 ## Deploy To Render
 
@@ -211,6 +215,15 @@ RapidAPI handles subscriber authentication and billing at its gateway. In the Ra
 Configure subscription plans, monthly quotas, and pricing in RapidAPI. Start with a small free trial and paid tiers based on measured Render latency, failure rates, and upstream costs. The service's 60-per-minute guard is a burst limit, not a monthly quota or billing system. Marketplace placement and revenue are not guaranteed.
 
 Only scrape content you are authorized to access. Respect the target site's terms and robots policy. This API does not circumvent logins, CAPTCHAs, paywalls, or anti-bot controls.
+
+### Connect Claude
+
+`POST /mcp` implements the standard MCP Streamable HTTP transport, so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET`/`DELETE` return `405`, and each JSON-RPC message is answered with a single `application/json` response.
+
+- Claude web or Desktop: add a custom connector with URL `https://<your-host>/mcp` and a request header `X-API-Key: <your-key>`.
+- Claude Code: `claude mcp add --transport http bintu https://<your-host>/mcp --header "X-API-Key: <your-key>"`.
+
+The server exposes one tool, `bintu_scrape_text`, with the same schema as the REST scrape. Tool execution failures (unsafe URL, rate limit, upstream error, `render_js_disabled`) come back in-band as `isError: true` with readable text so the model can correct itself. All requests still require the normal API key and count against the same rate limit. This endpoint is hidden from `/docs`; see the MCP section of the README.
 
 ## Native Mobile MVP
 

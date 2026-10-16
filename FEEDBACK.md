@@ -22,11 +22,18 @@ complaint with the `bintu_api.request` log line and `/metrics` counters.
 
 | Area | State | Evidence |
 |---|---|---|
-| Offline unit suite | 39 passing | `python -m unittest discover -s tests -t . -p "test_*.py" -v` |
+| Offline unit suite | 77 passing (2026-10-12) | `python -m unittest discover -s tests -t . -p "test_*.py" -v` — OK in ~4.6s; warnings only (Starlette `asyncio.iscoroutinefunction` + httpx `app=` deprecations on Python 3.14) |
 | `tests/test_integration.py` | 2 pre-existing errors on this workstation | `TimeoutError` connecting to `127.0.0.1`; loopback traffic blocked locally, unrelated to app code |
 | Dependency drift | Resolved | `redis==5.0.0` was pinned but absent from `.venv`; reinstalled so `REDIS_URL` deployments and editor resolution agree with `requirements.txt` |
 | Type checking | `redis` import resolves | `import redis` is soft by design; see `bintu_api/rate_limit.py` |
-| Live deploy | Not verified | Needs `BINTU_BASE_URL` + `python smoke_check.py` |
+| Live deploy | Full gate green 2026-10-13 — double `smoke_check.py` passed post-service-role | `/healthz OK` + `/api/v1/scrape/text` 173 chars ×2, `X-Request-ID` present. `/version -> 1.0.0, 1 MiB / 5 redirects / 6000 chars / 60-per-60s / cache 300s`, no secrets |
+| Repo hygiene | Ready for first commit (root `.gitignore` + `Bintu API/.gitignore` cover `.env/.venv/__pycache__/node_modules/.expo/scratch`; `rapidapi_listing.md` is committed copy-paste source) | YOU run: `rmdir /s Bintu API\.git`, `del Bintu API\tests_out.txt`, `git add .`, confirm no `.env`/`.venv`, `git commit -m "chore: single git root, root gitignore, release-gate evidence"`. Shell hangs from my side so no deletes/git writes by agent |
+| RapidAPI P1 | Drafted 2026-10-14 in `Bintu API/rapidapi_listing.md` — long description, plain-HTML plans, error table + `render_js_disabled`, 3 snippets, 6 endpoint tests, tags, soft-disable policy | YOU paste into provider dashboard (description, tests 81%->100%, Spotlight #2 output JSON, cancel self BASIC sub, link free status page). No app code change needed |
+| render_js soft-disable | Implemented 2026-10-14 — `RENDER_JS_ENABLED` flag (default false), 400 `render_js_disabled` on REST/mobile/MCP; full suite green (83 tests OK) | `settings.py:_bool_env` (exact `true` only) + `render_js_enabled` field; gates in `routes.py` (API/mobile, mobile gates AFTER auth) + `mcp.py:call_tool`; `render.yaml` value `false`; `.env.example`, README, listing synced; 6 new + 2 updated tests. Re-enable: set `RENDER_JS_ENABLED=true` in Render, no code deploy |
+| Standard MCP endpoint | Implemented 2026-10-14 — `POST /mcp` Streamable HTTP (JSON-RPC 2.0, stateless) for Claude connectors/Code; suite green (101 tests OK) | `mcp_streamable.py`: initialize/ping/tools/list/tools/call, notifications→202, GET/DELETE→405, Content-Type 415. Protocol errors use JSON-RPC codes; tool failures (unsafe URL, rate limit, upstream, `render_js_disabled`) in-band as `isError:true`. Same `verify_api_access` + `_scrape_text` rate limit. Schema shared via `TOOL_INPUT_SCHEMA` in `mcp.py`. Legacy `/mcp/tools*` kept |
+| Free pinger (cron-job.org) | Green 2026-10-13 — `GET /healthz` returns 200 OK in ~565ms | Was fetching `https://onrender.com` (301); corrected to `https://bintu-api.onrender.com/healthz`. Keep 10-min daytime UTC only, 30s timeout, redirects-as-failure OFF |
+| Password reset deep link | Open — reset email opens `localhost:3000` instead of app | App sends `redirectTo: Linking.createURL("auth/callback")` correctly (`supabase.ts:34`, `App.tsx:207-209`); Supabase falls back to Site URL = allow-list/dashboard save or stale link. Fix: Auth → URL Configuration Site URL + `exp://**/--/auth/callback` + `bintu://**`, fresh link, open on phone |
+| Pipeline wiring | Fully verified 2026-10-14 — Upstash `REDIS_URL` rotated + set in Render, redeployed | Service-role key active (24h Supabase cache), shared Redis buckets engaged (`rate_limit.py:117`). Pasted credential rotated; no secrets in repo or chat history to retain. Monitor Render logs for absence of `redis_rate_limiter_unavailable` |
 
 ## Environment checklist
 

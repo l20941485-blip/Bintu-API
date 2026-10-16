@@ -7,6 +7,15 @@ logger = logging.getLogger("bintu_api.settings")
 DEFAULT_CACHE_TTL_SECONDS = 300
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    """Read a boolean environment flag; only an explicit true enables it.
+
+    Anything else (empty, typo, "1", "yes") stays disabled so a mis-set
+    value cannot accidentally boot Chromium on free-tier infra.
+    """
+    return os.getenv(name, "").strip().lower() == "true"
+
+
 def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
     """Read an integer environment override, falling back to the default.
 
@@ -50,12 +59,17 @@ class Settings:
     rate_limit_window_seconds: int = 60
     cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
     redis_url: str = ""
+    # JavaScript rendering boots Playwright/Chromium (2-4s + RAM). Off by
+    # default on free infra; set RENDER_JS_ENABLED=true only on paid plans
+    # where the latency and quota cost are covered. RapidAPI does not send
+    # plan tier in headers, so per-plan gating is not enforceable here.
+    render_js_enabled: bool = False
     service_title: str = "Bintu Data Extraction API"
     service_version: str = "1.0.0"
     service_description: str = (
-        "Extract readable text from public HTML pages, optionally rendering JavaScript. "
-        "Responses are bounded, requests are rate-limited, and outbound connections are "
-        "validated against public IP addresses."
+        "Extract readable text from public HTML pages. JavaScript rendering is "
+        "disabled unless explicitly enabled. Responses are bounded, requests are "
+        "rate-limited, and outbound connections are validated against public IP addresses."
     )
 
     @classmethod
@@ -70,4 +84,5 @@ class Settings:
                 "CACHE_TTL_SECONDS", DEFAULT_CACHE_TTL_SECONDS, minimum=0, maximum=86400
             ),
             redis_url=os.getenv("REDIS_URL", "").strip(),
+            render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
         )

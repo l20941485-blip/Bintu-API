@@ -16,9 +16,15 @@ services:
         generateValue: true
       - key: RAPIDAPI_PROXY_SECRET
         sync: false
+      - key: REDIS_URL
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Off by default on free infra (Chromium boot = latency + RAM).
+      # Set to "true" only on paid plans where rendering cost is covered.
+      - key: RENDER_JS_ENABLED
+        value: "false"

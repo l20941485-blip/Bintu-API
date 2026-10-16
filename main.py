@@ -14,6 +14,7 @@ from bintu_api.database import (
     create_supabase_client,
 )
 from bintu_api.mcp import router as mcp_router
+from bintu_api.mcp_streamable import router as mcp_streamable_router
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
 from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.routes import router
@@ -67,6 +68,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         license_info={"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
         lifespan=lifespan,
     )
+    # /docs Authorize button: Security(api_key_scheme) / Security(bearer_scheme)
+    # dependencies on the scrape routes (bintu_api.routes / bintu_api.mcp) make
+    # FastAPI emit components.securitySchemes (named ApiKeyAuth / BearerAuth)
+    # plus the per-operation security arrays, so Swagger UI offers "Authorize".
+    # Runtime auth is unchanged — verify_api_access / verify_supabase_user
+    # still enforce the actual credentials; the schemes are auto_error=False
+    # documentation markers only.
     application.state.settings = app_settings
     application.state.rate_limiter = create_rate_limiter(app_settings)
     application.state.cache = TTLCache(app_settings.cache_ttl_seconds)
@@ -74,6 +82,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.add_middleware(RequestObservabilityMiddleware)
     application.include_router(router)
     application.include_router(mcp_router)
+    # Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0 at POST /mcp) for
+    # Claude connectors and Claude Code; hidden from /docs since it is not
+    # plain REST and the legacy /mcp/tools helpers stay documented above.
+    application.include_router(mcp_streamable_router)
 
     @application.get("/metrics", include_in_schema=False)
     def metrics(request: Request):

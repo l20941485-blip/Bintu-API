@@ -111,12 +111,14 @@ class ScraperApiTests(unittest.TestCase):
         self.assertTrue(response.json()["truncated"])
 
     def test_javascript_rendering_uses_the_shared_extractor(self) -> None:
+        settings = Settings(api_key="", rapidapi_proxy_secret="", render_js_enabled=True)
+        client = TestClient(create_app(settings))
         rendered = FetchedHTML(body=b"<main>Rendered content</main>", charset="utf-8")
         with patch(
             "bintu_api.routes.fetch_rendered_html_document",
             new=AsyncMock(return_value=rendered),
         ) as fetch:
-            response = self.client.get(
+            response = client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com/app", "render_js": "true"},
             )
@@ -126,11 +128,13 @@ class ScraperApiTests(unittest.TestCase):
         fetch.assert_awaited_once()
 
     def test_javascript_timeout_maps_to_504(self) -> None:
+        settings = Settings(api_key="", rapidapi_proxy_secret="", render_js_enabled=True)
+        client = TestClient(create_app(settings))
         with patch(
             "bintu_api.routes.fetch_rendered_html_document",
             new=AsyncMock(side_effect=TimeoutError),
         ):
-            response = self.client.get(
+            response = client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com/slow", "render_js": "true"},
             )
@@ -173,6 +177,84 @@ class ScraperApiTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_render_js_true_is_rejected_when_disabled(self) -> None:
+        with patch(
+            "bintu_api.routes.fetch_rendered_html_document",
+            new=AsyncMock(),
+        ) as fetch:
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/app", "render_js": "true"},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "render_js_disabled")
+        fetch.assert_not_awaited()
+
+    def test_render_js_true_passes_through_when_enabled(self) -> None:
+        settings = Settings(api_key="", rapidapi_proxy_secret="", render_js_enabled=True)
+        client = TestClient(create_app(settings))
+        rendered = FetchedHTML(body=b"<main>Rendered content</main>", charset="utf-8")
+        with patch(
+            "bintu_api.routes.fetch_rendered_html_document",
+            new=AsyncMock(return_value=rendered),
+        ) as fetch:
+            response = client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com/app", "render_js": "true"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["text"], "Rendered content")
+        fetch.assert_awaited_once()
+
+    def test_mcp_render_js_is_rejected_when_disabled(self) -> None:
+        with patch(
+            "bintu_api.routes.fetch_rendered_html_document",
+            new=AsyncMock(),
+        ) as fetch:
+            response = self.client.post(
+                "/mcp/tools/call",
+                json={
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com", "render_js": True},
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        fetch.assert_not_awaited()
+
+    def test_mobile_render_js_is_rejected_after_auth_when_disabled(self) -> None:
+        settings = Settings(
+            api_key="owner-key",
+            rapidapi_proxy_secret="",
+            supabase_url="https://project.supabase.co",
+            supabase_anon_key="public-anon-key",
+        )
+        client = TestClient(create_app(settings))
+        auth_response = io.BytesIO(
+            json.dumps(
+                {"id": "user-123", "email_confirmed_at": "2026-10-04T09:00:00Z"}
+            ).encode()
+        )
+        with (
+            patch("bintu_api.auth.urlopen", return_value=auth_response) as verify,
+            patch(
+                "bintu_api.routes.fetch_rendered_html_document",
+                new=AsyncMock(),
+            ) as fetch,
+        ):
+            response = client.post(
+                "/api/v1/mobile/scrape/text",
+                json={"url": "https://example.com/app", "render_js": True},
+                headers={"Authorization": "Bearer user-access-token"},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"]["code"], "render_js_disabled")
+        verify.assert_called_once()
+        fetch.assert_not_awaited()
 
     def test_supabase_cache_failure_falls_back_to_live_scraping(self) -> None:
         self.app.state.supabase_client = object()
@@ -256,6 +338,28 @@ class ScraperApiTests(unittest.TestCase):
         properties = schema["properties"]
         self.assertIn("True when", properties["truncated"]["description"])
         self.assertIn("character cap", properties["text"]["description"])
+
+    def test_openapi_advertises_auth_schemes_for_docs_authorize(self) -> None:
+        schema = self.client.get("/openapi.json").json()
+
+        schemes = schema["components"]["securitySchemes"]
+        self.assertEqual(
+            schemes["ApiKeyAuth"],
+            {"type": "apiKey", "in": "header", "name": "X-API-Key", "description": "Service API key."},
+        )
+        self.assertEqual(schemes["BearerAuth"]["type"], "http")
+        self.assertEqual(schemes["BearerAuth"]["scheme"], "bearer")
+
+        paths = schema["paths"]
+        self.assertEqual(paths["/api/v1/scrape/text"]["get"]["security"], [{"ApiKeyAuth": []}])
+        self.assertEqual(paths["/mcp/tools"]["get"]["security"], [{"ApiKeyAuth": []}])
+        self.assertEqual(paths["/mcp/tools/call"]["post"]["security"], [{"ApiKeyAuth": []}])
+        self.assertEqual(
+            paths["/api/v1/mobile/scrape/text"]["post"]["security"], [{"BearerAuth": []}]
+        )
+        # Public endpoints stay unlocked in /docs.
+        for path, method in (("/", "get"), ("/version", "get")):
+            self.assertNotIn("security", paths[path][method])
 
     def test_application_logs_and_metrics_exclude_scraped_content_and_target_url(self) -> None:
         target_url = "https://private.example/article?token=unique-target-secret"
