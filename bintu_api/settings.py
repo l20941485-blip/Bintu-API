@@ -64,6 +64,12 @@ class Settings:
     # where the latency and quota cost are covered. RapidAPI does not send
     # plan tier in headers, so per-plan gating is not enforceable here.
     render_js_enabled: bool = False
+    # REQUIRE_AUTH=true forbids the open-dev early return in verify_api_access:
+    # if both secrets are empty the service answers 500 auth_misconfiguration
+    # instead of accepting unauthenticated traffic. Read in from_env (not as a
+    # field default) so the value resolves per-app-creation like
+    # render_js_enabled, keeping tests that patch os.environ deterministic.
+    require_auth: bool = False
     service_title: str = "Bintu Data Extraction API"
     service_version: str = "1.0.0"
     service_description: str = (
@@ -85,4 +91,5 @@ class Settings:
             ),
             redis_url=os.getenv("REDIS_URL", "").strip(),
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
+            require_auth=_bool_env("REQUIRE_AUTH", default=False),
         )

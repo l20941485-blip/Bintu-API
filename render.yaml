@@ -16,6 +16,11 @@ services:
         generateValue: true
       - key: RAPIDAPI_PROXY_SECRET
         sync: false
+      # Fail closed in production: if both secrets above are ever empty
+      # (cleared env vars), requests are rejected with 500
+      # auth_misconfiguration instead of the service silently running open.
+      - key: REQUIRE_AUTH
+        value: "true"
       - key: REDIS_URL
         sync: false
       - key: SUPABASE_URL

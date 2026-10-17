@@ -36,6 +36,22 @@ def has_valid_proxy_secret(request: Request, settings: Settings) -> bool:
 
 
 def verify_api_access(request: Request, settings: Settings) -> None:
+    if settings.require_auth and not settings.api_key and not settings.rapidapi_proxy_secret:
+        # REQUIRE_AUTH=true (production, pinned in render.yaml) but no secrets
+        # survived into the environment. Refuse everything instead of degrading
+        # to open mode: a monetized public server with auth silently off is a
+        # revenue and abuse incident. 500 = operator misconfiguration, not a
+        # caller error.
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "auth_misconfiguration",
+                "message": (
+                    "Strict authentication is required but no API_KEY or "
+                    "RAPIDAPI_PROXY_SECRET is configured on this service."
+                ),
+            },
+        )
     if not settings.api_key and not settings.rapidapi_proxy_secret:
         return
 
