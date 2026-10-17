@@ -1,0 +1,12 @@
+version: 1
+name: bintu-data-extraction-api
+description: Extract clean, readable text from public HTML pages (article/main preferred, 6000-char cap).
+runtime: python
+entry: main.py
+build:
+  install: pip install -r requirements.txt
+startCommand:
+  type: http
+  command: uvicorn main:app --host 0.0.0.0 --port $PORT --no-access-log
+configSchema:
+  source: code

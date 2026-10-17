@@ -57,6 +57,13 @@ def verify_api_access(request: Request, settings: Settings) -> None:
 
     api_key_valid = _secret_matches(request.headers.get("X-API-Key", ""), settings.api_key)
     if not api_key_valid and not has_valid_proxy_secret(request, settings):
+        # Presence-only log: proves whether a gateway/probe sent any credential
+        # at all (vs. a wrong value) without ever writing secret material to logs.
+        logger.warning(
+            "auth_rejected has_api_key_header=%s has_proxy_secret_header=%s",
+            "X-API-Key" in request.headers,
+            "X-RapidAPI-Proxy-Secret" in request.headers,
+        )
         raise HTTPException(
             status_code=401,
             detail={"code": "invalid_api_key", "message": "A valid API key is required."},
