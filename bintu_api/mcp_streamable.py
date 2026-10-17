@@ -11,6 +11,9 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
   the server never pushes messages).
 - GET /mcp answers with an immediately-closing empty SSE stream: the endpoint
   must support GET, but this stateless server keeps no streams to resume.
+  GET /sse and GET /mcp/sse are compatibility aliases for gateways that
+  probe a dedicated SSE path; they return the same empty stream with the
+  same auth + Origin checks.
 - DELETE/PUT/PATCH /mcp return 405: no sessions exist to terminate.
 - Notifications (JSON-RPC messages without an ``id``) get 202 Accepted
   with an empty body.
@@ -106,6 +109,19 @@ def _reject_forbidden_origin() -> JSONResponse:
             "id": None,
             "error": {"code": -32000, "message": "Forbidden origin"},
         },
+    )
+
+
+async def _empty_sse_stream(request: Request) -> Response:
+    """Shared handler for GET /mcp and its /sse aliases (stateless: empty stream)."""
+    settings: Settings = request.app.state.settings
+    verify_api_access(request, settings)
+    if not _origin_is_allowed(request):
+        return _reject_forbidden_origin()
+    return Response(
+        content="",
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "close"},
     )
 
 
@@ -274,15 +290,22 @@ async def mcp_messages(request: Request):
 async def mcp_listen(request: Request) -> Response:
     # Stateless server: no streams to resume, so answer the mandatory GET with
     # an immediately-closing empty SSE stream instead of 405.
-    settings: Settings = request.app.state.settings
-    verify_api_access(request, settings)
-    if not _origin_is_allowed(request):
-        return _reject_forbidden_origin()
-    return Response(
-        content="",
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "close"},
-    )
+    return await _empty_sse_stream(request)
+
+
+@router.get("/sse", include_in_schema=False)
+async def mcp_listen_alias(request: Request) -> Response:
+    # Compatibility alias: some gateways/marketplaces (e.g. MCPize) probe a
+    # dedicated GET /sse path for SSE streaming. Same empty stateless stream
+    # as GET /mcp, same auth + Origin checks.
+    return await _empty_sse_stream(request)
+
+
+@router.get("/mcp/sse", include_in_schema=False)
+async def mcp_listen_nested_alias(request: Request) -> Response:
+    # Compatibility alias: some gateways append /sse to the configured Base URL
+    # (e.g. Base URL .../mcp -> GET .../mcp/sse). Same empty stream as GET /mcp.
+    return await _empty_sse_stream(request)
 
 
 @router.api_route("/mcp", methods=["DELETE", "PUT", "PATCH"], include_in_schema=False)

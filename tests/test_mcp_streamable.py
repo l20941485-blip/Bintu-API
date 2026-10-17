@@ -158,6 +158,14 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/event-stream", response.headers["content-type"])
 
+    def test_sse_alias_paths_return_same_empty_stream(self) -> None:
+        for path in ("/sse", "/mcp/sse"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("text/event-stream", response.headers["content-type"])
+
     def test_delete_and_unknown_methods_are_method_not_allowed(self) -> None:
         for method in ("DELETE", "PUT", "PATCH"):
             with self.subTest(method=method):
