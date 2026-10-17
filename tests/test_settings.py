@@ -67,6 +67,16 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertFalse(self._from_env({"RENDER_JS_ENABLED": "yes"}).render_js_enabled)
         self.assertFalse(self._from_env({"RENDER_JS_ENABLED": "false"}).render_js_enabled)
 
+    def test_require_auth_is_disabled_by_default(self) -> None:
+        self.assertFalse(self._from_env({}).require_auth)
+
+    def test_require_auth_requires_explicit_true(self) -> None:
+        self.assertTrue(self._from_env({"REQUIRE_AUTH": "true"}).require_auth)
+        self.assertTrue(self._from_env({"REQUIRE_AUTH": " True "}).require_auth)
+        self.assertFalse(self._from_env({"REQUIRE_AUTH": "1"}).require_auth)
+        self.assertFalse(self._from_env({"REQUIRE_AUTH": "yes"}).require_auth)
+        self.assertFalse(self._from_env({"REQUIRE_AUTH": "false"}).require_auth)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

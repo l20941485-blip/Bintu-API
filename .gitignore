@@ -11,5 +11,7 @@ dist/
 
 # Local test captures and scratch output
 tests_out.txt
+*_out.txt
+verify_*.py
 *.out
 *.log

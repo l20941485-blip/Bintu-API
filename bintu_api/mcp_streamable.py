@@ -2,15 +2,21 @@
 
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients — Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
-any other Streamable HTTP client — without adding the ``mcp`` SDK dependency:
+any other Streamable HTTP client — without adding the ``mcp`` SDK dependency.
+Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
+``2025-03-26`` during negotiation):
 
 - POST /mcp accepts one JSON-RPC message per request and answers with a
   single ``application/json`` response (the spec allows skipping SSE when
   the server never pushes messages).
-- GET/DELETE /mcp return 405: this server initiates no streams and keeps
-  no sessions, which the spec explicitly permits for stateless servers.
+- GET /mcp answers with an immediately-closing empty SSE stream: the endpoint
+  must support GET, but this stateless server keeps no streams to resume.
+- DELETE/PUT/PATCH /mcp return 405: no sessions exist to terminate.
 - Notifications (JSON-RPC messages without an ``id``) get 202 Accepted
   with an empty body.
+- ``MCP-Protocol-Version`` is enforced on every non-``initialize`` request
+  (unknown versions get 400); a missing header falls back to ``2025-03-26``
+  per the spec. ``Origin`` is validated against DNS rebinding (403).
 
 Error mapping follows the spec: protocol failures (unknown method/tool,
 invalid arguments, malformed payloads) use JSON-RPC error codes, while tool
@@ -37,8 +43,9 @@ logger = logging.getLogger("bintu_api.mcp_streamable")
 router = APIRouter(tags=["MCP"])
 
 SERVER_NAME = "bintu"
-SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26")
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26")
 LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+FALLBACK_PROTOCOL_VERSION = "2025-03-26"
 SERVER_INSTRUCTIONS = (
     "Extract readable text from public web pages with bintu_scrape_text. "
     "Pass an absolute http(s) URL; the result is readable text capped at "
@@ -63,6 +70,60 @@ def _rpc_error(request_id: Any, code: int, message: str) -> dict[str, Any]:
 
 def _tool_error(message: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": message}], "isError": True}
+
+
+def _protocol_version_header(request: Request) -> str:
+    """Return the client's declared protocol version for Streamable HTTP.
+
+    The spec requires ``MCP-Protocol-Version`` on every request after
+    ``initialize``; when absent we cannot know the version, so we assume the
+    ``2025-03-26`` fallback exactly as the specification directs.
+    """
+    declared = request.headers.get("mcp-protocol-version", "").strip()
+    return declared or FALLBACK_PROTOCOL_VERSION
+
+
+def _reject_unknown_protocol_version(version: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "code": "unsupported_protocol_version",
+                "message": (
+                    f"Unsupported MCP protocol version {version!r}; "
+                    f"supported versions: {', '.join(SUPPORTED_PROTOCOL_VERSIONS)}."
+                ),
+            }
+        },
+    )
+
+
+def _reject_forbidden_origin() -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
+        content={
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32000, "message": "Forbidden origin"},
+        },
+    )
+
+
+def _origin_is_allowed(request: Request) -> bool:
+    """Validate the Origin header against DNS-rebinding attacks.
+
+    Absent Origin (non-browser clients such as Claude Code or curl) is
+    allowed. When present, the origin must match the request's own scheme +
+    host; anything else is rejected with 403 per the Streamable HTTP spec.
+    """
+    origin = request.headers.get("origin", "").strip()
+    if not origin:
+        return True
+    host = request.headers.get("host", "").strip().lower()
+    if not host:
+        return False
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip().lower()
+    return origin.strip().lower() == f"{scheme}://{host}"
 
 
 def _http_detail_text(detail: Any) -> str:
@@ -155,6 +216,10 @@ async def mcp_messages(request: Request):
     settings: Settings = request.app.state.settings
     verify_api_access(request, settings)
 
+    if not _origin_is_allowed(request):
+        logger.warning("mcp_forbidden_origin origin=%r", request.headers.get("origin", ""))
+        return _reject_forbidden_origin()
+
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type != "application/json":
         raise HTTPException(
@@ -180,6 +245,12 @@ async def mcp_messages(request: Request):
         return Response(status_code=202)
 
     method = payload["method"]
+    if method != "initialize":
+        declared_version = _protocol_version_header(request)
+        if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:
+            logger.info("mcp_unsupported_protocol_version version=%r", declared_version)
+            return _reject_unknown_protocol_version(declared_version)
+
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         # MCP defines object params only; arrays (by-position) are not used.
@@ -199,7 +270,22 @@ async def mcp_messages(request: Request):
     return JSONResponse(_rpc_error(request_id, METHOD_NOT_FOUND, f"Method not found: {method}"))
 
 
-@router.api_route("/mcp", methods=["GET", "DELETE", "PUT", "PATCH"], include_in_schema=False)
+@router.get("/mcp", include_in_schema=False)
+async def mcp_listen(request: Request) -> Response:
+    # Stateless server: no streams to resume, so answer the mandatory GET with
+    # an immediately-closing empty SSE stream instead of 405.
+    settings: Settings = request.app.state.settings
+    verify_api_access(request, settings)
+    if not _origin_is_allowed(request):
+        return _reject_forbidden_origin()
+    return Response(
+        content="",
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "close"},
+    )
+
+
+@router.api_route("/mcp", methods=["DELETE", "PUT", "PATCH"], include_in_schema=False)
 async def mcp_unsupported_methods() -> Response:
-    # Stateless server: no SSE streams (GET), no sessions to end (DELETE).
-    return Response(status_code=405, headers={"Allow": "POST"})
+    # Stateless server: no sessions to end (DELETE); PUT/PATCH are undefined.
+    return Response(status_code=405, headers={"Allow": "POST, GET"})

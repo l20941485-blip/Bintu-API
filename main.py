@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from bintu_api.auth import verify_api_access
 from bintu_api.cache import TTLCache
@@ -75,6 +76,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Runtime auth is unchanged — verify_api_access / verify_supabase_user
     # still enforce the actual credentials; the schemes are auto_error=False
     # documentation markers only.
+    # CORSMiddleware is added before RequestObservabilityMiddleware, which makes
+    # observability the outermost layer: every request/response (including
+    # gateway pre-flights) is still logged and metered, while CORS answers
+    # pre-flight OPTIONS with the proper headers before routing/auth run.
+    # NOTE: allow_origins=["*"] cannot pair with allow_credentials=True (the
+    # CORS spec forbids a wildcard with credentials, and Starlette refuses to
+    # send Access-Control-Allow-Origin in that combo). allow_origin_regex=".*"
+    # keeps the open-gateway behaviour while still echoing the request origin
+    # so credentialed gateway probes succeed.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=".*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     application.state.settings = app_settings
     application.state.rate_limiter = create_rate_limiter(app_settings)
     application.state.cache = TTLCache(app_settings.cache_ttl_seconds)
@@ -93,6 +110,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # endpoint cannot be used to enumerate traffic on a public hostname.
         verify_api_access(request, app_settings)
         return metrics_response()
+
+    @application.options("/", include_in_schema=False)
+    def root_options():
+        # Absorb external gateway health pings/pre-flights (e.g. MCPize)
+        # that probe OPTIONS / before connecting; no auth required.
+        return {"status": "ok", "supported_methods": ["GET", "POST", "OPTIONS"]}
 
     return application
 

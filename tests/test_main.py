@@ -24,6 +24,27 @@ class ScraperApiTests(unittest.TestCase):
         self.assertEqual(gateway.json()["docs"], "/docs")
         self.assertEqual(health.json(), {"status": "ok"})
 
+    def test_root_options_absorbs_gateway_preflight(self) -> None:
+        response = self.client.options("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(), {"status": "ok", "supported_methods": ["GET", "POST", "OPTIONS"]}
+        )
+
+    def test_cors_preflight_returns_allow_origin(self) -> None:
+        response = self.client.options(
+            "/",
+            headers={
+                "Origin": "https://gateway.example",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "X-API-Key",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["access-control-allow-origin"], "https://gateway.example")
+
     def test_invalid_url_format(self) -> None:
         response = self.client.get("/api/v1/scrape/text", params={"url": "://example.com"})
 
@@ -407,6 +428,33 @@ class ScraperApiTests(unittest.TestCase):
             )
 
         self.assertEqual(denied.status_code, 401)
+        self.assertEqual(accepted.status_code, 200)
+
+    def test_require_auth_fails_closed_when_secrets_are_missing(self) -> None:
+        app = create_app(Settings(api_key="", rapidapi_proxy_secret="", require_auth=True))
+        client = TestClient(app)
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<p>ok</p>", charset=None),
+        ):
+            response = client.get("/api/v1/scrape/text", params={"url": "https://example.com"})
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"]["code"], "auth_misconfiguration")
+
+    def test_require_auth_allows_configured_keys(self) -> None:
+        app = create_app(Settings(api_key="local-test-secret", rapidapi_proxy_secret="", require_auth=True))
+        client = TestClient(app)
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<p>ok</p>", charset=None),
+        ):
+            accepted = client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com"},
+                headers={"X-API-Key": "local-test-secret"},
+            )
+
         self.assertEqual(accepted.status_code, 200)
 
     def test_rapidapi_proxy_secret_authentication(self) -> None:

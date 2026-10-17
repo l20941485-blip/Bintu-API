@@ -24,19 +24,24 @@ class McpStreamableTests(unittest.TestCase):
         )
 
     def test_initialize_returns_supported_protocol_and_server_info(self) -> None:
-        response = self.rpc("initialize", {"protocolVersion": "2025-06-18"})
+        response = self.rpc("initialize", {"protocolVersion": "2025-11-25"})
 
         self.assertEqual(response.status_code, 200)
         result = response.json()["result"]
-        self.assertEqual(result["protocolVersion"], "2025-06-18")
+        self.assertEqual(result["protocolVersion"], "2025-11-25")
         self.assertIn("tools", result["capabilities"])
         self.assertEqual(result["serverInfo"]["name"], "bintu")
         self.assertEqual(result["serverInfo"]["version"], "1.0.0")
 
+    def test_initialize_accepts_older_supported_versions(self) -> None:
+        response = self.rpc("initialize", {"protocolVersion": "2025-06-18"})
+
+        self.assertEqual(response.json()["result"]["protocolVersion"], "2025-06-18")
+
     def test_initialize_falls_back_to_latest_for_unknown_version(self) -> None:
         response = self.rpc("initialize", {"protocolVersion": "1999-01-01"})
 
-        self.assertEqual(response.json()["result"]["protocolVersion"], "2025-06-18")
+        self.assertEqual(response.json()["result"]["protocolVersion"], "2025-11-25")
 
     def test_ping_returns_empty_result(self) -> None:
         response = self.rpc("ping")
@@ -147,12 +152,51 @@ class McpStreamableTests(unittest.TestCase):
         )
         self.assertEqual(authorized.status_code, 200)
 
-    def test_get_and_delete_are_method_not_allowed(self) -> None:
-        for method in ("GET", "DELETE"):
+    def test_get_returns_empty_sse_stream_for_stateless_server(self) -> None:
+        response = self.client.get("/mcp")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/event-stream", response.headers["content-type"])
+
+    def test_delete_and_unknown_methods_are_method_not_allowed(self) -> None:
+        for method in ("DELETE", "PUT", "PATCH"):
             with self.subTest(method=method):
                 response = self.client.request(method, "/mcp")
                 self.assertEqual(response.status_code, 405)
-                self.assertEqual(response.headers["allow"], "POST")
+                self.assertIn("POST", response.headers["allow"])
+
+    def test_unsupported_protocol_version_is_rejected_with_400(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            headers={"MCP-Protocol-Version": "1999-01-01"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("2025-11-25", response.json()["error"]["message"])
+
+    def test_supported_protocol_version_header_is_accepted(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            headers={"MCP-Protocol-Version": "2025-11-25"},
+        )
+
+        self.assertEqual(response.json(), {"jsonrpc": "2.0", "id": 1, "result": {}})
+
+    def test_missing_protocol_version_falls_back_per_spec(self) -> None:
+        response = self.rpc("ping")
+
+        self.assertEqual(response.json(), {"jsonrpc": "2.0", "id": 1, "result": {}})
+
+    def test_foreign_origin_is_rejected_with_403(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            headers={"Origin": "https://evil.example"},
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_legacy_helpers_still_work_alongside(self) -> None:
         response = self.client.get("/mcp/tools")

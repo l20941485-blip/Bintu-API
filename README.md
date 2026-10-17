@@ -115,6 +115,7 @@ An invalid or unsafe URL returns HTTP 400:
 |---|---|---|
 | 400 | `invalid_or_unsafe_url`, `render_js_disabled` | Use a well-formed public HTTP or HTTPS URL. Private-network destinations are blocked. `render_js=true` is disabled unless the service enables it — retry with `render_js=false`. |
 | 401 | `invalid_api_key` | Send the current `X-API-Key` configured in Render. |
+| 500 | `auth_misconfiguration` | `REQUIRE_AUTH=true` is set (Render production default) but `API_KEY` and `RAPIDAPI_PROXY_SECRET` are both empty. Restore the secrets in the Render dashboard, then redeploy. |
 | 413 | `payload_too_large` | The HTML exceeds 1 MiB after decompression. |
 | 415 | `unsupported_media_type` | The target must return HTML or XHTML. |
 | 429 | `burst_rate_limit_exceeded` | Pause for the seconds specified in the `Retry-After` response header, then retry. |
@@ -131,6 +132,7 @@ Use Python 3.12. Install the application and test dependencies, then start the s
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
+cd "Bintu API"
 uvicorn main:app --reload
 ```
 
@@ -218,7 +220,7 @@ Only scrape content you are authorized to access. Respect the target site's term
 
 ### Connect Claude
 
-`POST /mcp` implements the standard MCP Streamable HTTP transport, so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET`/`DELETE` return `405`, and each JSON-RPC message is answered with a single `application/json` response.
+`POST /mcp` implements the standard MCP Streamable HTTP transport (protocol `2025-11-25`, also accepting `2025-06-18`/`2025-03-26`), so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET` answers with an empty SSE stream, `DELETE`/`PUT`/`PATCH` return `405`, and each JSON-RPC message is answered with a single `application/json` response. Requests after `initialize` must carry the negotiated `MCP-Protocol-Version` header (unknown versions get `400`), and a mismatched `Origin` header is rejected with `403` against DNS rebinding.
 
 - Claude web or Desktop: add a custom connector with URL `https://<your-host>/mcp` and a request header `X-API-Key: <your-key>`.
 - Claude Code: `claude mcp add --transport http bintu https://<your-host>/mcp --header "X-API-Key: <your-key>"`.
