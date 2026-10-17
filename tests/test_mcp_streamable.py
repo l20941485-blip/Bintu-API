@@ -152,6 +152,37 @@ class McpStreamableTests(unittest.TestCase):
         )
         self.assertEqual(authorized.status_code, 200)
 
+    def test_initialize_is_public_so_gateway_probes_pass_without_key(self) -> None:
+        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
+        client = TestClient(app)
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-11-25"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["result"]["serverInfo"]["name"], "bintu")
+
+    def test_tools_list_and_call_still_require_key(self) -> None:
+        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
+        client = TestClient(app)
+        for method, params in (
+            ("tools/list", {}),
+            ("tools/call", {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}}),
+        ):
+            with self.subTest(method=method):
+                response = client.post(
+                    "/mcp",
+                    json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                )
+
+                self.assertEqual(response.status_code, 401)
+
     def test_get_returns_empty_sse_stream_for_stateless_server(self) -> None:
         response = self.client.get("/mcp")
 

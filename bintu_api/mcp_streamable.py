@@ -8,7 +8,11 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 
 - POST /mcp accepts one JSON-RPC message per request and answers with a
   single ``application/json`` response (the spec allows skipping SSE when
-  the server never pushes messages).
+  the server never pushes messages). ``initialize`` is a public capability
+  handshake (protocol version + tool names only, no extraction); every
+  other method requires the normal API key, so gateway health-checkers
+  that omit the upstream token can validate the endpoint while all
+  billable work stays behind auth.
 - GET /mcp answers with an immediately-closing empty SSE stream: the endpoint
   must support GET, but this stateless server keeps no streams to resume.
   GET /sse and GET /mcp/sse are compatibility aliases for gateways that
@@ -230,7 +234,6 @@ async def _tools_call_result(
 @router.post("/mcp", include_in_schema=False)
 async def mcp_messages(request: Request):
     settings: Settings = request.app.state.settings
-    verify_api_access(request, settings)
 
     if not _origin_is_allowed(request):
         logger.warning("mcp_forbidden_origin origin=%r", request.headers.get("origin", ""))
@@ -258,22 +261,33 @@ async def mcp_messages(request: Request):
     request_id = payload.get("id")
     if request_id is None:
         # Notification (e.g. notifications/initialized): 202, no body.
+        # Authenticated below via tools/call path; capability probes without an
+        # id carry no billable work.
         return Response(status_code=202)
 
     method = payload["method"]
-    if method != "initialize":
-        declared_version = _protocol_version_header(request)
-        if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:
-            logger.info("mcp_unsupported_protocol_version version=%r", declared_version)
-            return _reject_unknown_protocol_version(declared_version)
+    if method == "initialize":
+        # Capability handshake only: returns protocol version + tool *names*,
+        # no extraction, no billable work. Public so gateway health-checkers
+        # and Test buttons (which omit the upstream token) can validate the
+        # endpoint; tools/list and tools/call below still require auth.
+        params = payload.get("params") or {}
+        if not isinstance(params, dict):
+            return JSONResponse(_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"))
+        return JSONResponse(_initialize_result(settings, request_id, params))
+
+    verify_api_access(request, settings)
+
+    declared_version = _protocol_version_header(request)
+    if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:
+        logger.info("mcp_unsupported_protocol_version version=%r", declared_version)
+        return _reject_unknown_protocol_version(declared_version)
 
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         # MCP defines object params only; arrays (by-position) are not used.
         return JSONResponse(_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"))
 
-    if method == "initialize":
-        return JSONResponse(_initialize_result(settings, request_id, params))
     if method == "ping":
         return JSONResponse(_rpc_result(request_id, {}))
     if method == "tools/list":
