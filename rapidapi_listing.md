@@ -1,5 +1,6 @@
-# Bintu Data Extraction API — RapidAPI listing pack (paste into provider dashboard)
-# Source of truth: README.md + /docs. Error codes and limits must match the app.
+# Bintu Data Extraction API — RapidAPI + MCPize listing pack (paste into provider dashboards)
+# Source of truth: README.md "Storefront parity" table + /docs. Error codes and limits must match the app.
+# NEVER send MCPize buyers to RapidAPI (or vice versa): each gateway bills its own subscribers.
 
 ## Short description (Spotlight 1, keep)
 Extract clean, readable text from public HTML pages with a simple API.
@@ -79,6 +80,73 @@ Plans (monthly quota enforced by RapidAPI; burst guard always 60/60s; plain HTML
 JS rendering (`render_js=true`) currently returns 400 `render_js_disabled` on all plans; quotas above are plain-HTML. Rendering returns only if re-enabled via `RENDER_JS_ENABLED=true` on paid infra.
 Support: include the `X-Request-ID` response header (see FEEDBACK.md template).
 Docs: https://bintu-api.onrender.com/docs — Health: https://bintu-api.onrender.com/healthz
+
+## MCPize listing pack (paste into MCPize dashboard — Description / Quick Start / Monetize)
+
+Gateway: `https://bintu-web-reader.mcpize.run` (upstream `POST https://bintu-api.onrender.com/mcp`).
+Verified live 2026-10-17: discovery lists `bintu_scrape_text`; `tools/call`
+`{"url": "https://www.iana.org/domains/reserved", "render_js": false}` →
+`{"content": [{"type": "text", "text": "# IANA-managed Reserved Domains\n..."}], "isError": false}`.
+Cold fetch ~2–6 s, Supabase 24 h cache hit ~300 ms.
+
+Description (paste; do NOT mention RapidAPI — MCPize bills its own subscribers):
+
+```markdown
+High-speed MCP tool for Claude context optimization. Strips tracking scripts, footers, and HTML noise, returning clean Markdown text to save up to 70% in token overhead. Perfect for Claude Code and Cursor agents.
+
+Subscribe on this page, copy your MCPize API key, and point your client at bintu-web-reader.mcpize.run. No separate token needed — billing, rate limits, and analytics are handled here.
+
+What you get:
+- Article/main content preferred; nav, header, footer, scripts stripped by default
+- Headings (#/##/###), tables (Markdown pipes), links as label (absolute URL)
+- 6,000-character cap with word-boundary cut; truncated flag when it applies
+- Plain-HTML extraction; render_js=true returns a retry-with-false hint (JS rendering disabled)
+
+What it refuses (by design, no exceptions):
+- Logins, paywalls, CAPTCHAs, anti-bot bypasses
+- Non-HTML content (PDFs, images, video, JSON)
+- Private/non-public URLs (SSRF-guarded, 1 MiB cap, 5 redirects max)
+
+Limits: 60 req / 60 s burst guard per subscriber · monthly quota enforced by your MCPize plan, not the tool.
+```
+
+Quick Start (paste):
+
+```markdown
+1. Click Subscribe and pick a tier below.
+2. Copy your MCPize API key (sk_...).
+3. Connect your client:
+
+Claude Code:
+claude mcp add --transport http bintu https://bintu-web-reader.mcpize.run --header "Authorization: Bearer YOUR_MCPIZE_KEY"
+
+Claude web/Desktop: add a custom connector with URL https://bintu-web-reader.mcpize.run and your MCPize key.
+
+4. Call the tool:
+
+Tool: bintu_scrape_text
+Arguments: {"url": "https://www.iana.org/domains/reserved", "render_js": false}
+
+5. Expect:
+
+{"content": [{"type": "text", "text": "# IANA-managed Reserved Domains\n## Example domains\n..."}], "isError": false}
+
+If isError is true, read the text — it tells the model how to self-correct (e.g. bad URL, rate limit, render_js_disabled → retry with false).
+```
+
+Publisher tiers (dashboard → Monetize; mirror RapidAPI so storefronts don't undercut each other; 80% via Stripe Connect, $100 minimum payout):
+- Free $0: ~1,000 calls/mo — discovery
+- Pro $9: ~10,000 calls/mo — solo devs, Claude Code daily use
+- Ultra $29: ~50,000 calls/mo — agents, RAG pipelines, monitoring
+- Mega $79: ~200,000 calls/mo — teams, high-volume ingestion
+
+Tags: scraper, claude, web-scraping + readability, rag, markdown, extraction (if slots allow).
+
+Upstream notes (operator only, NOT for the listing): Base URL `https://bintu-api.onrender.com/mcp`;
+upstream auth = single `X-API-Key` (Render `API_KEY`); `initialize` is a public
+handshake so the Test button passes without the token, `tools/list` + `tools/call`
+require it; `GET /sse` + `GET /mcp/sse` aliases cover the SSE probe; keep the
+MCPize gateway URL on the cron keep-alive next to Render `/healthz`.
 
 ## Endpoint tests (add in RapidAPI dashboard, all against https://example.com/, render_js=false)
 1. Happy path: GET /api/v1/scrape/text?url=https://example.com/ -> 200, body has `url`, non-empty `text`, boolean `truncated`

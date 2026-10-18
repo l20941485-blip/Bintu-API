@@ -210,6 +210,20 @@ Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-dri
 
 The free instance can sleep while idle, so the first request may be slow. Free services are best for validation and early users, not latency-sensitive production or an uptime guarantee. The local burst guard resets on restarts and is not shared across instances. It is not a paid quota; use RapidAPI plan limits as the billing authority.
 
+## Storefront parity (single source of truth)
+
+One API, three doors. Behaviour is identical; only auth + billing differ per gateway:
+
+| | Direct (Render) | RapidAPI | MCPize |
+|---|---|---|---|
+| Endpoint | `GET /api/v1/scrape/text?url=…` at `https://bintu-api.onrender.com` | Same path at `https://bintu-data-extraction-api.p.rapidapi.com` | `bintu_scrape_text` tool at `https://bintu-web-reader.mcpize.run` (upstream `POST https://bintu-api.onrender.com/mcp`) |
+| Auth | `X-API-Key: <Render API_KEY>` | `X-RapidAPI-Key` + `X-RapidAPI-Host` (gateway injects `X-RapidAPI-Proxy-Secret` + `X-RapidAPI-User`) | Subscriber's MCPize key (`sk_…`); gateway injects the upstream `X-API-Key`. Never send buyers to RapidAPI from the MCPize page |
+| Billing | None (owner key) | RapidAPI plans: BASIC $0/100 · PRO $9/10k · ULTRA $29/50k · MEGA $79/100k+ | MCPize publisher tiers (dashboard → Monetize): Free ~1k · Pro $9–19 · Team $49+ (80% via Stripe Connect) |
+| Quota | 60 req / 60 s burst guard per IP | 60/60s per `X-RapidAPI-User` + plan quota | 60/60s global across MCPize subscribers (single upstream token) + plan quota |
+| Cache | 5-min in-memory + 24 h Supabase persistent | Same | Same upstream cache; cold fetch ~2–6 s, cache hit ~300 ms |
+
+Limits everywhere: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (plain HTML only until `RENDER_JS_ENABLED=true` on paid infra). Error codes: see [Common errors](#common-errors).
+
 ## RapidAPI Publishing
 
 RapidAPI handles subscriber authentication and billing at its gateway. In the RapidAPI provider dashboard, point the API base URL at the Render service and configure the provider proxy secret. Set Render's `RAPIDAPI_PROXY_SECRET` to the same value. Requests authenticated with `X-RapidAPI-Proxy-Secret` are accepted; their `X-RapidAPI-User` identity receives an independent 60-request-per-minute bucket. Keep `API_KEY` for owner/direct access, and never expose either secret in client examples.
@@ -220,10 +234,11 @@ Only scrape content you are authorized to access. Respect the target site's term
 
 ### Connect Claude
 
-`POST /mcp` implements the standard MCP Streamable HTTP transport (protocol `2025-11-25`, also accepting `2025-06-18`/`2025-03-26`), so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET` answers with an empty SSE stream, `DELETE`/`PUT`/`PATCH` return `405`, and each JSON-RPC message is answered with a single `application/json` response. Requests after `initialize` must carry the negotiated `MCP-Protocol-Version` header (unknown versions get `400`), and a mismatched `Origin` header is rejected with `403` against DNS rebinding.
+`POST /mcp` implements the standard MCP Streamable HTTP transport (protocol `2025-11-25`, also accepting `2025-06-18`/`2025-03-26`), so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET` answers with an empty SSE stream (`GET /sse` and `GET /mcp/sse` are compatibility aliases for gateways that probe a dedicated SSE path), `DELETE`/`PUT`/`PATCH` return `405`, and each JSON-RPC message is answered with a single `application/json` response. Requests after `initialize` must carry the negotiated `MCP-Protocol-Version` header (unknown versions get `400`), and a mismatched `Origin` header is rejected with `403` against DNS rebinding. `initialize` is a public capability handshake (protocol version + tool names only, no extraction); `tools/list` and `tools/call` require auth, so gateway health-checkers that omit the upstream token can validate the endpoint while all billable work stays behind auth.
 
-- Claude web or Desktop: add a custom connector with URL `https://<your-host>/mcp` and a request header `X-API-Key: <your-key>`.
-- Claude Code: `claude mcp add --transport http bintu https://<your-host>/mcp --header "X-API-Key: <your-key>"`.
+- Direct (owner key) — Claude web or Desktop: custom connector URL `https://bintu-api.onrender.com/mcp` with request header `X-API-Key: <Render API_KEY>`.
+- Direct — Claude Code: `claude mcp add --transport http bintu https://bintu-api.onrender.com/mcp --header "X-API-Key: <Render API_KEY>"`.
+- MCPize (subscribers): connect to `https://bintu-web-reader.mcpize.run` with your MCPize `sk_…` key — the gateway injects the upstream token. No RapidAPI subscription needed; billing lives on the MCPize listing.
 
 The server exposes one tool, `bintu_scrape_text`, with the same schema as the REST scrape. Tool execution failures (unsafe URL, rate limit, upstream error, `render_js_disabled`) come back in-band as `isError: true` with readable text so the model can correct itself. All requests still require the normal API key and count against the same rate limit. This endpoint is hidden from `/docs`; see the MCP section of the README.
 

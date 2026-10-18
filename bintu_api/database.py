@@ -5,12 +5,20 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from bintu_api.settings import Settings
 
 if TYPE_CHECKING:
-    from supabase import AsyncClient
+    from supabase import AsyncClient  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
+else:
+    # Runtime fallback so annotations (PEP 563 strings via
+    # `from __future__ import annotations`) and tools that inspect
+    # module attributes never raise NameError when supabase isn't installed.
+    # The real client is imported lazily inside create_supabase_client().
+    # Annotated as TypeAlias so Pylance/pyright accept it in type expressions
+    # like `AsyncClient | None` ("Variable not allowed in type expression").
+    AsyncClient: TypeAlias = Any
 
 
 logger = logging.getLogger("bintu_api.database")
@@ -29,7 +37,12 @@ async def create_supabase_client(settings: Settings) -> AsyncClient | None:
     if not settings.supabase_url or not settings.supabase_service_role_key:
         return None
 
-    from supabase import create_async_client
+    try:
+        from supabase import create_async_client  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
+    except ImportError as exc:
+        raise RuntimeError(
+            "supabase package is not installed. Install it with `pip install supabase==2.15.0`."
+        ) from exc
 
     return await create_async_client(settings.supabase_url, settings.supabase_service_role_key)
 
@@ -48,6 +61,14 @@ async def get_cached_markdown(
 ) -> CachedMarkdown | None:
     """Return a cache entry only if it was successfully extracted in the last 24 hours."""
     cutoff = (datetime.now(timezone.utc) - CACHE_TTL).isoformat()
+    # Plain select + limit(1) instead of maybe_single(): maybe_single() sends
+    # `Accept: application/vnd.pgrst.object+json`, which PostgREST answers with
+    # 406 Not Acceptable whenever zero rows match (observed live 2026-10-17),
+    # and postgrest-py returns None / a bare dict rather than an APIResponse —
+    # so `response.data` raised AttributeError on every lookup. A plain select
+    # returns 200 with [] for a miss, and the composite primary key on
+    # (url, render_js, include_nav, include_header, include_footer) guarantees
+    # at most one row per cache key.
     response = await (
         client.table("scrape_cache")
         .select("markdown,truncated")
@@ -57,10 +78,13 @@ async def get_cached_markdown(
         .eq("include_header", include_header)
         .eq("include_footer", include_footer)
         .gt("created_at", cutoff)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    row = response.data
+    rows = response.data
+    if not isinstance(rows, list) or not rows:
+        return None
+    row = rows[0]
     if not isinstance(row, dict):
         return None
     markdown = row.get("markdown")
