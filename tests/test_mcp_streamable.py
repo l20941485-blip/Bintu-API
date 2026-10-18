@@ -139,18 +139,52 @@ class McpStreamableTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 415)
 
-    def test_api_key_is_required_when_configured(self) -> None:
+    def test_discovery_methods_pass_without_key_when_configured(self) -> None:
+        # initialize/tools/list/ping are the tokenless onboarding surface:
+        # health checkers and Claude Web cannot send headers during setup.
         app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
         client = TestClient(app)
-        unauthorized = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        for method, params in (
+            ("initialize", {"protocolVersion": "2025-11-25"}),
+            ("tools/list", {}),
+            ("ping", {}),
+        ):
+            with self.subTest(method=method):
+                response = client.post(
+                    "/mcp",
+                    json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                )
+
+                self.assertEqual(response.status_code, 200)
+
+    def test_tools_call_requires_api_key_when_configured(self) -> None:
+        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
+        client = TestClient(app)
+        call_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+        }
+        unauthorized = client.post("/mcp", json=call_payload)
 
         self.assertEqual(unauthorized.status_code, 401)
-        authorized = client.post(
-            "/mcp",
-            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
-            headers={"X-API-Key": "owner-key"},
+        self.assertEqual(
+            unauthorized.json()["detail"],
+            {
+                "code": "invalid_api_key",
+                "message": "A premium subscription or valid X-API-Key is required to execute scrapes.",
+            },
         )
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<main>gated</main>", charset=None),
+        ):
+            authorized = client.post(
+                "/mcp", json=call_payload, headers={"X-API-Key": "owner-key"}
+            )
         self.assertEqual(authorized.status_code, 200)
+        self.assertEqual(authorized.json()["result"]["content"][0]["text"], "gated")
 
     def test_initialize_is_public_so_gateway_probes_pass_without_key(self) -> None:
         app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
@@ -168,20 +202,55 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["result"]["serverInfo"]["name"], "bintu")
 
-    def test_tools_list_and_call_still_require_key(self) -> None:
-        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
+    def test_execution_accepts_authorization_bearer_with_either_key(self) -> None:
+        app = create_app(
+            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
+        )
         client = TestClient(app)
-        for method, params in (
-            ("tools/list", {}),
-            ("tools/call", {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}}),
+        call_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+        }
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<main>bearer ok</main>", charset=None),
         ):
-            with self.subTest(method=method):
-                response = client.post(
-                    "/mcp",
-                    json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
-                )
+            for token in ("owner-key", "claude-key"):
+                with self.subTest(token=token):
+                    response = client.post(
+                        "/mcp",
+                        json=call_payload,
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(
+                        response.json()["result"]["content"][0]["text"], "bearer ok"
+                    )
 
-                self.assertEqual(response.status_code, 401)
+    def test_execution_rejects_invalid_bearer_with_premium_detail(self) -> None:
+        app = create_app(
+            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
+        )
+        client = TestClient(app)
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+            },
+            headers={"Authorization": "Bearer wrong-token"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_api_key")
+        self.assertEqual(
+            response.json()["detail"]["message"],
+            "A premium subscription or valid X-API-Key is required to execute scrapes.",
+        )
 
     def test_get_returns_empty_sse_stream_for_stateless_server(self) -> None:
         response = self.client.get("/mcp")
@@ -290,10 +359,19 @@ class McpScopedApiKeyTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_unknown_key_is_rejected_on_mcp(self) -> None:
-        response = self.rpc("tools/list", headers={"X-API-Key": "wrong-key"})
+    def test_unknown_key_is_rejected_on_execution(self) -> None:
+        # Discovery is public now, so the wrong-key contract lives on tools/call.
+        response = self.rpc(
+            "tools/call",
+            {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+            headers={"X-API-Key": "wrong-key"},
+        )
 
         self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.json()["detail"]["message"],
+            "A premium subscription or valid X-API-Key is required to execute scrapes.",
+        )
 
     def test_scoped_key_can_be_the_only_configured_secret(self) -> None:
         app = create_app(Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="claude-key"))

@@ -8,12 +8,14 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 
 - POST /mcp accepts one JSON-RPC message per request and answers with a
   single ``application/json`` response (the spec allows skipping SSE when
-  the server never pushes messages). ``initialize`` is a public capability
-  handshake (protocol version + tool names only, no extraction); every
-  other method requires the master API_KEY or the scoped MCP_API_KEY, so
-  gateway health-checkers
-  that omit the upstream token can validate the endpoint while all
-  billable work stays behind auth.
+  the server never pushes messages). ``initialize``, ``tools/list`` and
+  ``ping`` are public discovery/onboarding methods (protocol negotiation,
+  tool schemas, liveness — never extraction); every other method — above
+  all ``tools/call`` — requires the master API_KEY, the scoped
+  MCP_API_KEY, or ``Authorization: Bearer`` with either key, so gateway
+  health-checkers and marketplace audits that omit the upstream token
+  complete instantly while all billable work stays behind auth (401 with
+  a premium-subscription detail).
 - GET /mcp answers with an immediately-closing empty SSE stream: the endpoint
   must support GET, but this stateless server keeps no streams to resume.
   GET /sse and GET /mcp/sse are compatibility aliases for gateways that
@@ -41,7 +43,11 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from bintu_api.auth import rate_limit_identity, verify_mcp_api_access
+from bintu_api.auth import (
+    rate_limit_identity,
+    verify_mcp_api_access,
+    verify_mcp_execution_access,
+)
 from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, ToolArguments
 from bintu_api.routes import _scrape_text
 from bintu_api.settings import Settings
@@ -54,6 +60,12 @@ SERVER_NAME = "bintu"
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26")
 LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 FALLBACK_PROTOCOL_VERSION = "2025-03-26"
+# Methods that pass without credentials: capability handshake, tool
+# discovery, and liveness. None of them extract anything, so gateway
+# health-checkers and marketplace audits (which cannot send headers during
+# onboarding) complete instantly while tools/call and every other method
+# stay behind verify_mcp_execution_access.
+PUBLIC_MCP_METHODS = frozenset({"initialize", "tools/list", "ping"})
 SERVER_INSTRUCTIONS = (
     "Extract readable text from public web pages with bintu_scrape_text. "
     "Pass an absolute http(s) URL; the result is readable text capped at "
@@ -271,13 +283,18 @@ async def mcp_messages(request: Request):
         # Capability handshake only: returns protocol version + tool *names*,
         # no extraction, no billable work. Public so gateway health-checkers
         # and Test buttons (which omit the upstream token) can validate the
-        # endpoint; tools/list and tools/call below still require auth.
+        # endpoint; tools/list and ping below are public discovery too, while
+        # tools/call and every other method still require auth.
         params = payload.get("params") or {}
         if not isinstance(params, dict):
             return JSONResponse(_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"))
         return JSONResponse(_initialize_result(settings, request_id, params))
 
-    verify_mcp_api_access(request, settings)
+    if method not in PUBLIC_MCP_METHODS:
+        # Billable work (tools/call) and any other non-discovery method:
+        # X-API-Key or Authorization: Bearer with the scoped or master key;
+        # a missing/invalid credential answers the premium-detail 401.
+        verify_mcp_execution_access(request, settings)
 
     declared_version = _protocol_version_header(request)
     if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:

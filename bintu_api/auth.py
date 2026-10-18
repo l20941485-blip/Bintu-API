@@ -87,6 +87,60 @@ def verify_mcp_api_access(request: Request, settings: Settings) -> None:
     verify_api_access(request, settings)
 
 
+# HTTPException body for billable MCP methods (tools/call) when no valid
+# credential is presented. Kept distinct from verify_api_access' generic
+# wording: marketplace callers get steered to subscribe ("premium
+# subscription") instead of a bare "invalid key", matching the storefront
+# copy in README / rapidapi_listing.md.
+MCP_EXECUTION_FORBIDDEN_DETAIL = {
+    "code": "invalid_api_key",
+    "message": "A premium subscription or valid X-API-Key is required to execute scrapes.",
+}
+
+
+def _bearer_matches(request: Request, settings: Settings) -> bool:
+    """True when ``Authorization: Bearer`` carries the scoped or master key.
+
+    The MCP authorization spec sends credentials in the Authorization
+    header, so connectors configured that way must unlock the MCP surfaces
+    exactly like ``X-API-Key`` does.
+    """
+    scheme, separator, token = request.headers.get("Authorization", "").partition(" ")
+    if not separator or scheme.lower() != "bearer":
+        return False
+    candidate = token.strip()
+    return _secret_matches(candidate, settings.mcp_api_key) or _secret_matches(
+        candidate, settings.api_key
+    )
+
+
+def verify_mcp_execution_access(request: Request, settings: Settings) -> None:
+    """Authorize billable MCP work: ``tools/call`` and any other heavy method.
+
+    Discovery methods (``initialize``, ``tools/list``, ``ping``) never reach
+    this check — they pass through tokenless for gateway health-checkers,
+    marketplace audits, and Claude Web onboarding, none of which can send
+    headers during initialization. Execution must present the scoped
+    MCP_API_KEY or master API_KEY via ``X-API-Key`` or
+    ``Authorization: Bearer``; the RapidAPI proxy secret still passes via
+    verify_mcp_api_access. Open dev mode (no secrets configured) and the
+    REQUIRE_AUTH misconfiguration guard keep the contracts defined in
+    verify_api_access — only the caller-facing 401 body is specialized.
+    """
+    if _bearer_matches(request, settings):
+        return
+    try:
+        verify_mcp_api_access(request, settings)
+    except HTTPException as error:
+        if error.status_code != 401:
+            raise
+        raise HTTPException(
+            status_code=401,
+            detail=MCP_EXECUTION_FORBIDDEN_DETAIL,
+            headers={"WWW-Authenticate": 'Bearer realm="bintu", ApiKey'},
+        ) from error
+
+
 def verify_supabase_user(request: Request, settings: Settings) -> str:
     authorization = request.headers.get("Authorization", "")
     scheme, separator, token = authorization.partition(" ")
