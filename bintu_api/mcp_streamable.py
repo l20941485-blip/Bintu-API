@@ -10,7 +10,8 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
   single ``application/json`` response (the spec allows skipping SSE when
   the server never pushes messages). ``initialize`` is a public capability
   handshake (protocol version + tool names only, no extraction); every
-  other method requires the normal API key, so gateway health-checkers
+  other method requires the master API_KEY or the scoped MCP_API_KEY, so
+  gateway health-checkers
   that omit the upstream token can validate the endpoint while all
   billable work stays behind auth.
 - GET /mcp answers with an immediately-closing empty SSE stream: the endpoint
@@ -40,7 +41,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from bintu_api.auth import rate_limit_identity, verify_api_access
+from bintu_api.auth import rate_limit_identity, verify_mcp_api_access
 from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, ToolArguments
 from bintu_api.routes import _scrape_text
 from bintu_api.settings import Settings
@@ -119,7 +120,7 @@ def _reject_forbidden_origin() -> JSONResponse:
 async def _empty_sse_stream(request: Request) -> Response:
     """Shared handler for GET /mcp and its /sse aliases (stateless: empty stream)."""
     settings: Settings = request.app.state.settings
-    verify_api_access(request, settings)
+    verify_mcp_api_access(request, settings)
     if not _origin_is_allowed(request):
         return _reject_forbidden_origin()
     return Response(
@@ -276,7 +277,7 @@ async def mcp_messages(request: Request):
             return JSONResponse(_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"))
         return JSONResponse(_initialize_result(settings, request_id, params))
 
-    verify_api_access(request, settings)
+    verify_mcp_api_access(request, settings)
 
     declared_version = _protocol_version_header(request)
     if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:

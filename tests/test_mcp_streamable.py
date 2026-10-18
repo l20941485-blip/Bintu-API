@@ -244,5 +244,69 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(response.json()["tools"][0]["name"], TOOL_NAME)
 
 
+class McpScopedApiKeyTests(unittest.TestCase):
+    """MCP_API_KEY unlocks the MCP surfaces only, never REST or /metrics."""
+
+    def setUp(self) -> None:
+        self.app = create_app(
+            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
+        )
+        self.client = TestClient(self.app)
+
+    def rpc(self, method: str, params: dict | None = None, headers: dict | None = None):
+        return self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}},
+            headers=headers or {},
+        )
+
+    def test_scoped_key_is_accepted_on_streamable_endpoint(self) -> None:
+        response = self.rpc("tools/list", headers={"X-API-Key": "claude-key"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["result"]["tools"][0]["name"], TOOL_NAME)
+
+    def test_scoped_key_is_accepted_on_legacy_helpers(self) -> None:
+        response = self.client.get("/mcp/tools", headers={"X-API-Key": "claude-key"})
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_scoped_key_is_rejected_on_rest_routes(self) -> None:
+        response = self.client.get(
+            "/api/v1/scrape/text?url=https://example.com",
+            headers={"X-API-Key": "claude-key"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"]["code"], "invalid_api_key")
+
+    def test_scoped_key_is_rejected_on_metrics(self) -> None:
+        response = self.client.get("/metrics", headers={"X-API-Key": "claude-key"})
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_master_key_still_works_on_mcp(self) -> None:
+        response = self.rpc("tools/list", headers={"X-API-Key": "owner-key"})
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_unknown_key_is_rejected_on_mcp(self) -> None:
+        response = self.rpc("tools/list", headers={"X-API-Key": "wrong-key"})
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_scoped_key_can_be_the_only_configured_secret(self) -> None:
+        app = create_app(Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="claude-key"))
+        client = TestClient(app)
+
+        response = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            headers={"X-API-Key": "claude-key"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

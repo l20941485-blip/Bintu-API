@@ -71,6 +71,22 @@ def verify_api_access(request: Request, settings: Settings) -> None:
         )
 
 
+def verify_mcp_api_access(request: Request, settings: Settings) -> None:
+    """Authenticate MCP clients with the scoped key or the standard credentials.
+
+    MCP clients (Claude custom connectors, Claude Code, MCPize upstream
+    probes) may present either the scoped MCP_API_KEY or the usual
+    credentials. The scoped key exists because connectors store a static
+    X-API-Key header: sharing it must not hand out the master API_KEY that
+    guards the REST routes and /metrics, and rotating it must not require
+    rotating the master key. It is only ever accepted here — on the MCP
+    surfaces — never in verify_api_access.
+    """
+    if _secret_matches(request.headers.get("X-API-Key", ""), settings.mcp_api_key):
+        return
+    verify_api_access(request, settings)
+
+
 def verify_supabase_user(request: Request, settings: Settings) -> str:
     authorization = request.headers.get("Authorization", "")
     scheme, separator, token = authorization.partition(" ")

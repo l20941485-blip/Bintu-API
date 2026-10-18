@@ -14,6 +14,12 @@ services:
         value: 3.12.8
       - key: API_KEY
         generateValue: true
+      # Optional scoped key for MCP clients (Claude connectors, Claude Code):
+      # accepted only on /mcp and /mcp/tools*, never on REST routes or
+      # /metrics. Set in the dashboard when sharing connector access; empty
+      # keeps the master API_KEY working on /mcp as before.
+      - key: MCP_API_KEY
+        sync: false
       - key: RAPIDAPI_PROXY_SECRET
         sync: false
       # Fail closed in production: if both secrets above are ever empty

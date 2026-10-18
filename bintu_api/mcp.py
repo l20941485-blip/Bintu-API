@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from bintu_api.auth import (
     api_key_scheme,
     rate_limit_identity,
-    verify_api_access,
+    verify_mcp_api_access,
 )
 from bintu_api.routes import _scrape_text
 from bintu_api.settings import Settings
@@ -63,7 +63,7 @@ class ToolArguments(BaseModel):
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def list_tools(request: Request) -> dict[str, Any]:
-    verify_api_access(request, request.app.state.settings)
+    verify_mcp_api_access(request, request.app.state.settings)
     return {
         "tools": [
             {
@@ -81,7 +81,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
 )
 async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, list[dict[str, str]]]:
     settings: Settings = request.app.state.settings
-    verify_api_access(request, settings)
+    verify_mcp_api_access(request, settings)
     if payload.name != TOOL_NAME:
         raise HTTPException(status_code=400, detail=f"Unknown MCP tool: {payload.name}")
     try:

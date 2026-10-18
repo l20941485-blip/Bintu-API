@@ -48,6 +48,11 @@ def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int
 class Settings:
     api_key: str
     rapidapi_proxy_secret: str
+    # Optional second key accepted ONLY on the MCP surfaces (/mcp, /mcp/tools*).
+    # Exists so connectors that store a static X-API-Key header (e.g. Claude
+    # custom connectors) get a shareable, independently rotatable credential
+    # that can never unlock the REST routes or /metrics.
+    mcp_api_key: str = ""
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
@@ -83,6 +88,7 @@ class Settings:
         return cls(
             api_key=os.getenv("API_KEY", "").strip(),
             rapidapi_proxy_secret=os.getenv("RAPIDAPI_PROXY_SECRET", "").strip(),
+            mcp_api_key=os.getenv("MCP_API_KEY", "").strip(),
             supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
             supabase_anon_key=os.getenv("SUPABASE_ANON_KEY", "").strip(),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip(),

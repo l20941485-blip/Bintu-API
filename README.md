@@ -236,11 +236,13 @@ Only scrape content you are authorized to access. Respect the target site's term
 
 `POST /mcp` implements the standard MCP Streamable HTTP transport (protocol `2025-11-25`, also accepting `2025-06-18`/`2025-03-26`), so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET` answers with an empty SSE stream (`GET /sse` and `GET /mcp/sse` are compatibility aliases for gateways that probe a dedicated SSE path), `DELETE`/`PUT`/`PATCH` return `405`, and each JSON-RPC message is answered with a single `application/json` response. Requests after `initialize` must carry the negotiated `MCP-Protocol-Version` header (unknown versions get `400`), and a mismatched `Origin` header is rejected with `403` against DNS rebinding. `initialize` is a public capability handshake (protocol version + tool names only, no extraction); `tools/list` and `tools/call` require auth, so gateway health-checkers that omit the upstream token can validate the endpoint while all billable work stays behind auth.
 
-- Direct (owner key) — Claude web or Desktop: custom connector URL `https://bintu-api.onrender.com/mcp` with request header `X-API-Key: <Render API_KEY>`.
-- Direct — Claude Code: `claude mcp add --transport http bintu https://bintu-api.onrender.com/mcp --header "X-API-Key: <Render API_KEY>"`.
+- Direct — Claude web or Desktop: custom connector URL `https://bintu-api.onrender.com/mcp` with request header `X-API-Key: <MCP_API_KEY>`.
+- Direct — Claude Code: `claude mcp add --transport http bintu https://bintu-api.onrender.com/mcp --header "X-API-Key: <MCP_API_KEY>"`.
 - MCPize (subscribers): connect to `https://bintu-web-reader.mcpize.run` with your MCPize `sk_…` key — the gateway injects the upstream token. No RapidAPI subscription needed; billing lives on the MCPize listing.
 
-The server exposes one tool, `bintu_scrape_text`, with the same schema as the REST scrape. Tool execution failures (unsafe URL, rate limit, upstream error, `render_js_disabled`) come back in-band as `isError: true` with readable text so the model can correct itself. All requests still require the normal API key and count against the same rate limit. This endpoint is hidden from `/docs`; see the MCP section of the README.
+`MCP_API_KEY` is the optional scoped key set in the Render dashboard. It is accepted only on the MCP surfaces (`/mcp`, `/mcp/tools`, `/mcp/tools/call`) and never on the REST routes or `/metrics`, so it can be shared with connector users and rotated without touching the master `API_KEY`. While `MCP_API_KEY` is unset, the master `API_KEY` keeps working on `/mcp` exactly as before.
+
+The server exposes one tool, `bintu_scrape_text`, with the same schema as the REST scrape. Tool execution failures (unsafe URL, rate limit, upstream error, `render_js_disabled`) come back in-band as `isError: true` with readable text so the model can correct itself. All requests still require a valid key (the master `API_KEY` or the scoped `MCP_API_KEY`) and count against the same rate limit. This endpoint is hidden from `/docs`; see the MCP section of the README.
 
 ## Native Mobile MVP
 
