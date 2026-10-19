@@ -11,14 +11,14 @@ Output: {"url": "https://www.iana.org/domains/reserved", "text": "# IANA-managed
 Headings, tables, and links preserved; nav/header/footer stripped unless requested.
 
 ## Long description (paste)
-Bintu turns public web pages into clean, readable text for AI ingestion, monitoring, and readability.
+Bintu turns public web pages into clean, readable text for AI ingestion, monitoring, and readability. Token-Sanitized Context Gateway for AI agents: deterministic max_tokens chunks, tokens/cache_hit/tokens_saved_estimate on every MCP call.
 
 What you get:
 - Article/main content preferred; nav, header, footer, scripts, and boilerplate stripped by default
 - Headings (#/##/###), tables (Markdown pipes), links as `label (absolute URL)`
 - `truncated: true` when the 6,000-character cap applies; text cut at a word boundary
 - JavaScript rendering is currently disabled (`render_js=true` returns 400 `render_js_disabled`); plain-HTML extraction only
-- MCP: standard Streamable HTTP endpoint at `POST /mcp` for Claude connectors and Claude Code; legacy helpers at `GET /mcp/tools` and `POST /mcp/tools/call`
+- MCP: standard Streamable HTTP endpoint at `POST /mcp` for Claude connectors and Claude Code; legacy helpers at `GET /mcp/tools` and `POST /mcp/tools/call`; `mode=chunk` (alias `chunked`), `max_tokens` (alias `chunk_token_budget`); every mode returns the unified JSON envelope `{mode, tokens, chunk_count, cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks}` in `content[0].text` plus `X-Token-Usage` header; no tier caps in code (dashboards own quota)
 
 What Bintu refuses (by design, no exceptions):
 - Logins, paywalls, CAPTCHAs, or anti-bot bypasses
@@ -88,19 +88,30 @@ Verified live 2026-10-17: discovery lists `bintu_scrape_text`; `tools/call`
 `{"url": "https://www.iana.org/domains/reserved", "render_js": false}` →
 `{"content": [{"type": "text", "text": "# IANA-managed Reserved Domains\n..."}], "isError": false}`.
 Cold fetch ~2–6 s, Supabase 24 h cache hit ~300 ms.
+OAuth path verified live 2026-10-18: Claude Web connector "Sign in now"
+(CIMD) → MCPize consent screen → token → live scrapes in chat.
+
+Card / Short description (the form's "few plain words" card field — keep it one or two sentences):
+
+```markdown
+Web scraper MCP server for Claude, Cursor, and LLM agents. Returns clean Markdown from any public page — up to 70% less token overhead. Powered by Bintu.
+```
+
+GitHub field: `https://github.com/l20941485-blip/Bintu-API` (fills the audit's Trust signal; leave Website empty unless you have a real site — never `example.com`).
 
 Description (paste; do NOT mention RapidAPI — MCPize bills its own subscribers):
 
 ```markdown
-High-speed MCP tool for Claude context optimization. Strips tracking scripts, footers, and HTML noise, returning clean Markdown text to save up to 70% in token overhead. Perfect for Claude Code and Cursor agents.
+Token-Sanitized Context Gateway for AI agents. Strips tracking scripts, footers, and HTML noise with deterministic max_tokens chunks — predictable context budgets, not raw dumps. Perfect for Claude Code and Cursor agents. Powered by Bintu.
 
-Subscribe on this page, copy your MCPize API key, and point your client at bintu-web-reader.mcpize.run. No separate token needed — billing, rate limits, and analytics are handled here.
+Subscribe on this page, copy your MCPize API key (sk_…). No upstream Bintu key needed — the gateway injects your credential; billing, rate limits, and analytics are handled here.
 
 What you get:
 - Article/main content preferred; nav, header, footer, scripts stripped by default
 - Headings (#/##/###), tables (Markdown pipes), links as label (absolute URL)
 - 6,000-character cap with word-boundary cut; truncated flag when it applies
 - Plain-HTML extraction; render_js=true returns a retry-with-false hint (JS rendering disabled)
+- Token Tax engine: mode=chunk (alias chunked), max_tokens (alias chunk_token_budget); every mode returns the unified JSON envelope {mode, tokens, chunk_count, cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks} plus X-Token-Usage header; 401 -32001 carries upgrade_url; no tier caps in code (dashboards own quota)
 
 What it refuses (by design, no exceptions):
 - Logins, paywalls, CAPTCHAs, anti-bot bypasses
@@ -108,6 +119,7 @@ What it refuses (by design, no exceptions):
 - Private/non-public URLs (SSRF-guarded, 1 MiB cap, 5 redirects max)
 
 Limits: 60 req / 60 s burst guard per subscriber · monthly quota enforced by your MCPize plan, not the tool.
+Docs & examples: https://github.com/l20941485-blip/Bintu-API
 ```
 
 Quick Start (paste):
@@ -120,16 +132,20 @@ Quick Start (paste):
 Claude Code:
 claude mcp add --transport http bintu https://bintu-web-reader.mcpize.run --header "Authorization: Bearer YOUR_MCPIZE_KEY"
 
-Claude web/Desktop: add a custom connector with URL https://bintu-web-reader.mcpize.run and your MCPize key.
+Claude web/Desktop: add a custom connector with URL https://bintu-web-reader.mcpize.run and choose "Sign in now" — sign in with your MCPize account and approve access once. (If your plan shows a request-header option, the sk_… key works there too.)
 
 4. Call the tool:
 
 Tool: bintu_scrape_text
-Arguments: {"url": "https://www.iana.org/domains/reserved", "render_js": false}
+Arguments: {"url": "https://www.iana.org/domains/reserved", "render_js": false, "mode": "scrape"}
 
-5. Expect:
+Budgeted RAG variant: {"url": "https://www.iana.org/domains/reserved", "mode": "chunked", "chunk_token_budget": 500} (aliases for mode=chunk, max_tokens=500).
 
-{"content": [{"type": "text", "text": "# IANA-managed Reserved Domains\n## Example domains\n..."}], "isError": false}
+5. Expect (unified envelope in content[0].text):
+
+{"content": [{"type": "text", "text": "{\"mode\": \"scrape\", \"tokens\": 42, \"chunk_count\": 1, \"cache_hit\": false, \"source_url\": \"...\", \"extracted_at\": \"...\", \"tokens_saved_estimate\": 0, \"truncated\": false, \"chunks\": [{\"index\": 0, \"text\": \"# IANA-managed Reserved Domains...\", \"tokens\": 42}]}"}], "isError": false}
+
+Response header X-Token-Usage: tokens=42, chunks=1, cache_hit=0.
 
 If isError is true, read the text — it tells the model how to self-correct (e.g. bad URL, rate limit, render_js_disabled → retry with false).
 ```

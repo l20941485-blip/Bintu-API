@@ -130,3 +130,18 @@ async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> 
         "increment_developer_usage",
         {"p_rapidapi_user": rapidapi_user},
     ).execute()
+
+
+async def increment_token_usage(
+    client: AsyncClient, rapidapi_user: str, tokens: int = 1, mode: str = "scrape"
+) -> None:
+    """Count one billable MCP execution with its token volume.
+
+    Fire-and-forget with a 2s timeout at the call site (never blocks
+    extraction); counts even cache hits so dashboards can bill per token
+    slice. No tier caps enforced here — marketplaces own quota.
+    """
+    await client.rpc(
+        "increment_developer_usage",
+        {"p_rapidapi_user": rapidapi_user, "p_tokens": max(0, int(tokens)), "p_mode": mode},
+    ).execute()

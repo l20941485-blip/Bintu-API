@@ -186,10 +186,12 @@ class ScraperApiTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {"content": [{"type": "text", "text": "MCP output"}]},
-        )
+        payload = response.json()
+        self.assertFalse(payload.get("isError", False))
+        envelope = json.loads(payload["content"][0]["text"])
+        self.assertEqual(envelope["mode"], "scrape")
+        self.assertEqual(envelope["chunks"][0]["text"], "MCP output")
+        self.assertIn("tokens", envelope)
 
     def test_mcp_rejects_unknown_tool_names(self) -> None:
         response = self.client.post(

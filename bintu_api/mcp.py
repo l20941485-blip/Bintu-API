@@ -7,38 +7,113 @@ Two surfaces exist on purpose:
   any integrations written against them.
 - ``/mcp`` (bintu_api.mcp_streamable): the standard MCP Streamable HTTP
   endpoint (JSON-RPC 2.0, stateless) used by Claude connectors and Claude
-  Code. Tool definitions are shared via TOOL_NAME/TOOL_DESCRIPTION/
-  TOOL_INPUT_SCHEMA so both surfaces stay in lockstep.
+  Code. Tool definitions are shared via TOOL_NAME/TOOL_TITLE/TOOL_DESCRIPTION/
+  TOOL_INPUT_SCHEMA/TOOL_OUTPUT_SCHEMA/TOOL_ANNOTATIONS so both surfaces stay in lockstep.
 """
 
+import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Security
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from bintu_api.auth import (
     api_key_scheme,
     rate_limit_identity,
     verify_mcp_api_access,
 )
+from bintu_api.context import extract_context, normalize_mode
 from bintu_api.routes import _scrape_text
 from bintu_api.settings import Settings
 
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
+
+logger = logging.getLogger("bintu_api.mcp")
 TOOL_NAME = "bintu_scrape_text"
-TOOL_DESCRIPTION = "Extracts readable text from a public web page (plain HTML; JS rendering disabled unless enabled)."
+TOOL_TITLE = "Bintu Scrape Text"
+TOOL_DESCRIPTION = (
+    "Token-Sanitized Context Gateway for AI agents: fetches one public "
+    "absolute http(s) URL (1 MiB cap, HTML/XHTML only, nav/ads/footer stripped, "
+    "article/main preferred) and returns readable text capped at 6,000 characters. "
+    "Default mode=scrape returns the token-metered envelope. "
+    "Use mode=chunk (alias chunked) to split text into max_tokens-sized chunks "
+    "ready for vector databases; use mode=summarize to truncate to a token budget. "
+    "Every call returns tokens, chunk_count, cache_hit, tokens_saved_estimate "
+    "for predictable context budgets. "
+    "JavaScript rendering is disabled unless enabled — render_js_disabled means "
+    "retry with render_js=false. "
+    "Fails cleanly with invalid_or_unsafe_url, render_js_disabled, rate_limited — "
+    "all in-band so the model can self-correct."
+)
+TOOL_ANNOTATIONS = {
+    "title": TOOL_TITLE,
+    "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
+TOOL_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "content": {
+            "type": "array",
+            "description": (
+                "MCP content blocks. content[0].text is always the unified JSON envelope: "
+                "{mode, tokens, chunk_count, cache_hit, source_url, extracted_at, "
+                "tokens_saved_estimate, truncated, chunks:[{index, text, tokens}]} "
+                "for predictable context budgets in every mode."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {"type": {"type": "string"}, "text": {"type": "string"}},
+                "required": ["type", "text"],
+            },
+        },
+        "isError": {
+            "type": "boolean",
+            "description": "True when extraction failed; content[0].text holds a code-prefixed hint (e.g. invalid_or_unsafe_url, render_js_disabled).",
+        },
+    },
+    "required": ["content"],
+    "additionalProperties": False,
+}
 TOOL_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "url": {
             "type": "string",
-            "description": "Public HTTP or HTTPS URL to extract.",
+            "format": "uri",
+            "description": "Absolute public HTTP or HTTPS URL to extract. Private IPs, non-http schemes, and unsafe targets fail with invalid_or_unsafe_url.",
+            "examples": ["https://www.iana.org/domains/reserved"],
         },
         "render_js": {
             "type": "boolean",
             "default": False,
-            "description": "Render the page in Chromium before extracting text.",
+            "description": "Render the page in Chromium before extracting text. Usually disabled on free infra; when off the call fails with render_js_disabled — retry with false.",
+        },
+        "mode": {
+            "type": "string",
+            "enum": ["scrape", "chunk", "summarize"],
+            "default": "scrape",
+            "description": (
+                "Extraction mode: scrape returns the metered envelope; chunk splits text into "
+                "max_tokens-sized chunks for vector databases (pitch alias: chunked); "
+                "summarize truncates to a token budget."
+            ),
+        },
+        "max_tokens": {
+            "type": "integer",
+            "default": 6000,
+            "minimum": 100,
+            "maximum": 50000,
+            "description": "Token budget for chunk/summarize modes (ignored in scrape mode). Pitch alias: chunk_token_budget.",
+        },
+        "cache": {
+            "type": "boolean",
+            "default": True,
+            "description": "Use the in-memory + Supabase cache when available.",
         },
     },
     "required": ["url"],
@@ -52,10 +127,40 @@ class ToolCallRequest(BaseModel):
 
 
 class ToolArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     url: str
     render_js: bool = False
+    mode: str = "scrape"
+    max_tokens: int = Field(default=6000, ge=100, le=50000)
+    cache: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_aliases(cls, data: Any) -> Any:
+        """Map pitch-name aliases to canonical values (case/whitespace tolerant).
+
+        - mode "chunked" (any case/whitespace) -> "chunk".
+        - "chunk_token_budget" -> "max_tokens"; canonical "max_tokens" wins
+          on conflict with a warning. Range-checked after normalization.
+        """
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        if "mode" in normalized:
+            normalized["mode"] = normalize_mode(normalized["mode"])
+        if "chunk_token_budget" in normalized:
+            if "max_tokens" in normalized:
+                logger.warning(
+                    "mcp_alias_conflict canonical=max_tokens wins over chunk_token_budget"
+                )
+                normalized.pop("chunk_token_budget")
+            else:
+                normalized["max_tokens"] = normalized.pop("chunk_token_budget")
+        max_tokens = normalized.get("max_tokens", 6000)
+        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
+            raise ValueError("max_tokens must be an integer")
+        return normalized
 
 
 @router.get(
@@ -68,8 +173,11 @@ async def list_tools(request: Request) -> dict[str, Any]:
         "tools": [
             {
                 "name": TOOL_NAME,
+                "title": TOOL_TITLE,
                 "description": TOOL_DESCRIPTION,
                 "inputSchema": TOOL_INPUT_SCHEMA,
+                "outputSchema": TOOL_OUTPUT_SCHEMA,
+                "annotations": TOOL_ANNOTATIONS,
             }
         ]
     }
@@ -79,7 +187,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
-async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, list[dict[str, str]]]:
+async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any]:
     settings: Settings = request.app.state.settings
     verify_mcp_api_access(request, settings)
     if payload.name != TOOL_NAME:
@@ -99,13 +207,34 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, lis
             },
         )
 
-    result = await _scrape_text(
+    context = await extract_context(
         request,
         arguments.url,
+        mode=arguments.mode,
+        max_tokens=arguments.max_tokens,
+        cache=arguments.cache,
+        render_js=arguments.render_js,
         include_nav=False,
         include_header=False,
         include_footer=False,
         identity=rate_limit_identity(request, settings),
-        render_js=arguments.render_js,
+        settings=settings,
     )
-    return {"content": [{"type": "text", "text": result.text}]}
+    # Unified Token Tax envelope in content[0].text across ALL modes:
+    # {mode, tokens, chunk_count, cache_hit, source_url, extracted_at,
+    #  tokens_saved_estimate, truncated, chunks} for predictable budgets.
+    payload = {
+        "mode": context.mode,
+        "tokens": context.tokens,
+        "chunk_count": context.chunk_count,
+        "cache_hit": context.cache_hit,
+        "source_url": context.source_url,
+        "extracted_at": context.extracted_at,
+        "tokens_saved_estimate": context.tokens_saved_estimate,
+        "truncated": context.truncated,
+        "chunks": context.chunks,
+    }
+    return {
+        "content": [{"type": "text", "text": json.dumps(payload)}],
+        "isError": False,
+    }

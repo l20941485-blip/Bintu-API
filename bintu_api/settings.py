@@ -64,6 +64,10 @@ class Settings:
     rate_limit_window_seconds: int = 60
     cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
     redis_url: str = ""
+    # Canonical upgrade URL embedded in 401 -32001 data so agents print a
+    # clickable subscribe link in-chat. Override with BINTU_UPGRADE_URL.
+    # No tier caps are enforced in code; dashboards own quota.
+    upgrade_url: str = "https://mcpize.com"
     # JavaScript rendering boots Playwright/Chromium (2-4s + RAM). Off by
     # default on free infra; set RENDER_JS_ENABLED=true only on paid plans
     # where the latency and quota cost are covered. RapidAPI does not send
@@ -96,6 +100,8 @@ class Settings:
                 "CACHE_TTL_SECONDS", DEFAULT_CACHE_TTL_SECONDS, minimum=0, maximum=86400
             ),
             redis_url=os.getenv("REDIS_URL", "").strip(),
+            upgrade_url=os.getenv("BINTU_UPGRADE_URL", "https://mcpize.com").strip()
+            or "https://mcpize.com",
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
             require_auth=_bool_env("REQUIRE_AUTH", default=False),
         )

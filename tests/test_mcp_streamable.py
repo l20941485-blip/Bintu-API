@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from bintu_api.mcp import TOOL_INPUT_SCHEMA, TOOL_NAME
+from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA
 from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
@@ -55,6 +55,11 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(len(tools), 1)
         self.assertEqual(tools[0]["name"], TOOL_NAME)
         self.assertEqual(tools[0]["inputSchema"], TOOL_INPUT_SCHEMA)
+        self.assertEqual(tools[0]["outputSchema"], TOOL_OUTPUT_SCHEMA)
+        self.assertEqual(tools[0]["annotations"], TOOL_ANNOTATIONS)
+        self.assertTrue(tools[0]["annotations"]["readOnlyHint"])
+        self.assertTrue(tools[0]["description"])
+        self.assertIn("url", tools[0]["inputSchema"]["properties"])
 
     def test_notification_returns_202_with_empty_body(self) -> None:
         response = self.client.post(
@@ -74,8 +79,63 @@ class McpStreamableTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()["result"]
-        self.assertEqual(payload["content"], [{"type": "text", "text": "MCP stream"}])
+        envelope = json.loads(payload["content"][0]["text"])
+        self.assertEqual(envelope["mode"], "scrape")
+        self.assertGreater(envelope["tokens"], 0)
+        self.assertEqual(envelope["chunks"][0]["text"], "MCP stream")
         self.assertFalse(payload["isError"])
+
+    def test_tools_call_chunk_mode_returns_structured_json(self) -> None:
+        long_text = "Sentence one. " * 200
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=f"<main>{long_text}</main>", charset=None),
+        ):
+            response = self.rpc(
+                "tools/call",
+                {
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "mode": "chunk",
+                        "max_tokens": 100,
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertFalse(payload["isError"])
+        data = json.loads(payload["content"][0]["text"])
+        self.assertEqual(data["mode"], "chunk")
+        self.assertGreater(data["tokens"], 0)
+        self.assertTrue(all("text" in c and "tokens" in c for c in data["chunks"]))
+        self.assertTrue(all(c["tokens"] <= 100 for c in data["chunks"]))
+
+    def test_tools_call_summarize_mode_truncates_to_budget(self) -> None:
+        long_text = "Sentence one. " * 100
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=f"<main>{long_text}</main>", charset=None),
+        ):
+            response = self.rpc(
+                "tools/call",
+                {
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "mode": "summarize",
+                        "max_tokens": 100,
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertFalse(payload["isError"])
+        data = json.loads(payload["content"][0]["text"])
+        self.assertEqual(data["mode"], "summarize")
+        self.assertLessEqual(data["tokens"], 100)
 
     def test_tools_call_render_js_disabled_is_in_band_tool_error(self) -> None:
         response = self.rpc(
@@ -120,24 +180,42 @@ class McpStreamableTests(unittest.TestCase):
             headers={"Content-Type": "application/json"},
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 400)
         payload = response.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
         self.assertEqual(payload["error"]["code"], -32700)
         self.assertIsNone(payload["id"])
 
     def test_non_jsonrpc_payload_is_invalid_request(self) -> None:
         response = self.client.post("/mcp", json={"hello": "world"})
 
-        self.assertEqual(response.json()["error"]["code"], -32600)
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
+        self.assertEqual(payload["error"]["code"], -32600)
 
-    def test_wrong_content_type_is_unsupported_media_type(self) -> None:
+    def test_wrong_content_type_is_invalid_request(self) -> None:
         response = self.client.post(
             "/mcp",
             content=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}),
             headers={"Content-Type": "text/plain"},
         )
 
-        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
+        self.assertEqual(payload["error"]["code"], -32600)
+        self.assertIsNone(payload["id"])
+
+    def test_array_payload_is_invalid_request(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            content=json.dumps([{"jsonrpc": "2.0", "id": 1, "method": "ping"}]),
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], -32600)
 
     def test_discovery_methods_pass_without_key_when_configured(self) -> None:
         # initialize/tools/list/ping are the tokenless onboarding surface:
@@ -169,13 +247,13 @@ class McpStreamableTests(unittest.TestCase):
         unauthorized = client.post("/mcp", json=call_payload)
 
         self.assertEqual(unauthorized.status_code, 401)
-        self.assertEqual(
-            unauthorized.json()["detail"],
-            {
-                "code": "invalid_api_key",
-                "message": "A premium subscription or valid X-API-Key is required to execute scrapes.",
-            },
-        )
+        payload = unauthorized.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
+        self.assertEqual(payload["id"], 1)
+        self.assertEqual(payload["error"]["code"], -32001)
+        self.assertIn("premium subscription", payload["error"]["message"])
+        self.assertEqual(payload["error"]["data"]["code"], "premium_required")
+        self.assertEqual(payload["error"]["data"]["upgrade_url"], "https://mcpize.com")
         with patch(
             "bintu_api.routes.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>gated</main>", charset=None),
@@ -184,7 +262,9 @@ class McpStreamableTests(unittest.TestCase):
                 "/mcp", json=call_payload, headers={"X-API-Key": "owner-key"}
             )
         self.assertEqual(authorized.status_code, 200)
-        self.assertEqual(authorized.json()["result"]["content"][0]["text"], "gated")
+        envelope = json.loads(authorized.json()["result"]["content"][0]["text"])
+        self.assertEqual(envelope["chunks"][0]["text"], "gated")
+        self.assertIn("tokens", envelope)
 
     def test_initialize_is_public_so_gateway_probes_pass_without_key(self) -> None:
         app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret=""))
@@ -225,9 +305,9 @@ class McpStreamableTests(unittest.TestCase):
                         headers={"Authorization": f"Bearer {token}"},
                     )
                     self.assertEqual(response.status_code, 200)
-                    self.assertEqual(
-                        response.json()["result"]["content"][0]["text"], "bearer ok"
-                    )
+                    envelope = json.loads(response.json()["result"]["content"][0]["text"])
+                    self.assertEqual(envelope["chunks"][0]["text"], "bearer ok")
+                    self.assertIn("tokens", envelope)
 
     def test_execution_rejects_invalid_bearer_with_premium_detail(self) -> None:
         app = create_app(
@@ -246,10 +326,14 @@ class McpStreamableTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json()["detail"]["code"], "invalid_api_key")
-        self.assertEqual(
-            response.json()["detail"]["message"],
-            "A premium subscription or valid X-API-Key is required to execute scrapes.",
+        payload = response.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
+        self.assertEqual(payload["error"]["code"], -32001)
+        self.assertEqual(payload["error"]["data"]["code"], "premium_required")
+        self.assertEqual(payload["error"]["data"]["upgrade_url"], "https://mcpize.com")
+        self.assertIn(
+            "premium subscription",
+            payload["error"]["message"],
         )
 
     def test_get_returns_empty_sse_stream_for_stateless_server(self) -> None:
@@ -281,7 +365,12 @@ class McpStreamableTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("2025-11-25", response.json()["error"]["message"])
+        payload = response.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
+        self.assertEqual(payload["id"], 1)
+        self.assertEqual(payload["error"]["code"], -32602)
+        self.assertIn("1999-01-01", payload["error"]["message"])
+        self.assertIn("2025-11-25", payload["error"]["data"]["supported"])
 
     def test_supported_protocol_version_header_is_accepted(self) -> None:
         response = self.client.post(
@@ -368,10 +457,12 @@ class McpScopedApiKeyTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
-        self.assertEqual(
-            response.json()["detail"]["message"],
-            "A premium subscription or valid X-API-Key is required to execute scrapes.",
-        )
+        payload = response.json()
+        self.assertEqual(payload["jsonrpc"], "2.0")
+        self.assertEqual(payload["error"]["code"], -32001)
+        self.assertEqual(payload["error"]["data"]["code"], "premium_required")
+        self.assertEqual(payload["error"]["data"]["upgrade_url"], "https://mcpize.com")
+        self.assertIn("premium subscription", payload["error"]["message"])
 
     def test_scoped_key_can_be_the_only_configured_secret(self) -> None:
         app = create_app(Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="claude-key"))

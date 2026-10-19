@@ -1,6 +1,6 @@
 version: 1
 name: bintu-data-extraction-api
-description: Extract clean, readable text from public HTML pages (article/main preferred, 6000-char cap).
+description: Token-Sanitized Context Gateway for AI agents — one public URL to readable text with deterministic max_tokens chunks, tokens/cache_hit/tokens_saved_estimate on every call. Stateless Streamable HTTP, 1 MiB cap, auth-gated execution. Pitch aliases: chunked, chunk_token_budget.
 runtime: python
 entry: main.py
 build:

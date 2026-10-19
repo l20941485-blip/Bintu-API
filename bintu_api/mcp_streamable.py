@@ -19,9 +19,15 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 - GET /mcp answers with an immediately-closing empty SSE stream: the endpoint
   must support GET, but this stateless server keeps no streams to resume.
   GET /sse and GET /mcp/sse are compatibility aliases for gateways that
-  probe a dedicated SSE path; they return the same empty stream with the
-  same auth + Origin checks.
-- DELETE/PUT/PATCH /mcp return 405: no sessions exist to terminate.
+  probe a dedicated SSE path; they return the same public empty stream with
+  Origin checks only (no extraction ever happens on GET).
+- DELETE/PUT/PATCH /mcp return 405: no sessions exist to terminate
+  (stateless by design; documented in initialize instructions).
+- Transport failures (malformed JSON, non-JSON-RPC payloads, wrong
+  content-type, unknown MCP-Protocol-Version) answer HTTP 400 with the
+  standard {"jsonrpc": "2.0", "id", "error": {"code", "message", "data"}}
+  envelope; auth failures on billable methods answer HTTP 401 with code
+  -32001 in the same envelope.
 - Notifications (JSON-RPC messages without an ``id``) get 202 Accepted
   with an empty body.
 - ``MCP-Protocol-Version`` is enforced on every non-``initialize`` request
@@ -35,6 +41,7 @@ disabled) are returned in-band with ``isError: true`` and a readable text so
 the model can self-correct — e.g. retrying with ``render_js=false``.
 """
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -44,12 +51,13 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from bintu_api.auth import (
+    mcp_upgrade_url,
     rate_limit_identity,
-    verify_mcp_api_access,
     verify_mcp_execution_access,
 )
-from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, ToolArguments
-from bintu_api.routes import _scrape_text
+from bintu_api.context import extract_context, normalize_mode
+from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_token_usage
+from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA, TOOL_TITLE, ToolArguments
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.mcp_streamable")
@@ -67,25 +75,43 @@ FALLBACK_PROTOCOL_VERSION = "2025-03-26"
 # stay behind verify_mcp_execution_access.
 PUBLIC_MCP_METHODS = frozenset({"initialize", "tools/list", "ping"})
 SERVER_INSTRUCTIONS = (
-    "Extract readable text from public web pages with bintu_scrape_text. "
-    "Pass an absolute http(s) URL; the result is readable text capped at "
-    "6,000 characters. JavaScript rendering is disabled unless the operator "
+    "Token-Sanitized Context Gateway: bintu_scrape_text fetches one public absolute "
+    "http(s) URL (1 MiB cap, HTML/XHTML only, nav/ads/footer stripped, article/main "
+    "preferred) and returns readable text capped at 6,000 characters. "
+    "Pass an absolute http(s) URL; private IPs and non-http schemes fail with "
+    "invalid_or_unsafe_url. JavaScript rendering is disabled unless the operator "
     "enabled it: if a call fails with render_js_disabled, retry with "
-    "render_js=false."
+    "render_js=false. Use mode=chunk (alias chunked) for vector-DB-ready chunks "
+    "or mode=summarize to truncate to a max_tokens budget (alias chunk_token_budget). "
+    "Every mode returns the unified JSON envelope {mode, tokens, chunk_count, "
+    "cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks} "
+    "for predictable context budgets. This server is stateless: no MCP sessions, "
+    "no subscriptions, no SSE streams — POST one JSON-RPC message per request; "
+    "GET returns an empty SSE stream. Discovery (initialize, tools/list, ping) is "
+    "public; tools/call requires X-API-Key or Authorization: Bearer."
 )
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
+# Custom server error: authentication required for billable MCP execution.
+# Stays inside the JSON-RPC reserved range (-32000..-32099) so strict
+# validators still recognise the envelope.
+AUTH_REQUIRED = -32001
 
 
 def _rpc_result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
-def _rpc_error(request_id: Any, code: int, message: str) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+def _rpc_error(
+    request_id: Any, code: int, message: str, data: Any = None
+) -> dict[str, Any]:
+    error: dict[str, Any] = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
+    return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
 
 def _tool_error(message: str) -> dict[str, Any]:
@@ -103,36 +129,40 @@ def _protocol_version_header(request: Request) -> str:
     return declared or FALLBACK_PROTOCOL_VERSION
 
 
-def _reject_unknown_protocol_version(version: str) -> JSONResponse:
+def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONResponse:
+    # Strict scanners expect the standard JSON-RPC envelope even for
+    # transport-level rejections — never a bare {"error": ...} shape.
     return JSONResponse(
         status_code=400,
-        content={
-            "error": {
-                "code": "unsupported_protocol_version",
-                "message": (
-                    f"Unsupported MCP protocol version {version!r}; "
-                    f"supported versions: {', '.join(SUPPORTED_PROTOCOL_VERSIONS)}."
-                ),
-            }
-        },
+        content=_rpc_error(
+            request_id,
+            INVALID_PARAMS,
+            f"Unsupported MCP protocol version {version!r}.",
+            data={"supported": list(SUPPORTED_PROTOCOL_VERSIONS)},
+        ),
     )
 
 
 def _reject_forbidden_origin() -> JSONResponse:
     return JSONResponse(
         status_code=403,
-        content={
-            "jsonrpc": "2.0",
-            "id": None,
-            "error": {"code": -32000, "message": "Forbidden origin"},
-        },
+        content=_rpc_error(
+            None,
+            -32000,
+            "Forbidden origin",
+            data={"hint": "Origin must match the request scheme + host, or be omitted for non-browser clients."},
+        ),
     )
 
 
 async def _empty_sse_stream(request: Request) -> Response:
-    """Shared handler for GET /mcp and its /sse aliases (stateless: empty stream)."""
-    settings: Settings = request.app.state.settings
-    verify_mcp_api_access(request, settings)
+    """Shared handler for GET /mcp and its /sse aliases (stateless: empty stream).
+
+    GET is the tokenless liveness surface: gateway health-checkers and
+    marketplace audits probe it without credentials, and no extraction ever
+    happens here, so auth is intentionally skipped (POST tools/call stays
+    gated). Origin is still validated against DNS rebinding.
+    """
     if not _origin_is_allowed(request):
         return _reject_forbidden_origin()
     return Response(
@@ -168,8 +198,23 @@ def _http_detail_text(detail: Any) -> str:
         hint = detail.get("hint")
         if hint:
             return f"{prefix}. Hint: {hint}"
+        upgrade_url = detail.get("upgrade_url")
+        if upgrade_url:
+            return f"{prefix}. Subscribe: {upgrade_url}"
         return str(prefix)
     return str(detail)
+
+
+def _metering_identity(request: Request, settings: Settings) -> str:
+    """Identity for token metering: RapidAPI subscriber or MCP client IP.
+
+    No tier caps are enforced in code (dashboards own quota); this key only
+    attributes token counts so marketplaces can bill per token slice.
+    """
+    identity = rate_limit_identity(request, settings)
+    if identity.startswith("rapidapi:"):
+        return identity.split("rapidapi:", 1)[1]
+    return f"mcp:{identity}"
 
 
 def _initialize_result(settings: Settings, request_id: Any, params: dict[str, Any]) -> dict[str, Any]:
@@ -197,8 +242,11 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
             "tools": [
                 {
                     "name": TOOL_NAME,
+                    "title": TOOL_TITLE,
                     "description": TOOL_DESCRIPTION,
                     "inputSchema": TOOL_INPUT_SCHEMA,
+                    "outputSchema": TOOL_OUTPUT_SCHEMA,
+                    "annotations": TOOL_ANNOTATIONS,
                 }
             ]
         },
@@ -210,8 +258,23 @@ async def _tools_call_result(
 ) -> dict[str, Any]:
     if params.get("name") != TOOL_NAME:
         return _rpc_error(request_id, INVALID_PARAMS, f"Unknown tool: {params.get('name')}")
+    raw_arguments = params.get("arguments") or {}
+    if isinstance(raw_arguments, dict):
+        # Canonicalize pitch-name aliases BEFORE Pydantic validation so raw
+        # JSON-RPC calls benefit too; canonical max_tokens wins on conflict.
+        raw_arguments = dict(raw_arguments)
+        if "mode" in raw_arguments:
+            raw_arguments["mode"] = normalize_mode(raw_arguments["mode"])
+        if "chunk_token_budget" in raw_arguments:
+            if "max_tokens" in raw_arguments:
+                logger.warning(
+                    "mcp_alias_conflict canonical=max_tokens wins over chunk_token_budget"
+                )
+                raw_arguments.pop("chunk_token_budget")
+            else:
+                raw_arguments["max_tokens"] = raw_arguments.pop("chunk_token_budget")
     try:
-        arguments = ToolArguments.model_validate(params.get("arguments") or {})
+        arguments = ToolArguments.model_validate(raw_arguments)
     except ValidationError as error:
         first = error.errors()[0]
         location = ".".join(str(part) for part in first.get("loc", ())) or "arguments"
@@ -227,20 +290,57 @@ async def _tools_call_result(
         )
 
     try:
-        result = await _scrape_text(
+        context = await extract_context(
             request,
             arguments.url,
+            mode=arguments.mode,
+            max_tokens=arguments.max_tokens,
+            cache=arguments.cache,
+            render_js=arguments.render_js,
             include_nav=False,
             include_header=False,
             include_footer=False,
             identity=rate_limit_identity(request, settings),
-            render_js=arguments.render_js,
+            settings=settings,
         )
     except HTTPException as error:
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
+
+    # Unified Token Tax envelope in content[0].text across ALL modes for
+    # predictable context budgets (no tier caps in code; dashboards own quota).
+    envelope = {
+        "mode": context.mode,
+        "tokens": context.tokens,
+        "chunk_count": context.chunk_count,
+        "cache_hit": context.cache_hit,
+        "source_url": context.source_url,
+        "extracted_at": context.extracted_at,
+        "tokens_saved_estimate": context.tokens_saved_estimate,
+        "truncated": context.truncated,
+        "chunks": context.chunks,
+    }
+    # Fire-and-forget token metering (2s, never blocks extraction): counts
+    # even cache hits so dashboards can bill per token slice.
+    if request.app.state.supabase_client is not None:
+        try:
+            await asyncio.wait_for(
+                increment_token_usage(
+                    request.app.state.supabase_client,
+                    _metering_identity(request, settings),
+                    tokens=context.tokens,
+                    mode=context.mode,
+                ),
+                timeout=DATABASE_TIMEOUT_SECONDS,
+            )
+        except Exception as error:
+            logger.warning("token_metering_failed error_type=%s", type(error).__name__)
     return _rpc_result(
-        request_id, {"content": [{"type": "text", "text": result.text}], "isError": False}
+        request_id,
+        {
+            "content": [{"type": "text", "text": json.dumps(envelope)}],
+            "isError": False,
+        },
     )
 
 
@@ -254,22 +354,32 @@ async def mcp_messages(request: Request):
 
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type != "application/json":
-        raise HTTPException(
-            status_code=415,
-            detail={
-                "code": "unsupported_media_type",
-                "message": "MCP requests must use Content-Type: application/json.",
-            },
+        # Transport-level failure: strict scanners expect HTTP 400 with the
+        # standard JSON-RPC envelope (id unknown -> null), not a REST 415.
+        return JSONResponse(
+            status_code=400,
+            content=_rpc_error(
+                None,
+                INVALID_REQUEST,
+                "Invalid Request: Content-Type must be application/json.",
+            ),
         )
 
     try:
         payload = json.loads(await request.body())
     except json.JSONDecodeError:
-        return JSONResponse(_rpc_error(None, PARSE_ERROR, "Parse error"))
+        # Malformed JSON-RPC: HTTP 400 + parse error, id null per spec.
+        return JSONResponse(
+            status_code=400,
+            content=_rpc_error(None, PARSE_ERROR, "Parse error"),
+        )
 
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0" or not isinstance(payload.get("method"), str):
         request_id = payload.get("id") if isinstance(payload, dict) else None
-        return JSONResponse(_rpc_error(request_id, INVALID_REQUEST, "Invalid Request"))
+        return JSONResponse(
+            status_code=400,
+            content=_rpc_error(request_id, INVALID_REQUEST, "Invalid Request"),
+        )
 
     request_id = payload.get("id")
     if request_id is None:
@@ -287,19 +397,43 @@ async def mcp_messages(request: Request):
         # tools/call and every other method still require auth.
         params = payload.get("params") or {}
         if not isinstance(params, dict):
-            return JSONResponse(_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"))
+            return JSONResponse(
+                status_code=200,
+                content=_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"),
+            )
         return JSONResponse(_initialize_result(settings, request_id, params))
 
     if method not in PUBLIC_MCP_METHODS:
         # Billable work (tools/call) and any other non-discovery method:
-        # X-API-Key or Authorization: Bearer with the scoped or master key;
-        # a missing/invalid credential answers the premium-detail 401.
-        verify_mcp_execution_access(request, settings)
+        # X-API-Key or Authorization: Bearer with the scoped or master key.
+        # Failures stay inside the JSON-RPC envelope (HTTP 401 + code -32001)
+        # so strict validators never see a bare REST {"detail": ...} body.
+        try:
+            verify_mcp_execution_access(request, settings)
+        except HTTPException as error:
+            detail = error.detail if isinstance(error.detail, dict) else {"message": str(error.detail)}
+            # 401 detail always carries the canonical upgrade_url so agents can
+            # print a clickable subscribe link in-chat.
+            upgrade_url = detail.get("upgrade_url") or mcp_upgrade_url(settings)
+            return JSONResponse(
+                status_code=error.status_code,
+                content=_rpc_error(
+                    request_id,
+                    AUTH_REQUIRED,
+                    str(detail.get("message") or "Authentication required."),
+                    data={
+                        "code": detail.get("code") or "premium_required",
+                        "hint": detail.get("hint")
+                        or f"Send X-API-Key or Authorization: Bearer with the MCP_API_KEY (or master API_KEY). Discovery methods need no key. Subscribe: {upgrade_url}",
+                        "upgrade_url": upgrade_url,
+                    },
+                ),
+            )
 
     declared_version = _protocol_version_header(request)
     if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:
         logger.info("mcp_unsupported_protocol_version version=%r", declared_version)
-        return _reject_unknown_protocol_version(declared_version)
+        return _reject_unknown_protocol_version(request_id, declared_version)
 
     params = payload.get("params") or {}
     if not isinstance(params, dict):
@@ -311,7 +445,22 @@ async def mcp_messages(request: Request):
     if method == "tools/list":
         return JSONResponse(_tools_list_result(request_id))
     if method == "tools/call":
-        return JSONResponse(await _tools_call_result(request, settings, request_id, params))
+        result = await _tools_call_result(request, settings, request_id, params)
+        # Metering header for marketplaces: tokens/chunks/cache_hit per
+        # execution without a second round-trip. Best-effort parse only.
+        response = JSONResponse(result)
+        try:
+            text = result.get("result", {}).get("content", [{}])[0].get("text", "")
+            envelope = json.loads(text) if isinstance(text, str) and text.startswith("{") else {}
+            if isinstance(envelope, dict) and "tokens" in envelope:
+                response.headers["X-Token-Usage"] = (
+                    f"tokens={envelope.get('tokens', 0)}, "
+                    f"chunks={envelope.get('chunk_count', 0)}, "
+                    f"cache_hit={1 if envelope.get('cache_hit') else 0}"
+                )
+        except Exception:
+            pass
+        return response
     if method.startswith("notifications/"):
         # Tolerate a client sending a notification with an id attached.
         return JSONResponse(_rpc_result(request_id, {}))
@@ -328,8 +477,8 @@ async def mcp_listen(request: Request) -> Response:
 @router.get("/sse", include_in_schema=False)
 async def mcp_listen_alias(request: Request) -> Response:
     # Compatibility alias: some gateways/marketplaces (e.g. MCPize) probe a
-    # dedicated GET /sse path for SSE streaming. Same empty stateless stream
-    # as GET /mcp, same auth + Origin checks.
+    # dedicated GET /sse path for SSE streaming. Same public empty stream
+    # as GET /mcp, Origin checks only.
     return await _empty_sse_stream(request)
 
 

@@ -200,6 +200,7 @@ Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-dri
 | `CACHE_TTL_SECONDS` | 300 | Process-local HTML cache TTL in seconds; `0` disables that cache (Supabase's 24-hour cache is separate). Non-numeric or out-of-range values (allowed range 0-86400) fall back to 300 with a logged warning |
 | `REDIS_URL` | (empty) | Redis URL for multi-instance rate limiting. Empty or unreachable = per-process burst guard (fail-open), each instance enforcing its own window |
 | `RENDER_JS_ENABLED` | `false` | JavaScript rendering kill-switch. Only exact `true` enables Chromium; anything else returns 400 `render_js_disabled` for `render_js=true` |
+| `BINTU_UPGRADE_URL` | `https://mcpize.com` | Canonical subscribe URL embedded in MCP 401 `-32001` `upgrade_url` so agents print a clickable link in-chat |
 
 ## Deploy To Render
 
@@ -216,11 +217,14 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 
 | | Direct (Render) | RapidAPI | MCPize |
 |---|---|---|---|
+| Listing name | Service `bintu-data-extraction-api` (MCP `serverInfo.name: bintu`) | `Bintu Data Extraction API` (subdomain `bintu-data-extraction-api`) | **LLM Web Scraper & Clean Text Extractor** (slug/host `bintu-web-reader.mcpize.run`; users label their Claude connector `Bintu-web-reader`) |
 | Endpoint | `GET /api/v1/scrape/text?url=…` at `https://bintu-api.onrender.com` | Same path at `https://bintu-data-extraction-api.p.rapidapi.com` | `bintu_scrape_text` tool at `https://bintu-web-reader.mcpize.run` (upstream `POST https://bintu-api.onrender.com/mcp`) |
 | Auth | `X-API-Key: <Render API_KEY>` | `X-RapidAPI-Key` + `X-RapidAPI-Host` (gateway injects `X-RapidAPI-Proxy-Secret` + `X-RapidAPI-User`) | Subscriber's MCPize key (`sk_…`); gateway injects the upstream `X-API-Key`. Never send buyers to RapidAPI from the MCPize page |
 | Billing | None (owner key) | RapidAPI plans: BASIC $0/100 · PRO $9/10k · ULTRA $29/50k · MEGA $79/100k+ | MCPize publisher tiers (dashboard → Monetize): Free ~1k · Pro $9–19 · Team $49+ (80% via Stripe Connect) |
 | Quota | 60 req / 60 s burst guard per IP | 60/60s per `X-RapidAPI-User` + plan quota | 60/60s global across MCPize subscribers (single upstream token) + plan quota |
 | Cache | 5-min in-memory + 24 h Supabase persistent | Same | Same upstream cache; cold fetch ~2–6 s, cache hit ~300 ms |
+
+**Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `{mode, tokens, chunk_count, cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks}` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
 
 Limits everywhere: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (plain HTML only until `RENDER_JS_ENABLED=true` on paid infra). Error codes: see [Common errors](#common-errors).
 

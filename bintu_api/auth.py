@@ -92,10 +92,25 @@ def verify_mcp_api_access(request: Request, settings: Settings) -> None:
 # wording: marketplace callers get steered to subscribe ("premium
 # subscription") instead of a bare "invalid key", matching the storefront
 # copy in README / rapidapi_listing.md.
-MCP_EXECUTION_FORBIDDEN_DETAIL = {
-    "code": "invalid_api_key",
-    "message": "A premium subscription or valid X-API-Key is required to execute scrapes.",
-}
+def mcp_upgrade_url(settings: Settings) -> str:
+    """Return the canonical subscribe URL for 401 -32001 upgrade prompts."""
+    return (settings.upgrade_url or "https://mcpize.com").strip() or "https://mcpize.com"
+
+
+MCP_EXECUTION_FORBIDDEN_MESSAGE = (
+    "A premium subscription or valid X-API-Key is required to execute scrapes."
+)
+
+
+def mcp_execution_forbidden_detail(settings: Settings) -> dict[str, str]:
+    """Build the 401 detail for gated MCP execution with an inline upgrade link."""
+    upgrade_url = mcp_upgrade_url(settings)
+    return {
+        "code": "premium_required",
+        "message": MCP_EXECUTION_FORBIDDEN_MESSAGE,
+        "hint": f"Subscribe or send X-API-Key / Authorization: Bearer. Subscribe: {upgrade_url}",
+        "upgrade_url": upgrade_url,
+    }
 
 
 def _bearer_matches(request: Request, settings: Settings) -> bool:
@@ -136,7 +151,7 @@ def verify_mcp_execution_access(request: Request, settings: Settings) -> None:
             raise
         raise HTTPException(
             status_code=401,
-            detail=MCP_EXECUTION_FORBIDDEN_DETAIL,
+            detail=mcp_execution_forbidden_detail(settings),
             headers={"WWW-Authenticate": 'Bearer realm="bintu", ApiKey'},
         ) from error
 
