@@ -286,6 +286,65 @@ class ScraperApiTests(unittest.TestCase):
         self.assertEqual(response.json()["text"], "Rendered content")
         fetch.assert_awaited_once()
 
+    def test_mcp_tool_call_rejects_invalid_mode(self) -> None:
+        """Invalid mode strings must be rejected with HTTP 400 on the legacy MCP route."""
+        response = self.client.post(
+            "/mcp/tools/call",
+            json={
+                "name": "bintu_scrape_text",
+                "arguments": {"url": "https://example.com", "mode": "not-a-mode"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_mcp_tool_call_rejects_invalid_mode_case_variants(self) -> None:
+        """Case/whitespace variants of unknown modes are still rejected."""
+        for bad_mode in ("INVALID", "chunked!"):
+            with self.subTest(mode=bad_mode):
+                response = self.client.post(
+                    "/mcp/tools/call",
+                    json={
+                        "name": "bintu_scrape_text",
+                        "arguments": {"url": "https://example.com", "mode": bad_mode},
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_mcp_tool_call_accepts_whitespace_tolerant_valid_modes(self) -> None:
+        """Whitespace/case-tolerant normalization of valid modes succeeds."""
+        for mode in (" Scrape ", "CHUNK", "Summarize"):
+            with self.subTest(mode=mode):
+                with patch(
+                    "bintu_api.routes.fetch_html_document",
+                    return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
+                ):
+                    response = self.client.post(
+                        "/mcp/tools/call",
+                        json={
+                            "name": "bintu_scrape_text",
+                            "arguments": {"url": "https://example.com", "mode": mode},
+                        },
+                    )
+                self.assertEqual(response.status_code, 200)
+
+    def test_mcp_tool_call_accepts_valid_modes(self) -> None:
+        """All three canonical modes pass validation on the legacy MCP route."""
+        for mode in ("scrape", "chunk", "summarize"):
+            with self.subTest(mode=mode):
+                with patch(
+                    "bintu_api.routes.fetch_html_document",
+                    return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
+                ):
+                    response = self.client.post(
+                        "/mcp/tools/call",
+                        json={
+                            "name": "bintu_scrape_text",
+                            "arguments": {"url": "https://example.com", "mode": mode},
+                        },
+                    )
+                self.assertEqual(response.status_code, 200)
+
     def test_mcp_render_js_is_rejected_when_disabled(self) -> None:
         with patch(
             "bintu_api.routes.fetch_rendered_html_document",

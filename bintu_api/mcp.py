@@ -16,7 +16,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Security
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from bintu_api.auth import (
     api_key_scheme,
@@ -141,20 +141,24 @@ class ToolArguments(BaseModel):
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     cache: bool = True
 
+    @field_validator("mode")
+    @classmethod
+    def _validate_mode(cls, v: str) -> str:
+        """Reject unknown modes with ValueError so Pydantic wraps it in ValidationError."""
+        return normalize_mode(v)
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
 
-        - mode "chunked" (any case/whitespace) -> "chunk".
+        - mode "chunked" (any case/whitespace) -> "chunk" (validated by field_validator).
         - "chunk_token_budget" -> "max_tokens"; canonical "max_tokens" wins
           on conflict with a warning. Range-checked after normalization.
         """
         if not isinstance(data, dict):
             return data
         normalized = dict(data)
-        if "mode" in normalized:
-            normalized["mode"] = normalize_mode(normalized["mode"])
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
                 logger.warning(
@@ -198,6 +202,14 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
     verify_mcp_api_access(request, settings)
     if payload.name != TOOL_NAME:
         raise HTTPException(status_code=400, detail=f"Unknown MCP tool: {payload.name}")
+    # Strict mode validation before Pydantic: reject unknown modes with HTTP 400
+    # so callers get a clean error instead of a 500 from extract_context.
+    raw_mode = payload.arguments.get("mode")
+    if raw_mode is not None:
+        try:
+            normalize_mode(raw_mode)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
     try:
         arguments = ToolArguments.model_validate(payload.arguments)
     except ValidationError as error:
@@ -213,19 +225,22 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
             },
         )
 
-    context = await extract_context(
-        request,
-        arguments.url,
-        mode=arguments.mode,
-        max_tokens=arguments.max_tokens,
-        cache=arguments.cache,
-        render_js=arguments.render_js,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        identity=mcp_rate_limit_identity(request, settings),
-        settings=settings,
-    )
+    try:
+        context = await extract_context(
+            request,
+            arguments.url,
+            mode=arguments.mode,
+            max_tokens=arguments.max_tokens,
+            cache=arguments.cache,
+            render_js=arguments.render_js,
+            include_nav=False,
+            include_header=False,
+            include_footer=False,
+            identity=mcp_rate_limit_identity(request, settings),
+            settings=settings,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     # Unified Token Tax envelope in content[0].text across ALL modes.
     # `tokens` is a deprecated alias of `approx_tokens` (kept for one release);
     # `token_method` names the counter; `html_tokens` is the fetched-document
