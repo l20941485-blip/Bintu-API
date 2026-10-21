@@ -36,14 +36,68 @@ class ScraperApiTests(unittest.TestCase):
         response = self.client.options(
             "/",
             headers={
-                "Origin": "https://gateway.example",
+                "Origin": "https://bintu-web-reader.mcpize.run",
                 "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": "X-API-Key",
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.headers["access-control-allow-origin"], "https://gateway.example")
+        self.assertEqual(
+            response.headers["access-control-allow-origin"],
+            "https://bintu-web-reader.mcpize.run",
+        )
+        self.assertEqual(response.headers["access-control-allow-credentials"], "true")
+
+    def test_cors_rejects_unlisted_origin(self) -> None:
+        """C3: a wildcard-plus-credentials CORS policy lets any page act for a user."""
+        response = self.client.options(
+            "/",
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "X-API-Key",
+            },
+        )
+
+        self.assertNotIn("access-control-allow-origin", response.headers)
+
+    def test_cors_allows_configured_extra_origins(self) -> None:
+        app = create_app(
+            Settings(
+                api_key="",
+                rapidapi_proxy_secret="",
+                cors_allowed_origins="https://app.example, https://dev.example",
+            )
+        )
+        client = TestClient(app)
+        for origin in ("https://app.example", "https://dev.example"):
+            with self.subTest(origin=origin):
+                response = client.options(
+                    "/",
+                    headers={
+                        "Origin": origin,
+                        "Access-Control-Request-Method": "GET",
+                    },
+                )
+                self.assertEqual(response.headers["access-control-allow-origin"], origin)
+
+        rejected = client.options(
+            "/",
+            headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"},
+        )
+        self.assertNotIn("access-control-allow-origin", rejected.headers)
+
+    def test_settings_read_cors_allowlist_from_env(self) -> None:
+        with patch.dict(
+            "os.environ", {"CORS_ALLOWED_ORIGINS": "https://a.example, https://b.example"}
+        ):
+            settings = Settings.from_env()
+        # The MCPize gateway stays allowed; env adds to it, never replaces it.
+        self.assertEqual(
+            settings.cors_origin_allowlist(),
+            ("https://bintu-web-reader.mcpize.run", "https://a.example", "https://b.example"),
+        )
 
     def test_invalid_url_format(self) -> None:
         response = self.client.get("/api/v1/scrape/text", params={"url": "://example.com"})

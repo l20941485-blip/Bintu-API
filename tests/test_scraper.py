@@ -12,6 +12,7 @@ from bintu_api.scraper import (
     UnsupportedMediaType,
     UpstreamHTTPError,
     _PinnedHTTPConnection,
+    _parse_target,
     _read_html_response,
     fetch_html,
     fetch_html_document,
@@ -65,6 +66,103 @@ class ScraperNetworkTests(unittest.TestCase):
             ):
                 with self.assertRaises(TargetURLRejected):
                     resolve_public_addresses("target.example", 80)
+
+    def test_resolver_rejects_multicast_ipv4_and_ipv6(self):
+        """Multicast is not a public web destination (S7)."""
+        for address, family in (
+            ("224.0.0.1", socket.AF_INET),
+            ("239.255.255.255", socket.AF_INET),
+            ("ff02::1", socket.AF_INET6),
+            ("ff0e::1", socket.AF_INET6),
+        ):
+            with self.subTest(address=address), patch(
+                "bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result(address, family)]
+            ):
+                with self.assertRaises(TargetURLRejected):
+                    resolve_public_addresses("multicast.example", 80)
+
+    def test_resolver_rejects_multicast_mapped_ipv6(self):
+        with patch(
+            "bintu_api.scraper.socket.getaddrinfo",
+            return_value=[dns_result("::ffff:224.0.0.1", socket.AF_INET6)],
+        ):
+            with self.assertRaises(TargetURLRejected):
+                resolve_public_addresses("mapped.example", 80)
+
+    def test_resolver_still_accepts_public_addresses(self):
+        for address, family in (
+            ("8.8.8.8", socket.AF_INET),
+            ("2001:4860:4860::8888", socket.AF_INET6),
+        ):
+            with self.subTest(address=address), patch(
+                "bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result(address, family)]
+            ):
+                self.assertEqual(resolve_public_addresses("public.example", 80), (address,))
+
+    def test_one_multicast_answer_poisons_the_whole_result(self):
+        with patch(
+            "bintu_api.scraper.socket.getaddrinfo",
+            return_value=[dns_result("93.184.216.34"), dns_result("224.0.0.1")],
+        ):
+            with self.assertRaises(TargetURLRejected):
+                resolve_public_addresses("mixed.example", 80)
+
+    def test_unusual_port_is_rejected_by_default(self):
+        """S8: the service is not a public host/port probe."""
+        for url in (
+            "http://example.com:22/",
+            "http://example.com:8080/",
+            "http://example.com:1/",
+            "http://example.com:65535/",
+        ):
+            with self.subTest(url=url):
+                with self.assertRaises(TargetURLRejected):
+                    _parse_target(url)
+
+    def test_default_ports_still_pass_parsing(self):
+        parsed, host, port, _ = _parse_target("http://example.com/")
+        self.assertEqual((host, port), ("example.com", 80))
+        parsed, host, port, _ = _parse_target("https://example.com/")
+        self.assertEqual((host, port), ("example.com", 443))
+        parsed, host, port, _ = _parse_target("http://example.com:80/explicit")
+        self.assertEqual((host, port), ("example.com", 80))
+        parsed, host, port, _ = _parse_target("https://example.com:443/explicit")
+        self.assertEqual((host, port), ("example.com", 443))
+
+    def test_configured_extra_ports_are_allowed(self):
+        settings = Settings(api_key="", rapidapi_proxy_secret="", allowed_ports="80,443,8080")
+        parsed, host, port, _ = _parse_target("http://example.com:8080/", settings=settings)
+        self.assertEqual(port, 8080)
+
+    def test_redirect_https_to_http_downgrade_is_refused(self):
+        """S10: an https page must not hand us down to cleartext mid-chain."""
+        first = FakeConnection(FakeResponse(status=302, headers={"Location": "http://example.com/"}))
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", return_value=first),
+        ):
+            with self.assertRaises(TargetURLRejected):
+                fetch_html("https://example.com/", self.settings)
+
+    def test_redirect_http_to_https_upgrade_is_allowed(self):
+        first = FakeConnection(FakeResponse(status=302, headers={"Location": "https://example.com/"}))
+        second = FakeConnection(FakeResponse(status=200, body=b"<p>secure</p>"))
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
+        ):
+            self.assertEqual(fetch_html("http://example.com/", self.settings), b"<p>secure</p>")
+
+    def test_same_scheme_redirect_still_works(self):
+        first = FakeConnection(FakeResponse(status=301, headers={"Location": "/landing"}))
+        second = FakeConnection(FakeResponse(status=200, body=b"<p>final</p>"))
+        with (
+            patch("bintu_api.scraper.socket.getaddrinfo", return_value=[dns_result("93.184.216.34")]),
+            patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
+        ):
+            self.assertEqual(
+                fetch_html("https://example.com/", self.settings), b"<p>final</p>"
+            )
 
     def test_private_dns_answer_is_rejected_before_connecting(self):
         with (

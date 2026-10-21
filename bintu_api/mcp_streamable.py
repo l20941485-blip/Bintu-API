@@ -51,8 +51,8 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from bintu_api.auth import (
+    mcp_rate_limit_identity,
     mcp_upgrade_url,
-    rate_limit_identity,
     verify_mcp_execution_access,
 )
 from bintu_api.context import extract_context, normalize_mode
@@ -143,6 +143,37 @@ def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONRespo
     )
 
 
+def _accept_header_serves_json(request: Request) -> bool:
+    """True unless the client explicitly refuses application/json responses.
+
+    The transport requires clients to send ``Accept: application/json,
+    text/event-stream``. This server answers every POST with a single JSON
+    response and never opens an SSE stream, so a client that lists other
+    media types but not JSON cannot be served (HTTP 406). Clients that send
+    no Accept header at all (gateway Test buttons, curl) are tolerated —
+    rejecting the largest installed base would be worse than the
+    corner-case protocol violation.
+    """
+    raw = request.headers.get("accept", "")
+    if not raw.strip():
+        return True
+    offered = [part.split(";")[0].strip().lower() for part in raw.split(",")]
+    offered = [part for part in offered if part]
+    return any(part in {"application/json", "*/*", "application/*"} for part in offered)
+
+
+def _reject_unsupported_accept(request_id: Any) -> JSONResponse:
+    return JSONResponse(
+        status_code=406,
+        content=_rpc_error(
+            request_id,
+            INVALID_REQUEST,
+            "Not Acceptable: this server returns single application/json "
+            "responses; the Accept header must include application/json.",
+        ),
+    )
+
+
 def _reject_forbidden_origin() -> JSONResponse:
     return JSONResponse(
         status_code=403,
@@ -206,14 +237,16 @@ def _http_detail_text(detail: Any) -> str:
 
 
 def _metering_identity(request: Request, settings: Settings) -> str:
-    """Identity for token metering: RapidAPI subscriber or MCP client IP.
+    """Identity for token metering: RapidAPI subscriber, MCP key, or IP.
 
-    No tier caps are enforced in code (dashboards own quota); this key only
-    attributes token counts so marketplaces can bill per token slice.
+    Reuses the same bucket as rate limiting: a keyed caller is metered under
+    its key fingerprint (without the raw secret), not under the gateway's IP.
     """
-    identity = rate_limit_identity(request, settings)
+    identity = mcp_rate_limit_identity(request, settings)
     if identity.startswith("rapidapi:"):
         return identity.split("rapidapi:", 1)[1]
+    if identity.startswith("mcp:"):
+        return identity
     return f"mcp:{identity}"
 
 
@@ -300,7 +333,7 @@ async def _tools_call_result(
             include_nav=False,
             include_header=False,
             include_footer=False,
-            identity=rate_limit_identity(request, settings),
+            identity=mcp_rate_limit_identity(request, settings),
             settings=settings,
         )
     except HTTPException as error:
@@ -309,15 +342,23 @@ async def _tools_call_result(
 
     # Unified Token Tax envelope in content[0].text across ALL modes for
     # predictable context budgets (no tier caps in code; dashboards own quota).
+    # `tokens` is a deprecated alias of `approx_tokens` (kept for one release);
+    # `token_method` names the counter; `html_tokens` is the fetched-document
+    # baseline for `tokens_saved_estimate`; `limiting_factor` says which cap bound.
     envelope = {
         "mode": context.mode,
         "tokens": context.tokens,
+        "approx_tokens": context.approx_tokens,
+        "html_tokens": context.html_tokens,
+        "token_method": context.token_method,
+        "limiting_factor": context.limiting_factor,
         "chunk_count": context.chunk_count,
         "cache_hit": context.cache_hit,
         "source_url": context.source_url,
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "truncated": context.truncated,
+        "split": context.split,
         "chunks": context.chunks,
     }
     # Fire-and-forget token metering (2s, never blocks extraction): counts
@@ -365,6 +406,20 @@ async def mcp_messages(request: Request):
             ),
         )
 
+    if not _accept_header_serves_json(request):
+        # The transport requires clients to accept application/json; this
+        # server answers with a single JSON response and never opens an SSE
+        # stream, so a client that accepts only SSE cannot be served.
+        return JSONResponse(
+            status_code=406,
+            content=_rpc_error(
+                None,
+                INVALID_REQUEST,
+                "Not Acceptable: this server returns single application/json "
+                "responses; the Accept header must include application/json.",
+            ),
+        )
+
     try:
         payload = json.loads(await request.body())
     except json.JSONDecodeError:
@@ -395,6 +450,8 @@ async def mcp_messages(request: Request):
         # and Test buttons (which omit the upstream token) can validate the
         # endpoint; tools/list and ping below are public discovery too, while
         # tools/call and every other method still require auth.
+        if not _accept_header_serves_json(request):
+            return _reject_unsupported_accept(request_id)
         params = payload.get("params") or {}
         if not isinstance(params, dict):
             return JSONResponse(
@@ -430,6 +487,10 @@ async def mcp_messages(request: Request):
                 ),
             )
 
+    if not _accept_header_serves_json(request):
+        # See the transport-level check above; initialize is public so the
+        # request id is known here and belongs in the envelope.
+        return _reject_unsupported_accept(request_id)
     declared_version = _protocol_version_header(request)
     if declared_version not in SUPPORTED_PROTOCOL_VERSIONS:
         logger.info("mcp_unsupported_protocol_version version=%r", declared_version)
@@ -446,15 +507,18 @@ async def mcp_messages(request: Request):
         return JSONResponse(_tools_list_result(request_id))
     if method == "tools/call":
         result = await _tools_call_result(request, settings, request_id, params)
-        # Metering header for marketplaces: tokens/chunks/cache_hit per
+        # Metering header for marketplaces: approx_tokens/chunks/cache_hit per
         # execution without a second round-trip. Best-effort parse only.
+        # `tokens` is mirrored as a deprecated alias for one release.
         response = JSONResponse(result)
         try:
             text = result.get("result", {}).get("content", [{}])[0].get("text", "")
             envelope = json.loads(text) if isinstance(text, str) and text.startswith("{") else {}
-            if isinstance(envelope, dict) and "tokens" in envelope:
+            approx = envelope.get("approx_tokens", envelope.get("tokens", 0))
+            if isinstance(envelope, dict) and ("approx_tokens" in envelope or "tokens" in envelope):
                 response.headers["X-Token-Usage"] = (
-                    f"tokens={envelope.get('tokens', 0)}, "
+                    f"approx_tokens={approx}, "
+                    f"tokens={approx}, "
                     f"chunks={envelope.get('chunk_count', 0)}, "
                     f"cache_hit={1 if envelope.get('cache_hit') else 0}"
                 )

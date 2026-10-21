@@ -143,15 +143,17 @@ def resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
 
     for address in addresses:
         try:
-            is_public = ipaddress.ip_address(address.split("%", 1)[0]).is_global
+            parsed_address = ipaddress.ip_address(address.split("%", 1)[0])
         except ValueError as error:
             raise TargetURLRejected("The target hostname resolved to an invalid address") from error
-        if not is_public:
+        # `is_global` alone is not enough: 224.0.0.0/4 and ff00::/8 are
+        # "global" per the stdlib but are multicast, never web destinations.
+        if not parsed_address.is_global or parsed_address.is_multicast:
             raise TargetURLRejected("The target hostname resolves to a non-public address")
     return addresses
 
 
-def _parse_target(url: str) -> tuple[object, str, int, str]:
+def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, str, int, str]:
     if any(character in url for character in "\r\n\t"):
         raise TargetURLRejected("The URL contains invalid characters")
     try:
@@ -161,7 +163,18 @@ def _parse_target(url: str) -> tuple[object, str, int, str]:
         if parsed.username is not None or parsed.password is not None:
             raise TargetURLRejected("URLs containing credentials are not allowed")
         host = parsed.hostname.encode("idna").decode("ascii")
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        # `parsed.port` is 0 for an explicit ":0" and None when absent, so the
+        # default port must only be applied when no port was given at all.
+        # Silently turning ":0" into 80 would smuggle a malformed target past
+        # the allow-list check below.
+        if parsed.port is None:
+            port = 443 if parsed.scheme == "https" else 80
+        else:
+            port = parsed.port
+        # Only 80/443 (plus an operator-configured extra list) may be fetched:
+        # arbitrary ports turn the service into a public host/port probe (S8).
+        if port not in (settings.allowed_port_set() if settings is not None else {80, 443}):
+            raise TargetURLRejected("Only ports 80 and 443 are allowed by default")
     except (UnicodeError, ValueError) as error:
         if isinstance(error, TargetURLRejected):
             raise
@@ -200,8 +213,15 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     request into a private network (DNS rebinding included).
     """
     current_url = url
+    current_scheme = urlsplit(url).scheme
     for _ in range(settings.max_redirects + 1):
-        parsed, host, port, path = _parse_target(current_url)
+        parsed, host, port, path = _parse_target(current_url, settings)
+        if parsed.scheme != current_scheme:
+            if current_scheme == "https" and parsed.scheme == "http":
+                # An https page must not hand us down to cleartext mid-chain:
+                # cookies/keys sent on the first hop would leak upstream (S10).
+                raise TargetURLRejected("Redirects from HTTPS to HTTP are not allowed")
+            current_scheme = parsed.scheme
         address = resolve_public_addresses(host, port)[0]
         connection = _make_connection(parsed, host, address, port, settings.request_timeout_seconds)
         try:
@@ -245,7 +265,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError
     from playwright.async_api import Route, async_playwright
 
-    _, host, port, _ = _parse_target(url)
+    _, host, port, _ = _parse_target(url, settings)
     await asyncio.to_thread(resolve_public_addresses, host, port)
     blocked_targets: list[Exception] = []
     browser = None
@@ -287,7 +307,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
                     return
 
                 try:
-                    _, request_host, request_port, _ = _parse_target(request.url)
+                    _, request_host, request_port, _ = _parse_target(request.url, settings)
                     await asyncio.to_thread(resolve_public_addresses, request_host, request_port)
                 except TargetURLRejected as error:
                     blocked_targets.append(error)

@@ -48,8 +48,10 @@ def normalize_mode(value: Any) -> str:
 
 # Dependency-free approximate tokenizer: split on whitespace sequences.
 # Good enough (~1 token per English word) for RAG sizing estimates without
-# pulling in tiktoken or another large dependency.
+# pulling in tiktoken or another large dependency. Named in every envelope via
+# TOKEN_METHOD so callers and contracts always know what the numbers mean.
 TOKEN_RE = re.compile(r"\S+")
+TOKEN_METHOD = "whitespace"
 
 
 def count_tokens(text: str) -> int:
@@ -63,14 +65,36 @@ def count_tokens(text: str) -> int:
 class ContextResult:
     mode: ContextMode
     text: str
-    tokens: int
-    chunk_count: int
-    cache_hit: bool
-    chunks: list[dict[str, Any]]
-    source_url: str
-    extracted_at: str
+    approx_tokens: int
+    html_tokens: int
+    token_method: str
+    limiting_factor: str
+    # Deprecated alias for approx_tokens, kept for one release so existing
+    # clients reading `tokens` do not break (Phase 1b, item 3).
+    tokens: int = 0
+    chunk_count: int = 0
+    cache_hit: bool = False
+    chunks: list[dict[str, Any]] | None = None
+    source_url: str = ""
+    extracted_at: str = ""
     tokens_saved_estimate: int = 0
     truncated: bool = False
+    split: bool = False
+
+
+def _decode_source_text(document: FetchedHTML) -> str:
+    """Decode a fetched body for the savings baseline (best effort, no throws).
+
+    The baseline deliberately counts the raw document — markup included — so
+    `tokens_saved_estimate` is approximately " fetched HTML tokens minus
+    delivered text tokens", the all-in number the cost-reduction story needs.
+    """
+    try:
+        if document.charset:
+            return document.body.decode(document.charset, errors="replace")
+        return document.body.decode("utf-8", errors="replace")
+    except Exception:  # pragma: no cover - decoder lookup is already guarded
+        return ""
 
 
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
@@ -146,6 +170,13 @@ async def extract_context(
     cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
     cache_hit = False
     raw_text: str | None = None
+    # Raw HTML for the all-in estimate baseline: whitespace tokens of the
+    # fetched document, so `tokens_saved_estimate` measures the whole strip
+    # (nav/ads/footer removal + character cap + mode trimming), not zero.
+    html_source_text: str | None = None
+    # True when the upstream extractor cut the document at the character cap.
+    # This is content loss and must reach the caller in every mode (P1).
+    content_truncated = False
     # Canonicalize pitch-name aliases up front so the cache key + downstream
     # logic always operate on canonical values.
     mode = normalize_mode(mode)  # type: ignore[assignment]
@@ -168,6 +199,8 @@ async def extract_context(
                 base_url=document.final_url or url,
             )
             raw_text = extracted.text
+            content_truncated = extracted.truncated
+            html_source_text = _decode_source_text(document)
 
     # --- Fetch + extract via the existing pipeline -------------------------
     if raw_text is None:
@@ -183,32 +216,77 @@ async def extract_context(
             render_js=render_js,
         )
         raw_text = scrape_result.text
+        content_truncated = scrape_result.truncated
+        # _scrape_text stores the fetched document in the memory cache (or
+        # returns a persistent-cache row); reuse the body for the estimate
+        # baseline instead of reporting zero.
+        cached_document = request.app.state.cache.get(cache_key)
+        if cached_document is not None:
+            document = cached_document
+            html_source_text = _decode_source_text(cached_document)
+
+    if html_source_text is None:
+        # Persistent-cache-only path: body gone, so the estimate degrades to
+        # delivered-text-vs-delivered-text (zero) rather than inventing data.
+        html_source_text = raw_text
 
     # --- Mode transformation -----------------------------------------------
-    # tokens_saved_estimate: nav/ads/footer stripping already happened in
-    # _scrape_text; estimate savings as raw tokens minus delivered tokens.
-    # This is an approximate whitespace-token delta for cost-reduction copy.
+    # tokens_saved_estimate: the whole strip, honestly measured. `html_tokens`
+    # counts the whitespace tokens of the fetched HTML document; `approx_tokens`
+    # counts what we actually deliver. The estimate is their difference, so it
+    # includes nav/ads/footer stripping, the character cap, and any mode-level
+    # trimming (never negative). Both figures use the same dependency-free
+    # whitespace counter, named in `token_method` so a future tokenizer (e.g.
+    # tiktoken) can be swapped in without changing the envelope shape.
+    html_tokens = count_tokens(html_source_text)
     raw_tokens = count_tokens(raw_text)
+    # Which cap bound the result? The character cap binds when the upstream
+    # extractor cut the document; otherwise the caller's token budget binds
+    # only when a mode trimmed below it (summarize dropping sentences).
+    # `split` only says the text was divided across several chunks. Chunking
+    # delivers every token, so it is never content loss (P2).
+    split = False
+    limiting_factor = "char_cap" if content_truncated else "none"
     if mode == "scrape":
         final_text = raw_text
-        chunks = [{"index": 0, "text": raw_text, "tokens": count_tokens(raw_text)}]
-        tokens = count_tokens(final_text)
-        truncated = False
+        chunks = [
+            {
+                "index": 0,
+                "text": raw_text,
+                "approx_tokens": count_tokens(raw_text),
+                "tokens": count_tokens(raw_text),
+            }
+        ]
+        approx_tokens = count_tokens(final_text)
+        truncated = content_truncated
     elif mode == "chunk":
         chunk_strings = split_into_chunks(raw_text, max_tokens)
         chunks = [
-            {"index": i, "text": c, "tokens": count_tokens(c)}
+            {
+                "index": i,
+                "text": c,
+                "approx_tokens": count_tokens(c),
+                "tokens": count_tokens(c),
+            }
             for i, c in enumerate(chunk_strings)
         ]
         final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
-        tokens = count_tokens(final_text)
-        truncated = tokens >= max_tokens and len(chunk_strings) > 1
+        approx_tokens = count_tokens(final_text)
+        split = len(chunk_strings) > 1
+        truncated = content_truncated
     elif mode == "summarize":
         if count_tokens(raw_text) <= max_tokens:
             final_text = raw_text
-            chunks = [{"index": 0, "text": raw_text, "tokens": count_tokens(raw_text)}]
-            tokens = count_tokens(final_text)
-            truncated = False
+            chunks = [
+                {
+                    "index": 0,
+                    "text": raw_text,
+                    "approx_tokens": count_tokens(raw_text),
+                    "tokens": count_tokens(raw_text),
+                }
+            ]
+            approx_tokens = count_tokens(final_text)
+            truncated = content_truncated
         else:
             sentences = re.split(r"(?<=[.!?])\s+", raw_text)
             selected: list[str] = []
@@ -220,18 +298,30 @@ async def extract_context(
                 selected.append(sentence)
                 used += sentence_tokens
             final_text = " ".join(selected)
-            chunks = [{"index": 0, "text": final_text, "tokens": count_tokens(final_text)}]
-            tokens = count_tokens(final_text)
+            chunks = [
+                {
+                    "index": 0,
+                    "text": final_text,
+                    "approx_tokens": count_tokens(final_text),
+                    "tokens": count_tokens(final_text),
+                }
+            ]
+            approx_tokens = count_tokens(final_text)
             truncated = True
+            limiting_factor = "token_budget"
     else:
         raise ValueError(f"Unknown context mode: {mode}")
 
-    tokens_saved_estimate = max(0, raw_tokens - tokens)
+    tokens_saved_estimate = max(0, html_tokens - approx_tokens)
 
     return ContextResult(
         mode=mode,
         text=final_text,
-        tokens=tokens,
+        approx_tokens=approx_tokens,
+        html_tokens=html_tokens,
+        token_method=TOKEN_METHOD,
+        limiting_factor=limiting_factor,
+        tokens=approx_tokens,
         chunk_count=len(chunks),
         cache_hit=cache_hit,
         chunks=chunks,
@@ -239,5 +329,6 @@ async def extract_context(
         extracted_at=datetime.now(timezone.utc).isoformat(),
         tokens_saved_estimate=tokens_saved_estimate,
         truncated=truncated,
+        split=split,
     )
 

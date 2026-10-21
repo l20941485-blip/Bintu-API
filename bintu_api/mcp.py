@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from bintu_api.auth import (
     api_key_scheme,
-    rate_limit_identity,
+    mcp_rate_limit_identity,
     verify_mcp_api_access,
 )
 from bintu_api.context import extract_context, normalize_mode
@@ -42,6 +42,12 @@ TOOL_DESCRIPTION = (
     "ready for vector databases; use mode=summarize to truncate to a token budget. "
     "Every call returns tokens, chunk_count, cache_hit, tokens_saved_estimate "
     "for predictable context budgets. "
+    "truncated=true means content was actually lost (the 6,000-character cap, or "
+    "summarize dropping sentences); split=true only means the text was divided "
+    "across several chunks, which never loses anything. "
+    "tokens is an approximate whitespace-token count (about one per word), not a "
+    "real tokenizer, so treat it as a sizing estimate rather than an exact billing "
+    "figure; tokens_saved_estimate is nonzero only in summarize mode. "
     "JavaScript rendering is disabled unless enabled — render_js_disabled means "
     "retry with render_js=false. "
     "Fails cleanly with invalid_or_unsafe_url, render_js_disabled, rate_limited — "
@@ -108,7 +114,7 @@ TOOL_INPUT_SCHEMA = {
             "default": 6000,
             "minimum": 100,
             "maximum": 50000,
-            "description": "Token budget for chunk/summarize modes (ignored in scrape mode). Pitch alias: chunk_token_budget.",
+            "description": "Token budget for chunk/summarize modes (ignored in scrape mode). Pitch alias: chunk_token_budget. Note: extracted text is always capped at 6,000 characters first, so that cap usually binds before this budget on long pages.",
         },
         "cache": {
             "type": "boolean",
@@ -217,21 +223,27 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         include_nav=False,
         include_header=False,
         include_footer=False,
-        identity=rate_limit_identity(request, settings),
+        identity=mcp_rate_limit_identity(request, settings),
         settings=settings,
     )
-    # Unified Token Tax envelope in content[0].text across ALL modes:
-    # {mode, tokens, chunk_count, cache_hit, source_url, extracted_at,
-    #  tokens_saved_estimate, truncated, chunks} for predictable budgets.
+    # Unified Token Tax envelope in content[0].text across ALL modes.
+    # `tokens` is a deprecated alias of `approx_tokens` (kept for one release);
+    # `token_method` names the counter; `html_tokens` is the fetched-document
+    # baseline for `tokens_saved_estimate`; `limiting_factor` says which cap bound.
     payload = {
         "mode": context.mode,
         "tokens": context.tokens,
+        "approx_tokens": context.approx_tokens,
+        "html_tokens": context.html_tokens,
+        "token_method": context.token_method,
+        "limiting_factor": context.limiting_factor,
         "chunk_count": context.chunk_count,
         "cache_hit": context.cache_hit,
         "source_url": context.source_url,
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "truncated": context.truncated,
+        "split": context.split,
         "chunks": context.chunks,
     }
     return {
