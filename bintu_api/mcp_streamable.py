@@ -297,7 +297,10 @@ async def _tools_call_result(
         # JSON-RPC calls benefit too; canonical max_tokens wins on conflict.
         raw_arguments = dict(raw_arguments)
         if "mode" in raw_arguments:
-            raw_arguments["mode"] = normalize_mode(raw_arguments["mode"])
+            try:
+                raw_arguments["mode"] = normalize_mode(raw_arguments["mode"])
+            except ValueError as error:
+                return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: mode: {error}")
         if "chunk_token_budget" in raw_arguments:
             if "max_tokens" in raw_arguments:
                 logger.warning(
@@ -339,6 +342,9 @@ async def _tools_call_result(
     except HTTPException as error:
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
+    except ValueError as error:
+        logger.info("mcp_tool_error value_error=%r", error)
+        return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: {error}")
 
     # Unified Token Tax envelope in content[0].text across ALL modes for
     # predictable context budgets (no tier caps in code; dashboards own quota).

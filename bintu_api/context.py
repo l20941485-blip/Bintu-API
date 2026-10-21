@@ -40,11 +40,18 @@ MODE_ALIASES = {"chunked": "chunk"}
 
 
 def normalize_mode(value: Any) -> str:
-    """Normalize a mode value to its canonical form (case/whitespace tolerant)."""
+    """Normalize a mode value to its canonical form (case/whitespace tolerant).
+
+    Raises ValueError for unknown modes so callers can reject them with
+    HTTP 400 (REST) or JSON-RPC -32602 (MCP) instead of a 500.
+    """
     if not isinstance(value, str):
         return value  # type: ignore[return-value]
     cleaned = value.strip().lower()
-    return MODE_ALIASES.get(cleaned, cleaned)
+    canonical = MODE_ALIASES.get(cleaned, cleaned)
+    if canonical not in ("scrape", "chunk", "summarize"):
+        raise ValueError(f"Unknown context mode: {value!r}")
+    return canonical
 
 # Dependency-free approximate tokenizer: split on whitespace sequences.
 # Good enough (~1 token per English word) for RAG sizing estimates without

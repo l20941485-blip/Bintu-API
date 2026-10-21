@@ -184,6 +184,68 @@ class McpStreamableTests(unittest.TestCase):
         self.assertTrue(payload["isError"])
         self.assertIn("render_js_disabled", payload["content"][0]["text"])
 
+    def test_tools_call_rejects_invalid_mode(self) -> None:
+        """Invalid mode strings must map to JSON-RPC -32602 on the streamable endpoint."""
+        response = self.rpc(
+            "tools/call",
+            {"name": TOOL_NAME, "arguments": {"url": "https://example.com", "mode": "not-a-mode"}},
+        )
+
+        error = response.json()["error"]
+        self.assertEqual(error["code"], -32602)
+
+    def test_tools_call_rejects_invalid_mode_case_variants(self) -> None:
+        """Case/whitespace variants of unknown modes map to -32602."""
+        for bad_mode in ("INVALID", "chunked!"):
+            with self.subTest(mode=bad_mode):
+                response = self.rpc(
+                    "tools/call",
+                    {
+                        "name": TOOL_NAME,
+                        "arguments": {"url": "https://example.com", "mode": bad_mode},
+                    },
+                )
+                error = response.json()["error"]
+                self.assertEqual(error["code"], -32602)
+
+    def test_tools_call_accepts_whitespace_tolerant_valid_modes(self) -> None:
+        """Whitespace/case-tolerant normalization of valid modes succeeds."""
+        for mode in (" Scrape ", "CHUNK", "Summarize"):
+            with self.subTest(mode=mode):
+                with patch(
+                    "bintu_api.routes.fetch_html_document",
+                    return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
+                ):
+                    response = self.rpc(
+                        "tools/call",
+                        {
+                            "name": TOOL_NAME,
+                            "arguments": {"url": "https://example.com", "mode": mode},
+                        },
+                    )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()["result"]
+                self.assertFalse(payload["isError"])
+
+    def test_tools_call_accepts_valid_modes(self) -> None:
+        """All three canonical modes pass validation on the streamable endpoint."""
+        for mode in ("scrape", "chunk", "summarize"):
+            with self.subTest(mode=mode):
+                with patch(
+                    "bintu_api.routes.fetch_html_document",
+                    return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
+                ):
+                    response = self.rpc(
+                        "tools/call",
+                        {
+                            "name": TOOL_NAME,
+                            "arguments": {"url": "https://example.com", "mode": mode},
+                        },
+                    )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()["result"]
+                self.assertFalse(payload["isError"])
+
     def test_tools_call_unknown_tool_is_invalid_params(self) -> None:
         response = self.rpc("tools/call", {"name": "other", "arguments": {"url": "https://example.com"}})
 
