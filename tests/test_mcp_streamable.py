@@ -31,7 +31,10 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(result["protocolVersion"], "2025-11-25")
         self.assertIn("tools", result["capabilities"])
         self.assertEqual(result["serverInfo"]["name"], "bintu")
-        self.assertEqual(result["serverInfo"]["version"], "1.0.0")
+        # Read the version from the app's own settings instead of hard-coding a
+        # literal: the MCP server advertises settings.service_version, so a
+        # release bump must not require a second edit in this test.
+        self.assertEqual(result["serverInfo"]["version"], self.app.state.settings.service_version)
 
     def test_initialize_accepts_older_supported_versions(self) -> None:
         response = self.rpc("initialize", {"protocolVersion": "2025-06-18"})
@@ -42,6 +45,39 @@ class McpStreamableTests(unittest.TestCase):
         response = self.rpc("initialize", {"protocolVersion": "1999-01-01"})
 
         self.assertEqual(response.json()["result"]["protocolVersion"], "2025-11-25")
+
+
+    def test_post_rejects_non_json_accept_header(self) -> None:
+        """Transport spec: the client must accept application/json; an SSE-only
+        client cannot be served a single-JSON response and must get 406."""
+        response = self.client.post(
+            "/mcp",
+            headers={"Accept": "text/html", "Content-Type": "application/json"},
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+        )
+        self.assertEqual(response.status_code, 406)
+        body = response.json()
+        self.assertEqual(body["jsonrpc"], "2.0")
+        self.assertIn("error", body)
+        self.assertIn("application/json", body["error"]["message"])
+
+    def test_post_accepts_json_and_wildcard_accept_headers(self) -> None:
+        for accept in ("application/json, text/event-stream", "application/json", "*/*"):
+            with self.subTest(accept=accept):
+                response = self.client.post(
+                    "/mcp",
+                    headers={"Accept": accept, "Content-Type": "application/json"},
+                    json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+                )
+                self.assertEqual(response.status_code, 200)
+
+    def test_post_missing_accept_header_is_tolerated(self) -> None:
+        """Gateway Test buttons omit headers; accept them rather than 406."""
+        response = self.client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+        )
+        self.assertEqual(response.status_code, 200)
 
     def test_ping_returns_empty_result(self) -> None:
         response = self.rpc("ping")
@@ -89,7 +125,7 @@ class McpStreamableTests(unittest.TestCase):
         long_text = "Sentence one. " * 200
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=f"<main>{long_text}</main>", charset=None),
+            return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
                 "tools/call",
@@ -116,7 +152,7 @@ class McpStreamableTests(unittest.TestCase):
         long_text = "Sentence one. " * 100
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=f"<main>{long_text}</main>", charset=None),
+            return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
                 "tools/call",

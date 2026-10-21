@@ -1,6 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass
+from typing import ClassVar
 
 logger = logging.getLogger("bintu_api.settings")
 
@@ -80,12 +81,51 @@ class Settings:
     # render_js_enabled, keeping tests that patch os.environ deterministic.
     require_auth: bool = False
     service_title: str = "Bintu Data Extraction API"
-    service_version: str = "1.0.0"
+    service_version: str = "1.0.1"
+    # Comma-separated extra browser origins allowed to send credentialed
+    # cross-origin requests. The MCPize gateway origin below is always allowed;
+    # this setting exists so operators can add their own dashboards without a
+    # code change. A wildcard-plus-credentials CORS policy would let any web
+    # page act on a visitor's behalf, so the list is explicit (C3).
+    cors_allowed_origins: str = ""
+    # Comma-separated extra TCP ports the fetcher may connect to, in addition
+    # to the default ports 80/443. Any other explicit port is rejected at
+    # parse time so the service cannot be used as a public host/port probe
+    # (S8). Override with ALLOWED_PORTS.
+    allowed_ports: str = ""
     service_description: str = (
         "Extract readable text from public HTML pages. JavaScript rendering is "
         "disabled unless explicitly enabled. Responses are bounded, requests are "
         "rate-limited, and outbound connections are validated against public IP addresses."
     )
+
+    # Origins always permitted via CORS: the MCPize gateway that fronts /mcp.
+    CORS_GATEWAY_ORIGINS: ClassVar[tuple[str, ...]] = ("https://bintu-web-reader.mcpize.run",)
+
+    def cors_origin_allowlist(self) -> tuple[str, ...]:
+        """Origins allowed to make credentialed cross-origin requests."""
+        extras = tuple(
+            origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()
+        )
+        return self.CORS_GATEWAY_ORIGINS + extras
+
+    def allowed_port_set(self) -> frozenset[int]:
+        """TCP ports the fetcher may connect to: 80/443 plus ALLOWED_PORTS."""
+        ports = {80, 443}
+        for raw in self.allowed_ports.split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                port = int(raw)
+            except ValueError:
+                logger.warning("invalid_allowed_port value=%r ignored", raw)
+                continue
+            if 1 <= port <= 65535:
+                ports.add(port)
+            else:
+                logger.warning("out_of_range_allowed_port value=%r ignored", raw)
+        return frozenset(ports)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -104,4 +144,6 @@ class Settings:
             or "https://mcpize.com",
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
             require_auth=_bool_env("REQUIRE_AUTH", default=False),
+            cors_allowed_origins=os.getenv("CORS_ALLOWED_ORIGINS", "").strip(),
+            allowed_ports=os.getenv("ALLOWED_PORTS", "").strip(),
         )

@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 import logging
@@ -281,4 +282,37 @@ def rate_limit_identity(request: Request, settings: Settings) -> str:
         rapidapi_user = request.headers.get("X-RapidAPI-User")
         if rapidapi_user:
             return f"rapidapi:{rapidapi_user}"
+    return request.client.host if request.client else "unknown"
+
+
+def _presented_credential(request: Request) -> str | None:
+    """Whatever credential the caller sent, raw — never logged or stored."""
+    header_key = request.headers.get("X-API-Key", "").strip()
+    if header_key:
+        return header_key
+    scheme, separator, token = request.headers.get("Authorization", "").partition(" ")
+    if separator and scheme.lower() == "bearer" and token.strip():
+        return token.strip()
+    return None
+
+
+def mcp_rate_limit_identity(request: Request, settings: Settings) -> str:
+    """Rate-limit bucket for MCP callers: RapidAPI user, then key fingerprint, then IP.
+
+    All Claude-connector traffic arrives from the MCPize gateway's IP, so keying
+    on IP alone collapses every connector user into one shared bucket (A3) —
+    one greedy caller can starve everyone else. A caller that presents any
+    credential (valid or not) is bucketed by the SHA-256 fingerprint of that
+    credential instead, so distinct keys stay separated and a flood of invalid
+    keys cannot evict a valid one. The raw secret never appears in the bucket
+    name, keys, or logs.
+    """
+    if has_valid_proxy_secret(request, settings):
+        rapidapi_user = request.headers.get("X-RapidAPI-User")
+        if rapidapi_user:
+            return f"rapidapi:{rapidapi_user}"
+    credential = _presented_credential(request)
+    if credential:
+        fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()[:16]
+        return f"mcp:{fingerprint}"
     return request.client.host if request.client else "unknown"

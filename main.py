@@ -83,11 +83,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # NOTE: allow_origins=["*"] cannot pair with allow_credentials=True (the
     # CORS spec forbids a wildcard with credentials, and Starlette refuses to
     # send Access-Control-Allow-Origin in that combo). allow_origin_regex=".*"
-    # keeps the open-gateway behaviour while still echoing the request origin
-    # so credentialed gateway probes succeed.
+    # was previously used as a workaround, but that combination effectively
+    # reflected ANY origin while still allowing credentials, so any web page
+    # could make credentialed calls from a visitor's browser. The policy is now
+    # an explicit allowlist (MCPize gateway plus CORS_ALLOWED_ORIGINS).
     application.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=".*",
+        allow_origins=list(app_settings.cors_origin_allowlist()),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

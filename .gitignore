@@ -15,3 +15,6 @@ tests_out.txt
 verify_*.py
 *.out
 *.log
+
+.venv*/
+bintu_test_report.json
