@@ -162,6 +162,7 @@ class ScraperApiTests(unittest.TestCase):
                 "url": "https://example.com/original",
                 "text": "Read the guide (https://example.com/guide).",
                 "truncated": False,
+                "cache_layer": "none",
             },
         )
 

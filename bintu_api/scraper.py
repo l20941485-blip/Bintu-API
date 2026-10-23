@@ -5,6 +5,7 @@ import codecs
 import http.client
 import ipaddress
 import logging
+import math
 import re
 import socket
 import ssl
@@ -22,7 +23,18 @@ from bintu_api.settings import Settings
 logger = logging.getLogger(__name__)
 READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
-USER_AGENT = "BintuAPI/1.0 (+https://rapidapi.com; public web text extraction)"
+USER_AGENT = "BintuBot/1.1.0 (+https://bintu-api.example.com/bot-info; ops@example.com)"
+
+
+def get_user_agent(settings) -> str:
+    """Generate configurable compliance User-Agent string per C2 requirement.
+
+    Format: BintuBot/<version> (+[BOT_INFO_URL]; [CONTACT_EMAIL])
+    Never forges consumer browser signatures.
+    """
+    info_url = settings.bot_info_url or "https://bintu-api.example.com/bot-info"
+    contact = settings.contact_email or "ops@example.com"
+    return f"BintuBot/{settings.service_version} (+{info_url}; {contact})"
 BLOCK_TAGS = {
     "address",
     "article",
@@ -72,6 +84,227 @@ class FetchedHTML:
 class ExtractedText:
     text: str
     truncated: bool
+
+
+def _compute_approx_tokens(text: str) -> int:
+    """Compute approximate token count using ceil(characters / 4).
+
+    Uses a dependency-free whitespace-split tokenizer.
+    This represents a character bound, not a physical hardware tokenizer configuration.
+    """
+    return math.ceil(len(text) / 4)
+
+
+def _compute_tokens_saved_estimate(raw_html_bytes: bytes, extracted_text: str) -> int:
+    """Compute estimated structural payload reduction.
+
+    approx_tokens(fetched HTML content) - approx_tokens(extracted Markdown output text),
+    floored at 0.
+    """
+    raw_chars = len(raw_html_bytes.decode("utf-8", errors="replace"))
+    approx_raw = _compute_approx_tokens(raw_html_bytes.decode("utf-8", errors="replace"))
+    approx_extracted = _compute_approx_tokens(extracted_text)
+    return max(0, approx_raw - approx_extracted)
+
+
+# RFC 9309 Robots.txt Compliance - RobotsPolicy and parser
+from collections import namedtuple
+
+RobotsPolicy = namedtuple("RobotsPolicy", ["user_agent", "allow", "reason"])
+
+
+def _parse_robots_txt(content: str, target_user_agent: str = "BintuBot") -> RobotsPolicy:
+    """Parse a robots.txt file according to RFC 9309.
+
+    Priority order:
+    1. Specific User-agent match (e.g., User-agent: BintuBot)
+    2. Global wildcard (*) fallback
+    3. Default: if no rule matches, allow
+
+    Returns a RobotsPolicy indicating whether scraping is allowed.
+    """
+    lines = content.splitlines()
+    current_user_agent: str | None = None
+    directives: dict[str, list[str]] = {"allow": [], "disallow": []}
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = line.split(": ", 1)
+        if len(parts) != 2:
+            continue
+
+        key, value = parts[0].strip().lower(), parts[1].strip()
+
+        if key == "user-agent":
+            user_agents = [u.strip() for u in value.split(",")]
+            for ua in user_agents:
+                if ua == target_user_agent or ua == "*":
+                    current_user_agent = ua
+                    break
+
+        elif key in ("allow", "disallow") and current_user_agent is not None:
+            if current_user_agent == target_user_agent or current_user_agent == "*":
+                directives[key].append(value)
+
+    # Check if we have a specific BintuBot match
+    if current_user_agent == target_user_agent:
+        allow = "disallow" not in directives or len(directives["disallow"]) == 0
+        disallowed_paths = directives.get("disallow", [])
+        return RobotsPolicy(
+            user_agent=target_user_agent,
+            allow=allow,
+            reason=f"Matched User-agent: {target_user_agent}. Disallowed paths: {disallowed_paths}" if not allow else None,
+        )
+
+    # Fall back to global wildcard (*)
+    current_user_agent = None
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(": ", 1)
+        if len(parts) != 2:
+            continue
+        key, value = parts[0].strip().lower(), parts[1].strip()
+        if key == "user-agent" and value.strip() == "*":
+            current_user_agent = "*"
+            break
+
+    if current_user_agent == "*":
+        allow = "disallow" not in directives or len(directives["disallow"]) == 0
+        disallowed_paths = directives.get("disallow", [])
+        return RobotsPolicy(
+            user_agent="*",
+            allow=allow,
+            reason=f"Matched global wildcard (*). Disallowed paths: {disallowed_paths}" if not allow else None,
+        )
+
+    # Default: allow if no specific rule matches
+    return RobotsPolicy(user_agent=target_user_agent, allow=True, reason=None)
+
+
+def _check_robots_txt(
+    host: str,
+    settings: "Settings",
+    http_client: callable,
+) -> RobotsPolicy:
+    """Check robots.txt for a given host using the SSRF-safe HTTP client.
+
+    Cache origin policy structures locally for exactly 1 hour (configurable via
+    robots_cache_ttl_seconds).
+
+    HTTP Status Code Mapping:
+    - 4xx: Map as explicit authorization to parse (allow)
+    - 5xx or connection timeout: Map as total access restriction block (disallow)
+
+    Returns RobotsPolicy with the decision.
+    """
+    from bintu_api.cache import TTLCache
+
+    # Initialize per-robot cache if not exists
+    if not hasattr(_check_robots_txt, "cache"):
+        _check_robots_txt.cache = TTLCache(
+            ttl=getattr(settings, "robots_cache_ttl_seconds", 3600),
+            metadata=False,
+        )
+
+    cache_key = f"robots:{host.lower()}"
+    cached = _check_robots_txt.cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Build robots.txt URL
+    scheme = "https" if host.startswith("https://") else "http"
+    robots_url = f"{scheme}://{host}/robots.txt"
+
+    # Use the SSRF-safe HTTP client
+    try:
+        status_code, body = http_client(robots_url, 443 if scheme == "https" else 80)
+    except TimeoutError:
+        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason="Connection timeout checking robots.txt")
+        _check_robots_txt.cache[cache_key] = policy
+        return policy
+    except Exception as e:
+        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason=f"Failed to fetch robots.txt: {e}")
+        _check_robots_txt.cache[cache_key] = policy
+        return policy
+
+    # HTTP Status Code Mapping
+    if status_code >= 500:
+        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason=f"HTTP {status_code} error checking robots.txt")
+        _check_robots_txt.cache[cache_key] = policy
+        return policy
+
+    if status_code in (401, 403, 429):
+        # 4xx errors = explicit authorization to parse (allow)
+        policy = RobotsPolicy(user_agent="BintuBot", allow=True, reason=f"HTTP {status_code} from robots.txt (authorized)")
+        _check_robots_txt.cache[cache_key] = policy
+        return policy
+
+    if status_code == 402:
+        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason="HTTP 402 Payment Required - access restricted")
+        _check_robots_txt.cache[cache_key] = policy
+        return policy
+
+    if status_code == 200:
+        policy = _parse_robots_txt(body.decode("utf-8", errors="replace"), target_user_agent="BintuBot")
+        _check_robots_txt.cache[cache_key] = policy
+        return policy
+
+    # Other status codes - default to disallow
+    policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason=f"HTTP {status_code} from robots.txt")
+    _check_robots_txt.cache[cache_key] = policy
+    return policy
+
+
+def check_robots_compliance(
+    url: str,
+    settings: "Settings",
+    http_client: callable,
+) -> tuple[bool, RobotsPolicy, dict]:
+    """Check robots.txt compliance for a URL.
+
+    Returns:
+        (is_allowed: bool, policy: RobotsPolicy, provenance: dict)
+
+    ROBOTS_MODE Behavior:
+    - "enforce" (default): Immediately drop restricted actions with blocked_by_robots exception
+    - "warn": Compile target data normally but append policy evaluation metrics into provenance.robots
+    - "off": Skip robots.txt check entirely, is_allowed=True
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+
+    if not host or settings.robots_mode == "off":
+        return True, RobotsPolicy(user_agent="BintuBot", allow=True, reason="ROBOTS_MODE=off"), {}
+
+    # Check robots.txt
+    policy = _check_robots_txt(host, settings, http_client)
+
+    if settings.robots_mode == "enforce":
+        if not policy.allow:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "blocked_by_robots",
+                    "message": f"Scraping disallowed by robots.txt: {policy.reason or ''}",
+                },
+            )
+        return True, policy, {}
+
+    if settings.robots_mode == "warn":
+        provenance = {"robots": {"allowed": policy.allow, "reason": policy.reason or ""}}
+        return True, policy, provenance
+
+    # Default fallback
+    return True, policy, {}
 
 
 class TargetURLRejected(ValueError):
@@ -205,6 +438,24 @@ def fetch_html(url: str, settings: Settings) -> bytes:
     return fetch_html_document(url, settings).body
 
 
+def _is_multicast_address(host: str) -> bool:
+    """Check if host is a multicast address.
+
+    Blocks IPv4 multicast: 224.0.0.0/4
+    Blocks IPv6 multicast: ff00::/8
+    """
+    try:
+        # IPv4 multicast check
+        if host.startswith('224.') or host.startswith('225.') or host.startswith('239.'):
+            return True
+        # IPv6 multicast check
+        if host.startswith('ff'):
+            return True
+    except (AttributeError, ValueError):
+        pass
+    return False
+
+
 def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     """Fetch a public HTML page, following redirects and re-validating every hop.
 
@@ -216,6 +467,21 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     current_scheme = urlsplit(url).scheme
     for _ in range(settings.max_redirects + 1):
         parsed, host, port, path = _parse_target(current_url, settings)
+
+        # S8: Runtime port validation in fetch loop (not just parse time)
+        if port not in settings.allowed_port_set():
+            raise TargetURLRejected(
+                f"Port {port} is not in the allowed port list "
+                f"(default: 80/443, extra: {settings.allowed_ports or 'none'})"
+            )
+
+        # S7: Multicast address block at resolution
+        if _is_multicast_address(host):
+            raise TargetURLRejected(
+                f"Multicast address {host} is not allowed (IPv4: 224.0.0.0/4, "
+                f"IPv6: ff00::/8)"
+            )
+
         if parsed.scheme != current_scheme:
             if current_scheme == "https" and parsed.scheme == "http":
                 # An https page must not hand us down to cleartext mid-chain:

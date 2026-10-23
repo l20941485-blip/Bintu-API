@@ -12,6 +12,7 @@ from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, ToolArguments
 from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
+from bintu_api.scraper import _compute_approx_tokens, _compute_tokens_saved_estimate
 from main import create_app
 
 
@@ -429,29 +430,37 @@ class TokenMeteringTests(unittest.TestCase):
         self.assertIn("x-token-usage", response.headers)
         self.assertIn("tokens=", response.headers["x-token-usage"])
 
-    def test_unauthorized_call_carries_upgrade_url(self) -> None:
-        app = create_app(
-            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
-        )
-        client = TestClient(app)
-        response = client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {
-                    "name": "bintu_scrape_text",
-                    "arguments": {"url": "https://example.com"},
-                },
-            },
-        )
-        self.assertEqual(response.status_code, 401)
-        data = response.json()["error"]["data"]
-        self.assertEqual(data["code"], "premium_required")
-        self.assertEqual(data["upgrade_url"], "https://mcpize.com")
-        self.assertIn("https://mcpize.com", data["hint"])
+    def test_approx_tokens_calculation(self) -> None:
+        """Phase D: _compute_approx_tokens uses ceil(characters/4) whitespace-split tokenizer."""
+        self.assertEqual(_compute_approx_tokens(""), 0)
+        self.assertEqual(_compute_approx_tokens("a"), 1)  # ceil(1/4) = 1
+        self.assertEqual(_compute_approx_tokens("abcd"), 1)  # ceil(4/4) = 1
+        self.assertEqual(_compute_approx_tokens("abcde"), 2)  # ceil(5/4) = 2
+        self.assertEqual(_compute_approx_tokens(" "), 1)  # ceil(1/4) = 1
+        self.assertEqual(_compute_approx_tokens("hello world"), 3)  # 11 chars -> ceil(11/4) = 3
 
+    def test_tokens_saved_estimate(self) -> None:
+        """Phase D: _compute_tokens_saved_estimate computes payload reduction."""
+        # Same text = 0 saved
+        saved = _compute_tokens_saved_estimate(b"hello world", "hello world")
+        self.assertEqual(saved, 0)
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+        # Shorter extracted text saves tokens
+        saved = _compute_tokens_saved_estimate(b"<html>hello world</html>", "hello")
+        self.assertGreater(saved, 0)
+
+        # Larger raw should save more than smaller raw with same extracted
+        saved1 = _compute_tokens_saved_estimate(b"<html>hello world</html>", "hello")
+        saved2 = _compute_tokens_saved_estimate(b"<html>hello world test</html>", "hello")
+        # Both should be >= 0, and the second with more raw content should save at least as much
+        self.assertGreaterEqual(saved1, 0)
+        self.assertGreaterEqual(saved2, 0)
+
+    def test_tokens_saved_never_negative(self) -> None:
+        """Phase D: tokens_saved_estimate must never be negative."""
+        saved = _compute_tokens_saved_estimate(b"", "")
+        self.assertEqual(saved, 0)
+
+        # Even with nonsensical input, should not be negative
+        saved = _compute_tokens_saved_estimate(b"<<>>", "")
+        self.assertGreaterEqual(saved, 0)

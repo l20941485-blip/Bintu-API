@@ -74,6 +74,7 @@ class ContextResult:
     tokens: int = 0
     chunk_count: int = 0
     cache_hit: bool = False
+    cache_layer: Literal["none", "memory", "persistent"] = "none"
     chunks: list[dict[str, Any]] | None = None
     source_url: str = ""
     extracted_at: str = ""
@@ -169,6 +170,7 @@ async def extract_context(
 
     cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
     cache_hit = False
+    cache_layer = "none"
     raw_text: str | None = None
     # Raw HTML for the all-in estimate baseline: whitespace tokens of the
     # fetched document, so `tokens_saved_estimate` measures the whole strip
@@ -189,6 +191,7 @@ async def extract_context(
         document = request.app.state.cache.get(cache_key)
         if document is not None:
             cache_hit = True
+            cache_layer = "memory"
             extracted = extract_text_result(
                 document.body,
                 settings.max_text_characters,
@@ -214,6 +217,7 @@ async def extract_context(
             include_footer=include_footer,
             identity=identity,
             render_js=render_js,
+            skip_cache=not cache,
         )
         raw_text = scrape_result.text
         content_truncated = scrape_result.truncated

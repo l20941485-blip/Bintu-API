@@ -73,15 +73,30 @@ class Settings:
     # default on free infra; set RENDER_JS_ENABLED=true only on paid plans
     # where the latency and quota cost are covered. RapidAPI does not send
     # plan tier in headers, so per-plan gating is not enforceable here.
+# RFC 9309 Compliance Configuration
+    robots_mode: str = "enforce"  # enforce | warn | off
+    robots_cache_ttl_seconds: int = 3600  # 1 hour cache TTL
+    bot_info_url: str = ""  # Optional: e.g. https://bintu-api.example.com/bot-info
+    contact_email: str = ""  # Optional: e.g. ops@example.com
     render_js_enabled: bool = False
     # REQUIRE_AUTH=true forbids the open-dev early return in verify_api_access:
+    # WARNING: Enabling JavaScript rendering boots Playwright/Chromium
+    # (2-4s startup + ongoing RAM). Only enable on paid/infra plans that
+    # cover the latency and resource cost. Do not enable on free-tier.
+    if render_js_enabled:
+        logger.warning(
+            "RENDER_JS_ENABLED is enabled - JavaScript rendering "
+            "will boot Playwright/Chromium on every fetch. This incurs "
+            "2-4s startup latency and ongoing RAM costs. "
+            "Only enable on paid infrastructure plans."
+        )
     # if both secrets are empty the service answers 500 auth_misconfiguration
     # instead of accepting unauthenticated traffic. Read in from_env (not as a
     # field default) so the value resolves per-app-creation like
     # render_js_enabled, keeping tests that patch os.environ deterministic.
     require_auth: bool = False
     service_title: str = "Bintu Data Extraction API"
-    service_version: str = "1.0.1"
+    service_version: str = "1.1.0"
     # Comma-separated extra browser origins allowed to send credentialed
     # cross-origin requests. The MCPize gateway origin below is always allowed;
     # this setting exists so operators can add their own dashboards without a

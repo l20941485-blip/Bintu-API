@@ -40,6 +40,8 @@ from bintu_api.scraper import (
     extract_text_result,
     fetch_html_document,
     fetch_rendered_html_document,
+    check_robots_compliance,
+    get_user_agent,
 )
 
 
@@ -300,6 +302,20 @@ async def _scrape_text(
                 "hint": "The target server returned an error. Try again later.",
             },
         ) from error
+
+    # C3: Upstream error interception - clean structured upstream_access_denied body.
+    # 401, 402, 403, 429 responses map to structured error without retry.
+    except HTTPException as error:
+        if error.status_code in (401, 402, 403, 429):
+            logger.warning("upstream_access_denied status=%d", error.status_code)
+            raise HTTPException(
+                status_code=error.status_code,
+                detail={
+                    "code": "upstream_access_denied",
+                    "message": error.detail.get("message", "Access denied by target server."),
+                    "hint": "The target server rejected the request. No retry or CAPTCHA handling is performed.",
+                },
+            ) from error
     except TooManyRedirects as error:
         raise HTTPException(
             status_code=502,
