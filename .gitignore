@@ -16,5 +16,18 @@ verify_*.py
 *.out
 *.log
 
+# Phase B: Caching tier stabilization
+.vscode/
+fix_*.py
+patch_*.py
+_p0_*
+
 .venv*/
 bintu_test_report.json
+.vscode/settings.json
+server.json
+tatus
+test_verify.py
+tatus
+run_tests.py
+tatus
