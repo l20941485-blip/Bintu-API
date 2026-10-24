@@ -1,6 +1,8 @@
 """Simple MCP-compatible tool discovery and invocation endpoints.
 
+
 Two surfaces exist on purpose:
+
 
 - ``/mcp/tools`` and ``/mcp/tools/call``: minimal JSON helpers with the same
   shapes as MCP content blocks; kept for the existing RapidAPI listing and
@@ -11,24 +13,30 @@ Two surfaces exist on purpose:
   TOOL_INPUT_SCHEMA/TOOL_OUTPUT_SCHEMA/TOOL_ANNOTATIONS so both surfaces stay in lockstep.
 """
 
+
+import asyncio
 import json
 import logging
 from typing import Any
 
+
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+
+from bintu_api import routes
 from bintu_api.auth import (
     api_key_scheme,
     mcp_rate_limit_identity,
     verify_mcp_api_access,
 )
-from bintu_api.context import extract_context, normalize_mode
-from bintu_api.routes import _scrape_text
+from bintu_api.context import _decode_source_text, extract_context, normalize_mode
 from bintu_api.settings import Settings
 
 
+
 router = APIRouter(prefix="/mcp", tags=["MCP"])
+
 
 logger = logging.getLogger("bintu_api.mcp")
 TOOL_NAME = "bintu_scrape_text"
@@ -48,6 +56,8 @@ TOOL_DESCRIPTION = (
     "tokens is an approximate whitespace-token count (about one per word), not a "
     "real tokenizer, so treat it as a sizing estimate rather than an exact billing "
     "figure; tokens_saved_estimate is nonzero only in summarize mode. "
+    "The 6,000-character cap binds before any token budget is enforced; if your "
+    "application has a smaller token budget, set max_tokens accordingly. "
     "JavaScript rendering is disabled unless enabled — render_js_disabled means "
     "retry with render_js=false. "
     "Fails cleanly with invalid_or_unsafe_url, render_js_disabled, rate_limited — "
@@ -127,13 +137,16 @@ TOOL_INPUT_SCHEMA = {
 }
 
 
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any]
 
 
+
 class ToolArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
 
     url: str
     render_js: bool = False
@@ -141,10 +154,12 @@ class ToolArguments(BaseModel):
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     cache: bool = True
 
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
+
 
         - mode "chunked" (any case/whitespace) -> "chunk".
         - "chunk_token_budget" -> "max_tokens"; canonical "max_tokens" wins
@@ -169,6 +184,7 @@ class ToolArguments(BaseModel):
         return normalized
 
 
+
 @router.get(
     "/tools",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -189,6 +205,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
     }
 
 
+
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -203,6 +220,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
     except ValidationError as error:
         raise HTTPException(status_code=400, detail=error.errors()) from error
 
+
     if arguments.render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
@@ -213,6 +231,24 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
             },
         )
 
+
+    # Fetch and extract once through the shared REST pipeline boundary. This
+    # keeps the legacy helper aligned with REST and the Streamable MCP endpoint
+    # while allowing tests to patch bintu_api.routes.fetch_html_document.
+    document = await asyncio.to_thread(
+        routes.fetch_html_document, arguments.url, settings
+    )
+    extracted = routes.extract_text_result(
+        document.body,
+        settings.max_text_characters,
+        include_nav=False,
+        include_header=False,
+        include_footer=False,
+        from_encoding=document.charset,
+        base_url=document.final_url or arguments.url,
+    )
+
+
     context = await extract_context(
         request,
         arguments.url,
@@ -220,12 +256,17 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         max_tokens=arguments.max_tokens,
         cache=arguments.cache,
         render_js=arguments.render_js,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
         identity=mcp_rate_limit_identity(request, settings),
+        raw_text=extracted.text,
+        content_truncated=extracted.truncated,
+        html_source_text=_decode_source_text(document),
+        cache_hit=False,
+        cache_layer="none",
+        document=document,
         settings=settings,
     )
+
+
     # Unified Token Tax envelope in content[0].text across ALL modes.
     # `tokens` is a deprecated alias of `approx_tokens` (kept for one release);
     # `token_method` names the counter; `html_tokens` is the fetched-document
