@@ -168,8 +168,6 @@ class ToolArguments(BaseModel):
         if not isinstance(data, dict):
             return data
         normalized = dict(data)
-        if "mode" in normalized:
-            normalized["mode"] = normalize_mode(normalized["mode"])
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
                 logger.warning(
@@ -215,6 +213,14 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
     verify_mcp_api_access(request, settings)
     if payload.name != TOOL_NAME:
         raise HTTPException(status_code=400, detail=f"Unknown MCP tool: {payload.name}")
+    # Strict mode validation before Pydantic: reject unknown modes with HTTP 400
+    # so callers get a clean error instead of a 500 from extract_context.
+    raw_mode = payload.arguments.get("mode")
+    if raw_mode is not None:
+        try:
+            normalize_mode(raw_mode)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
     try:
         arguments = ToolArguments.model_validate(payload.arguments)
     except ValidationError as error:

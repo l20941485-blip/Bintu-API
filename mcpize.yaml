@@ -10,3 +10,17 @@ startCommand:
   command: uvicorn main:app --host 0.0.0.0 --port $PORT --no-access-log
 configSchema:
   source: code
+
+credentials:
+  - name: api_key
+    type: string
+    required: true
+    description: "Bintu API key for authentication. Get your key from the Bintu dashboard."
+  - name: user_id
+    type: string
+    required: false
+    description: "Optional user ID for tracking usage"
+  - name: endpoint
+    type: string
+    required: false
+    description: "Custom API endpoint (advanced use)"
