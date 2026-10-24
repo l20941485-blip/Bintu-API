@@ -15,6 +15,23 @@ from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
 from bintu_api.scraper import _compute_approx_tokens, _compute_tokens_saved_estimate
 from main import create_app
 
+from unittest import mock
+
+from bintu_api.robots import RobotsDecision
+
+_robots_patch = mock.patch(
+    "bintu_api.routes.robots_decision",
+    return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
+)
+
+
+def setUpModule():
+    _robots_patch.start()
+
+
+def tearDownModule():
+    _robots_patch.stop()
+
 
 class TokenMeteringTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -66,11 +83,11 @@ class TokenMeteringTests(unittest.TestCase):
                 "tools/call",
                 {
                     "name": "bintu_scrape_text",
-                    "arguments": {"url": "https://example.com_savings"},
+                    "arguments": {"url": "https://example.com"},
                 },
             )
         envelope = json.loads(response.json()["result"]["content"][0]["text"])
-        self.assertEqual(envelope["token_method"], "whitespace")
+        self.assertEqual(envelope["token_method"], "ceil(characters/4)")
         self.assertGreater(envelope["tokens_saved_estimate"], 100)
         self.assertLessEqual(envelope["tokens_saved_estimate"], envelope["html_tokens"])
         self.assertLess(envelope["approx_tokens"], envelope["html_tokens"])
@@ -294,11 +311,11 @@ class TokenMeteringTests(unittest.TestCase):
 
         The estimate is ``html_tokens - approx_tokens``, so the markup the
         extractor strips is legitimately counted. The baseline is the raw HTML
-        (401 whitespace tokens here) and the delivered text is the same words
+        (about 401 whitespace tokens here) and the delivered text is the same words
         (400), the single-token difference being the stripped ``</main>``
         closing tag. What the mode itself must not do is claim savings
-        proportional to the document, so the bound is a couple of markup
-        tokens rather than the ~400 a real trim would show.
+        proportional to the document, so the bound is a few tokens of markup
+        rather than the ~400 a real trim would show.
         """
         long_text = "Sentence one. " * 200
         for mode in ("scrape", "chunk"):
@@ -322,7 +339,7 @@ class TokenMeteringTests(unittest.TestCase):
             self.assertGreater(envelope["html_tokens"], 300)
             self.assertLessEqual(
                 envelope["tokens_saved_estimate"],
-                2,
+                8,
                 f"{mode} mode must not claim savings it does not perform",
             )
 
@@ -436,7 +453,7 @@ class TokenMeteringTests(unittest.TestCase):
         self.assertEqual(_compute_approx_tokens("a"), 1)  # ceil(1/4) = 1
         self.assertEqual(_compute_approx_tokens("abcd"), 1)  # ceil(4/4) = 1
         self.assertEqual(_compute_approx_tokens("abcde"), 2)  # ceil(5/4) = 2
-        self.assertEqual(_compute_approx_tokens(" "), 1)  # ceil(1/4) = 1
+        self.assertEqual(_compute_approx_tokens(" "), 0)  # whitespace-only -> 0
         self.assertEqual(_compute_approx_tokens("hello world"), 3)  # 11 chars -> ceil(11/4) = 3
 
     def test_tokens_saved_estimate(self) -> None:

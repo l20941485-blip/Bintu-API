@@ -1,17 +1,21 @@
 """Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
+
 Modes:
   scrape    — plain readable text (existing behavior), with token count + provenance
   chunk     — text split into max_tokens-sized chunks, each with token count,
               ready to drop straight into a vector database
   summarize — condensed text truncated to max_tokens (sentence-aware)
 
+
 Designed for AI-agent context engineering: instead of returning a raw blob of
 Markdown, the server reports token counts, chunk boundaries, and cache hits so
 agents and callers can budget LLM context precisely.
 """
 
+
 from __future__ import annotations
+
 
 import asyncio
 import hashlib
@@ -21,22 +25,30 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+
 from fastapi import Request
+
 
 from bintu_api.auth import rate_limit_identity
 from bintu_api.cache import TTLCache
-from bintu_api.routes import _scrape_text
 from bintu_api.scraper import FetchedHTML, extract_text_result
 from bintu_api.settings import Settings
 
+
+from bintu_api.schemas import CacheInfo
+
+
 logger = logging.getLogger("bintu_api.context")
 
+
 ContextMode = Literal["scrape", "chunk", "summarize"]
+
 
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
 # while the canonical protocol stays "chunk" / "max_tokens" so existing
 # Claude connectors never break. Normalization is case/whitespace tolerant.
 MODE_ALIASES = {"chunked": "chunk"}
+
 
 
 def normalize_mode(value: Any) -> str:
@@ -46,19 +58,15 @@ def normalize_mode(value: Any) -> str:
     cleaned = value.strip().lower()
     return MODE_ALIASES.get(cleaned, cleaned)
 
-# Dependency-free approximate tokenizer: split on whitespace sequences.
-# Good enough (~1 token per English word) for RAG sizing estimates without
-# pulling in tiktoken or another large dependency. Named in every envelope via
-# TOKEN_METHOD so callers and contracts always know what the numbers mean.
-TOKEN_RE = re.compile(r"\S+")
-TOKEN_METHOD = "whitespace"
+
+# Approximate token method: ceil(characters/4) - dependency-free token counting
+TOKEN_METHOD = "ceil(characters/4)"
 
 
 def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
-    if not text:
-        return 0
-    return len(TOKEN_RE.findall(text))
+    from bintu_api.scraper import _compute_approx_tokens
+    return _compute_approx_tokens(text)
 
 
 @dataclass(frozen=True)
@@ -81,10 +89,31 @@ class ContextResult:
     tokens_saved_estimate: int = 0
     truncated: bool = False
     split: bool = False
+    # Provenance (added in Phase D): additive for both REST and MCP surfaces.
+    # request_id: identifier from the requesting middleware; may be synthetic
+    # if none was supplied. fetched_at: UTC ISO when the fetch occurred.
+    # requested_url: the URL as-sent, sanitized of sensitive query params.
+    # final_url: URL after redirects; absent for cache hits.
+    # content_type: fetched response content-type when a fetch happened.
+    # bytes_fetched: len(document.body) when a fetch happened.
+    # content_sha256: SHA-256 of the returned text when a fetch happened.
+    # cache: CacheInfo when known; otherwise None.
+    # extractor_version: from settings.service_version.
+    request_id: str | None = None
+    fetched_at: str | None = None
+    requested_url: str | None = None
+    final_url: str | None = None
+    content_type: str | None = None
+    bytes_fetched: int | None = None
+    content_sha256: str | None = None
+    cache: CacheInfo | None = None
+    extractor_version: str | None = None
+
 
 
 def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
+
 
     The baseline deliberately counts the raw document — markup included — so
     `tokens_saved_estimate` is approximately " fetched HTML tokens minus
@@ -98,8 +127,10 @@ def _decode_source_text(document: FetchedHTML) -> str:
         return ""
 
 
+
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     """Split ``text`` into chunks of at most ``max_tokens`` tokens.
+
 
     Preserves paragraph and sentence boundaries where possible using a
     recursive separator strategy. No LangChain or other heavy dependency
@@ -110,21 +141,24 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     if max_tokens <= 0:
         return [text]
 
+
     separators = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
+
 
     def _split(text: str, sep_index: int) -> list[str]:
         if sep_index >= len(separators):
-            # Last resort: hard split by token count.
-            tokens = TOKEN_RE.findall(text)
-            return [
-                " ".join(tokens[i : i + max_tokens])
-                for i in range(0, len(tokens), max_tokens)
-            ]
+            # Last resort: hard split by characters. A chunk of N tokens is at
+            # most 4*N characters (ceil(characters/4) is the token counter),
+            # so the budget in tokens maps to a character limit this way.
+            limit = max_tokens * 4
+            return [text[i : i + limit] for i in range(0, len(text), limit)]
+
 
         sep = separators[sep_index]
         parts = text.split(sep) if sep else list(text)
         chunks: list[str] = []
         current = ""
+
 
         for part in parts:
             candidate = (current + sep + part) if current else part
@@ -137,11 +171,14 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
                 chunks.extend(sub_chunks)
                 current = ""
 
+
         if current:
             chunks.append(current)
         return chunks
 
+
     return _split(text, 0)
+
 
 
 async def extract_context(
@@ -155,9 +192,17 @@ async def extract_context(
     include_header: bool = False,
     include_footer: bool = False,
     identity: str | None = None,
+    raw_text: str | None = None,
+    content_truncated: bool = False,
+    html_source_text: str | None = None,
+    cache_hit: bool = False,
+    cache_layer: str = "none",
+    document: FetchedHTML | None = None,
     settings: Settings | None = None,
 ) -> ContextResult:
+    
     """Fetch, extract, and transform a page into a context-ready document.
+
 
     Reuses the existing fetch → extract → cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
@@ -168,80 +213,25 @@ async def extract_context(
     if identity is None:
         identity = rate_limit_identity(request, settings)
 
-    cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
-    cache_hit = False
-    cache_layer = "none"
-    raw_text: str | None = None
-    # Raw HTML for the all-in estimate baseline: whitespace tokens of the
-    # fetched document, so `tokens_saved_estimate` measures the whole strip
-    # (nav/ads/footer removal + character cap + mode trimming), not zero.
-    html_source_text: str | None = None
-    # True when the upstream extractor cut the document at the character cap.
-    # This is content loss and must reach the caller in every mode (P1).
-    content_truncated = False
-    # Canonicalize pitch-name aliases up front so the cache key + downstream
-    # logic always operate on canonical values.
+
+    # Canonicalize pitch-name aliases up front so downstream logic always
+    # operates on canonical values. The caller supplies the extraction inputs;
+    # this function must not overwrite them.
     mode = normalize_mode(mode)  # type: ignore[assignment]
     if mode not in ("scrape", "chunk", "summarize"):
         raise ValueError(f"Unknown context mode: {mode}")
 
-    # --- Memory-cache read -------------------------------------------------
-    document: FetchedHTML | None = None
-    if cache:
-        document = request.app.state.cache.get(cache_key)
-        if document is not None:
-            cache_hit = True
-            cache_layer = "memory"
-            extracted = extract_text_result(
-                document.body,
-                settings.max_text_characters,
-                include_nav=include_nav,
-                include_header=include_header,
-                include_footer=include_footer,
-                from_encoding=document.charset,
-                base_url=document.final_url or url,
-            )
-            raw_text = extracted.text
-            content_truncated = extracted.truncated
-            html_source_text = _decode_source_text(document)
+    raw_text = raw_text or ""
+    html_source_text = html_source_text or ""
 
-    # --- Fetch + extract via the existing pipeline -------------------------
-    if raw_text is None:
-        # _scrape_text handles rate limiting, Supabase cache, fetch, extract,
-        # memory-cache store, and Supabase upsert — all existing guards intact.
-        scrape_result = await _scrape_text(
-            request,
-            url,
-            include_nav=include_nav,
-            include_header=include_header,
-            include_footer=include_footer,
-            identity=identity,
-            render_js=render_js,
-            skip_cache=not cache,
-        )
-        raw_text = scrape_result.text
-        content_truncated = scrape_result.truncated
-        # _scrape_text stores the fetched document in the memory cache (or
-        # returns a persistent-cache row); reuse the body for the estimate
-        # baseline instead of reporting zero.
-        cached_document = request.app.state.cache.get(cache_key)
-        if cached_document is not None:
-            document = cached_document
-            html_source_text = _decode_source_text(cached_document)
-
-    if html_source_text is None:
-        # Persistent-cache-only path: body gone, so the estimate degrades to
-        # delivered-text-vs-delivered-text (zero) rather than inventing data.
-        html_source_text = raw_text
 
     # --- Mode transformation -----------------------------------------------
     # tokens_saved_estimate: the whole strip, honestly measured. `html_tokens`
-    # counts the whitespace tokens of the fetched HTML document; `approx_tokens`
-    # counts what we actually deliver. The estimate is their difference, so it
-    # includes nav/ads/footer stripping, the character cap, and any mode-level
-    # trimming (never negative). Both figures use the same dependency-free
-    # whitespace counter, named in `token_method` so a future tokenizer (e.g.
-    # tiktoken) can be swapped in without changing the envelope shape.
+    # counts the approximate tokens of the fetched HTML document;
+    # `approx_tokens` counts what we actually deliver. The estimate is their
+    # difference, so it includes nav/ads/footer stripping, the character cap,
+    # and any mode-level trimming (never negative). Both figures use the same
+    # dependency-free counter, named in `token_method`.
     html_tokens = count_tokens(html_source_text)
     raw_tokens = count_tokens(raw_text)
     # Which cap bound the result? The character cap binds when the upstream
@@ -316,7 +306,9 @@ async def extract_context(
     else:
         raise ValueError(f"Unknown context mode: {mode}")
 
+
     tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+
 
     return ContextResult(
         mode=mode,
@@ -328,11 +320,22 @@ async def extract_context(
         tokens=approx_tokens,
         chunk_count=len(chunks),
         cache_hit=cache_hit,
+        cache_layer=cache_layer,
         chunks=chunks,
         source_url=url,
         extracted_at=datetime.now(timezone.utc).isoformat(),
         tokens_saved_estimate=tokens_saved_estimate,
         truncated=truncated,
         split=split,
+        # Provenance fields - callers should populate these from the actual
+        # request context and fetch results
+        request_id=None,
+        fetched_at=None,
+        requested_url=None,
+        final_url=None,
+        content_type=None,
+        bytes_fetched=None,
+        content_sha256=None,
+        cache=None,
+        extractor_version=None,
     )
-

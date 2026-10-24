@@ -23,18 +23,26 @@ from bintu_api.settings import Settings
 logger = logging.getLogger(__name__)
 READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
-USER_AGENT = "BintuBot/1.1.0 (+https://bintu-api.example.com/bot-info; ops@example.com)"
 
 
 def get_user_agent(settings) -> str:
-    """Generate configurable compliance User-Agent string per C2 requirement.
+    """Build the honest, identifiable User-Agent: BintuBot/<version> (+<info url>; <contact>).
 
-    Format: BintuBot/<version> (+[BOT_INFO_URL]; [CONTACT_EMAIL])
-    Never forges consumer browser signatures.
+    The parenthesised parts appear only for settings that are actually configured.
+    Never imitates a browser.
     """
-    info_url = settings.bot_info_url or "https://bintu-api.example.com/bot-info"
-    contact = settings.contact_email or "ops@example.com"
-    return f"BintuBot/{settings.service_version} (+{info_url}; {contact})"
+    version = (getattr(settings, "service_version", "") or "").strip() or "0"
+    details = []
+    info_url = (getattr(settings, "bot_info_url", "") or "").strip()
+    contact = (getattr(settings, "contact_email", "") or "").strip()
+    if info_url:
+        details.append(f"+{info_url}")
+    if contact:
+        details.append(contact)
+    suffix = f" ({'; '.join(details)})" if details else ""
+    return f"BintuBot/{version}{suffix}"
+
+
 BLOCK_TAGS = {
     "address",
     "article",
@@ -87,224 +95,16 @@ class ExtractedText:
 
 
 def _compute_approx_tokens(text: str) -> int:
-    """Compute approximate token count using ceil(characters / 4).
-
-    Uses a dependency-free whitespace-split tokenizer.
-    This represents a character bound, not a physical hardware tokenizer configuration.
-    """
+    """Approximate token count: ceil(characters / 4). An estimate, not a tokenizer count."""
+    if not text or not text.strip():
+        return 0
     return math.ceil(len(text) / 4)
 
 
 def _compute_tokens_saved_estimate(raw_html_bytes: bytes, extracted_text: str) -> int:
-    """Compute estimated structural payload reduction.
-
-    approx_tokens(fetched HTML content) - approx_tokens(extracted Markdown output text),
-    floored at 0.
-    """
-    raw_chars = len(raw_html_bytes.decode("utf-8", errors="replace"))
-    approx_raw = _compute_approx_tokens(raw_html_bytes.decode("utf-8", errors="replace"))
-    approx_extracted = _compute_approx_tokens(extracted_text)
-    return max(0, approx_raw - approx_extracted)
-
-
-# RFC 9309 Robots.txt Compliance - RobotsPolicy and parser
-from collections import namedtuple
-
-RobotsPolicy = namedtuple("RobotsPolicy", ["user_agent", "allow", "reason"])
-
-
-def _parse_robots_txt(content: str, target_user_agent: str = "BintuBot") -> RobotsPolicy:
-    """Parse a robots.txt file according to RFC 9309.
-
-    Priority order:
-    1. Specific User-agent match (e.g., User-agent: BintuBot)
-    2. Global wildcard (*) fallback
-    3. Default: if no rule matches, allow
-
-    Returns a RobotsPolicy indicating whether scraping is allowed.
-    """
-    lines = content.splitlines()
-    current_user_agent: str | None = None
-    directives: dict[str, list[str]] = {"allow": [], "disallow": []}
-
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        parts = line.split(": ", 1)
-        if len(parts) != 2:
-            continue
-
-        key, value = parts[0].strip().lower(), parts[1].strip()
-
-        if key == "user-agent":
-            user_agents = [u.strip() for u in value.split(",")]
-            for ua in user_agents:
-                if ua == target_user_agent or ua == "*":
-                    current_user_agent = ua
-                    break
-
-        elif key in ("allow", "disallow") and current_user_agent is not None:
-            if current_user_agent == target_user_agent or current_user_agent == "*":
-                directives[key].append(value)
-
-    # Check if we have a specific BintuBot match
-    if current_user_agent == target_user_agent:
-        allow = "disallow" not in directives or len(directives["disallow"]) == 0
-        disallowed_paths = directives.get("disallow", [])
-        return RobotsPolicy(
-            user_agent=target_user_agent,
-            allow=allow,
-            reason=f"Matched User-agent: {target_user_agent}. Disallowed paths: {disallowed_paths}" if not allow else None,
-        )
-
-    # Fall back to global wildcard (*)
-    current_user_agent = None
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(": ", 1)
-        if len(parts) != 2:
-            continue
-        key, value = parts[0].strip().lower(), parts[1].strip()
-        if key == "user-agent" and value.strip() == "*":
-            current_user_agent = "*"
-            break
-
-    if current_user_agent == "*":
-        allow = "disallow" not in directives or len(directives["disallow"]) == 0
-        disallowed_paths = directives.get("disallow", [])
-        return RobotsPolicy(
-            user_agent="*",
-            allow=allow,
-            reason=f"Matched global wildcard (*). Disallowed paths: {disallowed_paths}" if not allow else None,
-        )
-
-    # Default: allow if no specific rule matches
-    return RobotsPolicy(user_agent=target_user_agent, allow=True, reason=None)
-
-
-def _check_robots_txt(
-    host: str,
-    settings: "Settings",
-    http_client: callable,
-) -> RobotsPolicy:
-    """Check robots.txt for a given host using the SSRF-safe HTTP client.
-
-    Cache origin policy structures locally for exactly 1 hour (configurable via
-    robots_cache_ttl_seconds).
-
-    HTTP Status Code Mapping:
-    - 4xx: Map as explicit authorization to parse (allow)
-    - 5xx or connection timeout: Map as total access restriction block (disallow)
-
-    Returns RobotsPolicy with the decision.
-    """
-    from bintu_api.cache import TTLCache
-
-    # Initialize per-robot cache if not exists
-    if not hasattr(_check_robots_txt, "cache"):
-        _check_robots_txt.cache = TTLCache(
-            ttl=getattr(settings, "robots_cache_ttl_seconds", 3600),
-            metadata=False,
-        )
-
-    cache_key = f"robots:{host.lower()}"
-    cached = _check_robots_txt.cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    # Build robots.txt URL
-    scheme = "https" if host.startswith("https://") else "http"
-    robots_url = f"{scheme}://{host}/robots.txt"
-
-    # Use the SSRF-safe HTTP client
-    try:
-        status_code, body = http_client(robots_url, 443 if scheme == "https" else 80)
-    except TimeoutError:
-        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason="Connection timeout checking robots.txt")
-        _check_robots_txt.cache[cache_key] = policy
-        return policy
-    except Exception as e:
-        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason=f"Failed to fetch robots.txt: {e}")
-        _check_robots_txt.cache[cache_key] = policy
-        return policy
-
-    # HTTP Status Code Mapping
-    if status_code >= 500:
-        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason=f"HTTP {status_code} error checking robots.txt")
-        _check_robots_txt.cache[cache_key] = policy
-        return policy
-
-    if status_code in (401, 403, 429):
-        # 4xx errors = explicit authorization to parse (allow)
-        policy = RobotsPolicy(user_agent="BintuBot", allow=True, reason=f"HTTP {status_code} from robots.txt (authorized)")
-        _check_robots_txt.cache[cache_key] = policy
-        return policy
-
-    if status_code == 402:
-        policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason="HTTP 402 Payment Required - access restricted")
-        _check_robots_txt.cache[cache_key] = policy
-        return policy
-
-    if status_code == 200:
-        policy = _parse_robots_txt(body.decode("utf-8", errors="replace"), target_user_agent="BintuBot")
-        _check_robots_txt.cache[cache_key] = policy
-        return policy
-
-    # Other status codes - default to disallow
-    policy = RobotsPolicy(user_agent="BintuBot", allow=False, reason=f"HTTP {status_code} from robots.txt")
-    _check_robots_txt.cache[cache_key] = policy
-    return policy
-
-
-def check_robots_compliance(
-    url: str,
-    settings: "Settings",
-    http_client: callable,
-) -> tuple[bool, RobotsPolicy, dict]:
-    """Check robots.txt compliance for a URL.
-
-    Returns:
-        (is_allowed: bool, policy: RobotsPolicy, provenance: dict)
-
-    ROBOTS_MODE Behavior:
-    - "enforce" (default): Immediately drop restricted actions with blocked_by_robots exception
-    - "warn": Compile target data normally but append policy evaluation metrics into provenance.robots
-    - "off": Skip robots.txt check entirely, is_allowed=True
-    """
-    from urllib.parse import urlparse
-
-    parsed = urlparse(url)
-    host = parsed.hostname or ""
-
-    if not host or settings.robots_mode == "off":
-        return True, RobotsPolicy(user_agent="BintuBot", allow=True, reason="ROBOTS_MODE=off"), {}
-
-    # Check robots.txt
-    policy = _check_robots_txt(host, settings, http_client)
-
-    if settings.robots_mode == "enforce":
-        if not policy.allow:
-            from fastapi import HTTPException
-
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "blocked_by_robots",
-                    "message": f"Scraping disallowed by robots.txt: {policy.reason or ''}",
-                },
-            )
-        return True, policy, {}
-
-    if settings.robots_mode == "warn":
-        provenance = {"robots": {"allowed": policy.allow, "reason": policy.reason or ""}}
-        return True, policy, provenance
-
-    # Default fallback
-    return True, policy, {}
+    """Approximate tokens of the fetched HTML minus approximate tokens of the returned text, floored at 0."""
+    html_text = raw_html_bytes.decode("utf-8", errors="replace")
+    return max(0, _compute_approx_tokens(html_text) - _compute_approx_tokens(extracted_text))
 
 
 class TargetURLRejected(ValueError):
@@ -406,8 +206,14 @@ def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, s
             port = parsed.port
         # Only 80/443 (plus an operator-configured extra list) may be fetched:
         # arbitrary ports turn the service into a public host/port probe (S8).
-        if port not in (settings.allowed_port_set() if settings is not None else {80, 443}):
+        if port not in (getattr(settings, "allowed_port_set", lambda: {80, 443})() if settings is not None else {80, 443}):
             raise TargetURLRejected("Only ports 80 and 443 are allowed by default")
+        # C5: Reject NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embedding private/metadata IPv4
+        if _is_nat64_or_6to4_address(host):
+            raise TargetURLRejected(
+                f"URL host {host} uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
+                f"with private/metadata IPv4, which is not allowed"
+            )
     except (UnicodeError, ValueError) as error:
         if isinstance(error, TargetURLRejected):
             raise
@@ -439,21 +245,38 @@ def fetch_html(url: str, settings: Settings) -> bytes:
 
 
 def _is_multicast_address(host: str) -> bool:
-    """Check if host is a multicast address.
-
-    Blocks IPv4 multicast: 224.0.0.0/4
-    Blocks IPv6 multicast: ff00::/8
-    """
+    """True when host is a literal multicast address (IPv4 224.0.0.0/4 or IPv6 ff00::/8)."""
     try:
-        # IPv4 multicast check
-        if host.startswith('224.') or host.startswith('225.') or host.startswith('239.'):
-            return True
-        # IPv6 multicast check
-        if host.startswith('ff'):
-            return True
-    except (AttributeError, ValueError):
-        pass
-    return False
+        return ipaddress.ip_address(host).is_multicast
+    except ValueError:
+        return False
+
+
+def _embedded_ipv4(address: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """IPv4 address embedded in an IPv4-mapped, NAT64 (64:ff9b::/96) or 6to4 (2002::/16) IPv6 address."""
+    mapped = address.ipv4_mapped
+    if mapped is not None:
+        return mapped
+    packed = address.packed
+    if packed[:12] == bytes.fromhex("0064ff9b0000000000000000"):  # 64:ff9b::/96
+        return ipaddress.IPv4Address(packed[12:16])
+    if packed[:2] == b"\x20\x02":  # 6to4: 2002:<IPv4 address>::/48
+        return ipaddress.IPv4Address(packed[2:6])
+    return None
+
+
+def _is_nat64_or_6to4_address(host: str) -> bool:
+    """True when host is an IPv6 literal that embeds a non-public IPv4 address."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    if address.version != 6:
+        return False
+    embedded = _embedded_ipv4(address)
+    if embedded is None:
+        return False
+    return (not embedded.is_global) or embedded.is_multicast
 
 
 def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
@@ -482,6 +305,13 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
                 f"IPv6: ff00::/8)"
             )
 
+        # C5: Reject NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embedding private/metadata IPv4
+        if _is_nat64_or_6to4_address(host):
+            raise TargetURLRejected(
+                f"URL host {host} uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
+                f"with private/metadata IPv4, which is not allowed"
+            )
+
         if parsed.scheme != current_scheme:
             if current_scheme == "https" and parsed.scheme == "http":
                 # An https page must not hand us down to cleartext mid-chain:
@@ -499,7 +329,7 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
                     "Accept-Encoding": "identity",
                     "Connection": "close",
                     "Host": _host_header(host, port, parsed.scheme),
-                    "User-Agent": USER_AGENT,
+                    "User-Agent": get_user_agent(settings),
                 },
             )
             response = connection.getresponse()

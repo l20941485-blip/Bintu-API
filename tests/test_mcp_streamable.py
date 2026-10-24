@@ -11,6 +11,22 @@ from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
 
+from unittest import mock
+
+from bintu_api.robots import RobotsDecision
+
+_robots_patch = mock.patch(
+    "bintu_api.routes.robots_decision",
+    return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
+)
+
+
+def setUpModule():
+    _robots_patch.start()
+
+
+def tearDownModule():
+    _robots_patch.stop()
 
 class McpStreamableTests(unittest.TestCase):
     def setUp(self) -> None:

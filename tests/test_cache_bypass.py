@@ -6,6 +6,7 @@ from unittest import mock
 
 from bintu_api import routes
 from bintu_api.database import CachedMarkdown
+from bintu_api.settings import Settings
 
 URL = "https://example.com/page"
 HTML = b"<html><body><article><p>Hello world</p></article></body></html>"
@@ -29,7 +30,7 @@ def fake_document():
 
 
 def make_request(cache, db_client=None):
-    settings = SimpleNamespace(max_text_characters=6000, render_js_enabled=False)
+    settings = Settings(api_key="", rapidapi_proxy_secret="", robots_mode="off")
     state = SimpleNamespace(
         settings=settings,
         rate_limiter=SimpleNamespace(check=lambda identity: None),
@@ -53,8 +54,13 @@ class CacheBypassTests(unittest.TestCase):
     def patches(self):
         return (
             mock.patch.object(routes, "fetch_html_document", return_value=fake_document()),
-            mock.patch.object(routes, "get_cached_markdown", new=mock.AsyncMock(
-                return_value=CachedMarkdown(markdown="from-persistent", truncated=False))),
+            mock.patch.object(
+                routes,
+                "get_cached_markdown",
+                new=mock.AsyncMock(
+                    return_value=CachedMarkdown(markdown="from-persistent", truncated=False)
+                ),
+            ),
             mock.patch.object(routes, "upsert_cached_markdown", new=mock.AsyncMock()),
             mock.patch.object(routes, "has_valid_proxy_secret", return_value=False),
         )
