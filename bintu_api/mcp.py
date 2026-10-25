@@ -3,7 +3,9 @@
 
 
 
+
 Two surfaces exist on purpose:
+
 
 
 
@@ -20,6 +22,7 @@ Two surfaces exist on purpose:
 
 
 
+
 import asyncio
 import json
 import logging
@@ -28,8 +31,10 @@ from typing import Any
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
 
 
 
@@ -53,7 +58,9 @@ from bintu_api.settings import Settings
 
 
 
+
 router = APIRouter(prefix="/mcp", tags=["MCP"])
+
 
 
 
@@ -160,9 +167,11 @@ TOOL_INPUT_SCHEMA = {
 
 
 
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any]
+
 
 
 
@@ -172,6 +181,7 @@ class ToolArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+
     url: str
     render_js: bool = False
     mode: str = "scrape"
@@ -179,10 +189,12 @@ class ToolArguments(BaseModel):
     cache: bool = True
 
 
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
+
 
 
         - mode "chunked" (any case/whitespace) -> "chunk".
@@ -193,11 +205,14 @@ class ToolArguments(BaseModel):
             return data
 
 
+
         normalized = dict(data)
+
 
 
         if "mode" in normalized:
             normalized["mode"] = normalize_mode(normalized["mode"])
+
 
 
         if "chunk_token_budget" in normalized:
@@ -210,12 +225,15 @@ class ToolArguments(BaseModel):
                 normalized["max_tokens"] = normalized.pop("chunk_token_budget")
 
 
+
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
 
 
+
         return normalized
+
 
 
 
@@ -244,6 +262,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
 
 
 
+
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -261,6 +280,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
+
     if arguments.render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
@@ -270,6 +290,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
                 "hint": "Retry with render_js=false for plain HTML extraction.",
             },
         )
+
 
 
 
@@ -300,6 +321,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
+
     # Preserve the original extraction economics when the response came from
     # the persistent cache. The cached row no longer contains source HTML, so
     # recomputing these values would incorrectly report zero savings.
@@ -312,6 +334,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
             truncated=cached.truncated,
             extracted_at=cached.extracted_at,
         )
+
 
 
 
@@ -335,7 +358,9 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         document=document,
         settings=settings,
         cache_economics=cache_economics,
+        extracted_at=cached.extracted_at,
     )
+
 
 
 

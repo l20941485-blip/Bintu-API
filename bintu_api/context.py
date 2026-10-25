@@ -2,11 +2,13 @@
 
 
 
+
 Modes:
-  scrape    — plain readable text (existing behavior), with token count + provenance
-  chunk     — text split into max_tokens-sized chunks, each with token count,
-              ready to drop straight into a vector database
-  summarize — condensed text truncated to max_tokens (sentence-aware)
+  scrape    — plain readable text (existing behavior), with token count + provenance
+  chunk     — text split into max_tokens-sized chunks, each with token count,
+              ready to drop straight into a vector database
+  summarize — condensed text truncated to max_tokens (sentence-aware)
+
 
 
 
@@ -17,7 +19,9 @@ agents and callers can budget LLM context precisely.
 
 
 
+
 from __future__ import annotations
+
 
 
 
@@ -31,7 +35,9 @@ from typing import Any, Literal
 
 
 
+
 from fastapi import Request
+
 
 
 
@@ -42,7 +48,9 @@ from bintu_api.settings import Settings
 
 
 
+
 from bintu_api.schemas import CacheInfo
+
 
 
 
@@ -50,7 +58,9 @@ logger = logging.getLogger("bintu_api.context")
 
 
 
+
 ContextMode = Literal["scrape", "chunk", "summarize"]
+
 
 
 
@@ -62,8 +72,10 @@ MODE_ALIASES = {"chunked": "chunk"}
 
 
 
+
 def normalize_mode(value: Any) -> str:
     """Normalize a mode value to its canonical form (case/whitespace tolerant).
+
 
 
     Raises ValueError for unknown modes so callers can reject them with
@@ -79,8 +91,10 @@ def normalize_mode(value: Any) -> str:
 
 
 
+
 # Approximate token method: ceil(characters/4) - dependency-free token counting
 TOKEN_METHOD = "ceil(characters/4)"
+
 
 
 
@@ -88,6 +102,7 @@ def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
     from bintu_api.scraper import _compute_approx_tokens
     return _compute_approx_tokens(text)
+
 
 
 
@@ -134,9 +149,11 @@ class ContextResult:
 
 
 
+
 @dataclass(frozen=True)
 class CacheEconomics:
     """Extraction economics preserved across persistent-cache hits."""
+
 
 
     html_tokens: int
@@ -148,8 +165,10 @@ class CacheEconomics:
 
 
 
+
 def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
+
 
 
 
@@ -167,8 +186,10 @@ def _decode_source_text(document: FetchedHTML) -> str:
 
 
 
+
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     """Split ``text`` into chunks of at most ``max_tokens`` tokens.
+
 
 
 
@@ -183,7 +204,9 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
     separators = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
+
 
 
 
@@ -197,10 +220,12 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
         sep = separators[sep_index]
         parts = text.split(sep) if sep else list(text)
         chunks: list[str] = []
         current = ""
+
 
 
 
@@ -217,13 +242,16 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
         if current:
             chunks.append(current)
         return chunks
 
 
 
+
     return _split(text, 0)
+
 
 
 
@@ -247,8 +275,10 @@ async def extract_context(
     document: FetchedHTML | None = None,
     settings: Settings | None = None,
     cache_economics: CacheEconomics | None = None,
+    extracted_at: str | None = None,
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
+
 
 
 
@@ -263,6 +293,7 @@ async def extract_context(
 
 
 
+
     # Canonicalize pitch-name aliases up front so downstream logic always
     # operates on canonical values. The caller supplies the extraction inputs;
     # this function must not overwrite them.
@@ -271,8 +302,10 @@ async def extract_context(
         raise ValueError(f"Unknown context mode: {mode}")
 
 
+
     raw_text = raw_text or ""
     html_source_text = html_source_text or ""
+
 
 
 
@@ -283,11 +316,12 @@ async def extract_context(
     if cache_hit and cache_economics is not None:
         html_tokens = cache_economics.html_tokens
         tokens_saved_estimate: int | None = cache_economics.tokens_saved_estimate
-        extracted_at = cache_economics.extracted_at
+        resolved_extracted_at = cache_economics.extracted_at
     else:
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
-        extracted_at = datetime.now(timezone.utc).isoformat()
+        resolved_extracted_at = extracted_at or datetime.now(timezone.utc).isoformat()
+
 
 
 
@@ -373,8 +407,10 @@ async def extract_context(
 
 
 
+
     if tokens_saved_estimate is None:
         tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+
 
 
 
@@ -395,7 +431,7 @@ async def extract_context(
         cache_layer=cache_layer,
         chunks=chunks,
         source_url=url,
-        extracted_at=extracted_at,
+        extracted_at=resolved_extracted_at,
         tokens_saved_estimate=tokens_saved_estimate,
         truncated=(
             cache_economics.truncated
