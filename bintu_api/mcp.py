@@ -1,7 +1,9 @@
 """Simple MCP-compatible tool discovery and invocation endpoints.
 
 
+
 Two surfaces exist on purpose:
+
 
 
 - ``/mcp/tools`` and ``/mcp/tools/call``: minimal JSON helpers with the same
@@ -14,6 +16,7 @@ Two surfaces exist on purpose:
 """
 
 
+
 import asyncio
 import json
 import logging
@@ -24,6 +27,7 @@ from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
+
 from bintu_api import routes
 from bintu_api.auth import (
     api_key_scheme,
@@ -31,11 +35,15 @@ from bintu_api.auth import (
     verify_mcp_api_access,
 )
 from bintu_api.context import _decode_source_text, extract_context, normalize_mode
+from bintu_api.scraper import TargetURLRejected
+from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
 
 
 
+
 router = APIRouter(prefix="/mcp", tags=["MCP"])
+
 
 
 logger = logging.getLogger("bintu_api.mcp")
@@ -53,9 +61,9 @@ TOOL_DESCRIPTION = (
     "truncated=true means content was actually lost (the 6,000-character cap, or "
     "summarize dropping sentences); split=true only means the text was divided "
     "across several chunks, which never loses anything. "
-    "tokens is an approximate whitespace-token count (about one per word), not a "
-    "real tokenizer, so treat it as a sizing estimate rather than an exact billing "
-    "figure; tokens_saved_estimate is nonzero only in summarize mode. "
+    "tokens is an approximate character-based token estimate (ceil(characters/4)), "
+    "not a real tokenizer, so treat it as a sizing estimate rather than an exact "
+    "billing figure; tokens_saved_estimate is nonzero only in summarize mode. "
     "The 6,000-character cap binds before any token budget is enforced; if your "
     "application has a smaller token budget, set max_tokens accordingly. "
     "JavaScript rendering is disabled unless enabled — render_js_disabled means "
@@ -138,15 +146,16 @@ TOOL_INPUT_SCHEMA = {
 
 
 
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any]
 
 
 
+
 class ToolArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
 
     url: str
     render_js: bool = False
@@ -154,20 +163,23 @@ class ToolArguments(BaseModel):
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     cache: bool = True
 
-
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
 
-
         - mode "chunked" (any case/whitespace) -> "chunk".
         - "chunk_token_budget" -> "max_tokens"; canonical "max_tokens" wins
-          on conflict with a warning. Range-checked after normalization.
+          on conflict with a warning.
         """
         if not isinstance(data, dict):
             return data
+
         normalized = dict(data)
+
+        if "mode" in normalized:
+            normalized["mode"] = normalize_mode(normalized["mode"])
+
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
                 logger.warning(
@@ -176,10 +188,13 @@ class ToolArguments(BaseModel):
                 normalized.pop("chunk_token_budget")
             else:
                 normalized["max_tokens"] = normalized.pop("chunk_token_budget")
+
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
+
         return normalized
+
 
 
 
@@ -204,6 +219,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
 
 
 
+
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -213,18 +229,11 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
     verify_mcp_api_access(request, settings)
     if payload.name != TOOL_NAME:
         raise HTTPException(status_code=400, detail=f"Unknown MCP tool: {payload.name}")
-    # Strict mode validation before Pydantic: reject unknown modes with HTTP 400
-    # so callers get a clean error instead of a 500 from extract_context.
-    raw_mode = payload.arguments.get("mode")
-    if raw_mode is not None:
-        try:
-            normalize_mode(raw_mode)
-        except ValueError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
     try:
         arguments = ToolArguments.model_validate(payload.arguments)
     except ValidationError as error:
         raise HTTPException(status_code=400, detail=error.errors()) from error
+
 
 
     if arguments.render_js and not settings.render_js_enabled:
@@ -238,21 +247,30 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         )
 
 
-    # Fetch and extract once through the shared REST pipeline boundary. This
-    # keeps the legacy helper aligned with REST and the Streamable MCP endpoint
-    # while allowing tests to patch bintu_api.routes.fetch_html_document.
-    document = await asyncio.to_thread(
-        routes.fetch_html_document, arguments.url, settings
-    )
-    extracted = routes.extract_text_result(
-        document.body,
-        settings.max_text_characters,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        from_encoding=document.charset,
-        base_url=document.final_url or arguments.url,
-    )
+
+    # Fetch, robots-check, cache, and extract through the shared REST pipeline
+    # boundary. This keeps legacy MCP aligned with REST and the Streamable MCP
+    # endpoint while allowing tests to patch bintu_api.routes.fetch_html_document.
+    try:
+        document, cached, cache_layer = await routes._fetch_and_extract(
+            request,
+            arguments.url,
+            include_nav=False,
+            include_header=False,
+            include_footer=False,
+            render_js=arguments.render_js,
+            skip_cache=False,
+        )
+    except TargetURLRejected as error:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_or_unsafe_url",
+                "message": str(error),
+                "hint": "URL must start with http:// or https:// and be publicly accessible",
+            },
+        ) from error
+
 
 
     context = await extract_context(
@@ -262,15 +280,19 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         max_tokens=arguments.max_tokens,
         cache=arguments.cache,
         render_js=arguments.render_js,
+        include_nav=False,
+        include_header=False,
+        include_footer=False,
         identity=mcp_rate_limit_identity(request, settings),
-        raw_text=extracted.text,
-        content_truncated=extracted.truncated,
-        html_source_text=_decode_source_text(document),
-        cache_hit=False,
-        cache_layer="none",
+        raw_text=cached.markdown,
+        content_truncated=cached.truncated,
+        html_source_text=_decode_source_text(document) if document is not None else "",
+        cache_hit=cache_layer != "none",
+        cache_layer=cache_layer,
         document=document,
         settings=settings,
     )
+
 
 
     # Unified Token Tax envelope in content[0].text across ALL modes.
@@ -286,7 +308,8 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         "limiting_factor": context.limiting_factor,
         "chunk_count": context.chunk_count,
         "cache_hit": context.cache_hit,
-        "source_url": context.source_url,
+        "cache_layer": context.cache_layer,
+        "source_url": routes.sanitize_url(arguments.url),
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "truncated": context.truncated,
