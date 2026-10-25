@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
 
-from fastapi import APIRouter, HTTPException, Request, Security
+
+from fastapi import APIRouter, HTTPException, Request, Security, status
+
 
 
 from bintu_api.auth import (
@@ -56,12 +58,15 @@ from bintu_api.settings import Settings
 
 
 
+
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
 
+
 TOKEN_METHOD = "ceil(characters/4)"
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
+
 
 
 
@@ -77,6 +82,7 @@ def sanitize_url(url: str) -> str:
     return urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, safe_query, parsed.fragment)
     )
+
 
 
 
@@ -100,6 +106,7 @@ def _build_provenance(
         cache=CacheInfo(hit=cache_layer != "none", layer=cache_layer, age_seconds=None),
         extractor_version=getattr(settings, "service_version", "unknown"),
     )
+
 
 
 
@@ -131,8 +138,10 @@ def _build_response(
 
 
 
+
 async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     """Check robots.txt before any network fetch of the page.
+
 
 
     enforce: a disallowed (or unretrievable) robots.txt blocks with 403.
@@ -158,6 +167,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
 
 
 
+
 @router.get("/", response_model=GatewayResponse)
 def gateway_check(request: Request) -> GatewayResponse:
     settings = request.app.state.settings
@@ -165,9 +175,11 @@ def gateway_check(request: Request) -> GatewayResponse:
 
 
 
+
 @router.get("/healthz", response_model=HealthResponse, include_in_schema=False)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
+
 
 
 
@@ -185,6 +197,7 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
     )
+
 
 
 
@@ -225,7 +238,6 @@ async def scrape_text(
                 "hint": "Retry with render_js=false for plain HTML extraction.",
             },
         )
-    # Delegate to the implementation below (private name kept for test compatibility).
     return await _scrape_text(
         request,
         url,
@@ -236,6 +248,7 @@ async def scrape_text(
         render_js,
         skip_cache,
     )
+
 
 
 
@@ -284,6 +297,154 @@ async def mobile_scrape_text(
 
 
 
+
+async def _fetch_and_extract(
+    request: Request,
+    url: str,
+    *,
+    include_nav: bool,
+    include_header: bool,
+    include_footer: bool,
+    render_js: bool,
+    skip_cache: bool,
+) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
+    """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
+
+
+    Returns:
+        document: FetchedHTML for a fresh fetch; None for a cache hit.
+        result: extracted markdown and truncation flag.
+        cache_layer: "none", "memory", or "persistent".
+
+
+    Raises the same HTTPException and scraper exceptions as the REST endpoint.
+    """
+    settings = request.app.state.settings
+    database_client = getattr(request.app.state, "supabase_client", None)
+    result: CachedMarkdown | None = None
+    document: FetchedHTML | None = None
+    cache_layer = "none"
+
+
+    # skip_cache skips cache READS only. Writes and usage counting still happen.
+    if database_client is not None and not skip_cache:
+        try:
+            result = await asyncio.wait_for(
+                get_cached_markdown(
+                    database_client,
+                    url,
+                    render_js,
+                    include_nav,
+                    include_header,
+                    include_footer,
+                ),
+                timeout=DATABASE_TIMEOUT_SECONDS,
+            )
+        except Exception as error:
+            logger.warning(
+                "supabase_cache_lookup_failed error_type=%s",
+                type(error).__name__,
+            )
+
+
+    cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
+
+
+    if result is not None:
+        CACHE_HITS.inc()
+        cache_layer = "persistent"
+        logger.info("persistent_cache_hit url_hash=%s", cache_key[:12])
+
+
+        # Persistent-cache rows contain already-extracted text, not HTML.
+        extracted = extract_text_result(
+            result.markdown,
+            settings.max_text_characters,
+            include_nav=include_nav,
+            include_header=include_header,
+            include_footer=include_footer,
+            from_encoding=None,
+            base_url=url,
+        )
+        result = CachedMarkdown(
+            markdown=extracted.text,
+            truncated=extracted.truncated,
+        )
+        return document, result, cache_layer
+
+
+    cache = request.app.state.cache
+    document = None if skip_cache else cache.get(cache_key)
+
+
+    if document is not None:
+        CACHE_HITS.inc()
+        cache_layer = "memory"
+        logger.info("memory_cache_hit url_hash=%s", cache_key[:12])
+    else:
+        CACHE_MISSES.inc()
+        logger.info("cache_miss url_hash=%s", cache_key[:12])
+
+
+        # robots.txt is checked before any network fetch of the page.
+        # skip_cache does not bypass it.
+        await _enforce_robots(url, settings, cache_key[:12])
+
+
+        if render_js:
+            document = await fetch_rendered_html_document(url, settings)
+        else:
+            # The existing transport pins each request to a validated public IP.
+            # Keep it off the event loop rather than replacing that SSRF guard
+            # with HTTPX's second, independently resolved DNS lookup.
+            document = await asyncio.to_thread(fetch_html_document, url, settings)
+
+
+        cache.set(cache_key, document)
+
+
+    extracted = extract_text_result(
+        document.body,
+        settings.max_text_characters,
+        include_nav=include_nav,
+        include_header=include_header,
+        include_footer=include_footer,
+        from_encoding=document.charset,
+        base_url=document.final_url or url,
+    )
+    result = CachedMarkdown(
+        markdown=extracted.text,
+        truncated=extracted.truncated,
+    )
+
+
+    if database_client is not None:
+        try:
+            await asyncio.wait_for(
+                upsert_cached_markdown(
+                    database_client,
+                    url,
+                    render_js,
+                    include_nav,
+                    include_header,
+                    include_footer,
+                    result.markdown,
+                    result.truncated,
+                ),
+                timeout=DATABASE_TIMEOUT_SECONDS,
+            )
+        except Exception as error:
+            logger.warning(
+                "supabase_cache_upsert_failed error_type=%s",
+                type(error).__name__,
+            )
+
+
+    return document, result, cache_layer
+
+
+
+
 async def _scrape_text(
     request: Request,
     url: str,
@@ -299,114 +460,42 @@ async def _scrape_text(
         getattr(getattr(request, "state", None), "request_id", None)
         or uuid.uuid4().hex
     )
+
+
     try:
         await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
 
 
-        database_client = getattr(request.app.state, "supabase_client", None)
-        result: CachedMarkdown | None = None
-        document = None
-        cache_layer = "none"
+        document, result, cache_layer = await _fetch_and_extract(
+            request,
+            url,
+            include_nav=include_nav,
+            include_header=include_header,
+            include_footer=include_footer,
+            render_js=render_js,
+            skip_cache=skip_cache,
+        )
 
 
-        # skip_cache skips cache READS only. Writes and usage counting still happen.
-        if database_client is not None and not skip_cache:
-            try:
-                result = await asyncio.wait_for(
-                    get_cached_markdown(
-                        database_client,
-                        url,
-                        render_js,
-                        include_nav,
-                        include_header,
-                        include_footer,
-                    ),
-                    timeout=DATABASE_TIMEOUT_SECONDS,
-                )
-            except Exception as error:
-                logger.warning("supabase_cache_lookup_failed error_type=%s", type(error).__name__)
-
-
-        cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
-        if result is not None:
-            CACHE_HITS.inc()
-            cache_layer = "persistent"
-            logger.info("persistent_cache_hit url_hash=%s", cache_key[:12])
-            # Persistent-cache row: result.markdown is the extracted text; there is
-            # no FetchedHTML body, so rebuild a light result object and mark the
-            # layer persistent. No network fetch, no robots.txt check.
-            extracted = extract_text_result(
-                result.markdown,
-                settings.max_text_characters,
-                include_nav=include_nav,
-                include_header=include_header,
-                include_footer=include_footer,
-                from_encoding=None,
-                base_url=url,
-            )
-            result = CachedMarkdown(markdown=extracted.text, truncated=extracted.truncated)
-        else:
-            cache = request.app.state.cache
-            document = None if skip_cache else cache.get(cache_key)
-            if document is not None:
-                CACHE_HITS.inc()
-                cache_layer = "memory"
-                logger.info("memory_cache_hit url_hash=%s", cache_key[:12])
-            else:
-                CACHE_MISSES.inc()
-                logger.info("cache_miss url_hash=%s", cache_key[:12])
-                # robots.txt is checked before any network fetch of the page, and
-                # skip_cache does not bypass it.
-                await _enforce_robots(url, settings, cache_key[:12])
-                if render_js:
-                    document = await fetch_rendered_html_document(url, settings)
-                else:
-                    # The existing transport pins each request to a validated public IP.
-                    # Keep it off the event loop rather than replacing that SSRF guard
-                    # with HTTPX's second, independently resolved DNS lookup.
-                    document = await asyncio.to_thread(fetch_html_document, url, settings)
-                cache.set(cache_key, document)
-
-
-            extracted = extract_text_result(
-                document.body,
-                settings.max_text_characters,
-                include_nav=include_nav,
-                include_header=include_header,
-                include_footer=include_footer,
-                from_encoding=document.charset,
-                base_url=document.final_url or url,
-            )
-            result = CachedMarkdown(markdown=extracted.text, truncated=extracted.truncated)
-            if database_client is not None:
-                try:
-                    await asyncio.wait_for(
-                        upsert_cached_markdown(
-                            database_client,
-                            url,
-                            render_js,
-                            include_nav,
-                            include_header,
-                            include_footer,
-                            result.markdown,
-                            result.truncated,
-                        ),
-                        timeout=DATABASE_TIMEOUT_SECONDS,
-                    )
-                except Exception as error:
-                    logger.warning("supabase_cache_upsert_failed error_type=%s", type(error).__name__)
-
-
-        if database_client is not None and has_valid_proxy_secret(request, settings):
+        if (
+            request.app.state.supabase_client is not None
+            and has_valid_proxy_secret(request, settings)
+        ):
             rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
             if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
                 try:
                     await asyncio.wait_for(
-                        increment_developer_usage(database_client, rapidapi_user),
+                        increment_developer_usage(
+                            request.app.state.supabase_client,
+                            rapidapi_user,
+                        ),
                         timeout=DATABASE_TIMEOUT_SECONDS,
                     )
                 except Exception as error:
-                    logger.warning("supabase_usage_increment_failed error_type=%s", type(error).__name__)
+                    logger.warning(
+                        "supabase_usage_increment_failed error_type=%s",
+                        type(error).__name__,
+                    )
 
 
         return _build_response(
@@ -417,6 +506,8 @@ async def _scrape_text(
             request_id,
             settings,
         )
+
+
     except HTTPException:
         raise
     except TargetURLRejected as error:
@@ -456,7 +547,11 @@ async def _scrape_text(
             },
         ) from error
     except UpstreamHTTPError as error:
-        logger.warning("upstream_http_error status=%d reason=%s", error.status_code, error.reason)
+        logger.warning(
+            "upstream_http_error status=%d reason=%s",
+            error.status_code,
+            error.reason,
+        )
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             # Returned as 502 so a target's 401/403 is never mistaken for a problem
             # with the caller's own API key. No retries, no workarounds.
@@ -469,6 +564,8 @@ async def _scrape_text(
                     "upstream_status": error.status_code,
                 },
             ) from error
+
+
         raise HTTPException(
             status_code=502,
             detail={
@@ -505,7 +602,10 @@ async def _scrape_text(
             },
         ) from error
     except OSError as error:
-        logger.warning("upstream_connection_error error_type=%s", type(error).__name__)
+        logger.warning(
+            "upstream_connection_error error_type=%s",
+            type(error).__name__,
+        )
         raise HTTPException(
             status_code=502,
             detail={
@@ -523,6 +623,7 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
+
 
 
 

@@ -47,6 +47,7 @@ the model can self-correct — e.g. retrying with ``render_js=false``.
 
 import asyncio
 import json
+import socket
 import logging
 from typing import Any
 
@@ -62,10 +63,18 @@ from bintu_api.auth import (
     mcp_upgrade_url,
     verify_mcp_execution_access,
 )
+from bintu_api.scraper import (
+    PayloadTooLarge,
+    TargetURLRejected,
+    TooManyRedirects,
+    UnsupportedContentEncoding,
+    UnsupportedMediaType,
+    UpstreamHTTPError,
+    UpstreamRenderError,
+)
 from bintu_api.context import _decode_source_text, extract_context, normalize_mode
 from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_token_usage
 from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA, TOOL_TITLE, ToolArguments
-from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
 
 
@@ -332,7 +341,11 @@ async def _tools_call_result(
             try:
                 raw_arguments["mode"] = normalize_mode(raw_arguments["mode"])
             except ValueError as error:
-                return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: mode: {error}")
+                return _rpc_error(
+                    request_id,
+                    INVALID_PARAMS,
+                    f"Invalid arguments: mode: {error}",
+                )
         if "chunk_token_budget" in raw_arguments:
             if "max_tokens" in raw_arguments:
                 logger.warning(
@@ -349,6 +362,8 @@ async def _tools_call_result(
         return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: {location}: {first['msg']}")
 
 
+
+
     if arguments.render_js and not settings.render_js_enabled:
         return _rpc_result(
             request_id,
@@ -359,12 +374,21 @@ async def _tools_call_result(
         )
 
 
+
+
     try:
-        # MCP tool calls use the same SSRF-guarded page fetch and extractor as
-        # the REST endpoint. Call through the routes module so tests can patch
-        # the shared network boundary at bintu_api.routes.fetch_html_document.
-        document = await asyncio.to_thread(
-            routes.fetch_html_document, arguments.url, settings
+        # MCP tool calls use the same robots, cache, SSRF-guarded page fetch,
+        # and extractor pipeline as the REST endpoint. Call through the routes
+        # module so tests can patch the shared network boundary at
+        # bintu_api.routes.fetch_html_document.
+        document, cached, cache_layer = await routes._fetch_and_extract(
+            request,
+            arguments.url,
+            include_nav=False,
+            include_header=False,
+            include_footer=False,
+            render_js=arguments.render_js,
+            skip_cache=False,
         )
     except TargetURLRejected as error:
         logger.info("mcp_tool_error detail=%r", str(error))
@@ -379,17 +403,55 @@ async def _tools_call_result(
     except HTTPException as error:
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
+    except (
+        UnsupportedMediaType,
+        UnsupportedContentEncoding,
+        PayloadTooLarge,
+        UpstreamHTTPError,
+        TooManyRedirects,
+        UpstreamRenderError,
+        TimeoutError,
+        socket.timeout,
+        OSError,
+    ) as error:
+        logger.info("mcp_tool_error error_type=%s", type(error).__name__)
+        if isinstance(error, UpstreamHTTPError):
+            message = (
+                f"upstream_http_error: The target returned HTTP {error.status_code}. "
+                "Hint: The target server returned an error. Try another public URL."
+            )
+        elif isinstance(error, UnsupportedMediaType):
+            message = (
+                "unsupported_media_type: Only HTML and XHTML pages are supported. "
+                "Hint: Use a public HTML page."
+            )
+        elif isinstance(error, UnsupportedContentEncoding):
+            message = (
+                "unsupported_content_encoding: The target returned an unsupported or "
+                "invalid compressed response."
+            )
+        elif isinstance(error, PayloadTooLarge):
+            message = "payload_too_large: The page exceeds the 1 MiB size limit."
+        elif isinstance(error, TooManyRedirects):
+            message = "too_many_redirects: The page has too many redirects."
+        elif isinstance(error, UpstreamRenderError):
+            message = (
+                "upstream_render_error: The target page could not be rendered. "
+                "Hint: Retry with render_js=false."
+            )
+        elif isinstance(error, (TimeoutError, socket.timeout)):
+            message = (
+                "upstream_timeout: The target did not respond in time. "
+                "Hint: Try again later or use another URL."
+            )
+        else:
+            message = (
+                "upstream_connection_error: Could not connect to the target. "
+                "Hint: The target server may be down or unreachable."
+            )
+        return _rpc_result(request_id, _tool_error(message))
 
 
-    extracted = routes.extract_text_result(
-        document.body,
-        settings.max_text_characters,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        from_encoding=document.charset,
-        base_url=document.final_url or arguments.url,
-    )
 
 
     try:
@@ -404,20 +466,19 @@ async def _tools_call_result(
             include_header=False,
             include_footer=False,
             identity=mcp_rate_limit_identity(request, settings),
-            raw_text=extracted.text,
-            content_truncated=extracted.truncated,
-            html_source_text=_decode_source_text(document),
-            cache_hit=False,
-            cache_layer="none",
+            raw_text=cached.markdown,
+            content_truncated=cached.truncated,
+            html_source_text=_decode_source_text(document) if document is not None else "",
+            cache_hit=cache_layer != "none",
+            cache_layer=cache_layer,
             document=document,
             settings=settings,
         )
     except HTTPException as error:
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
-    except ValueError as error:
-        logger.info("mcp_tool_error value_error=%r", error)
-        return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: {error}")
+
+
 
 
     # Unified Token Tax envelope in content[0].text across ALL modes for
@@ -451,6 +512,11 @@ async def _tools_call_result(
         provenance_dict["extractor_version"] = context.extractor_version
 
 
+
+
+    safe_source_url = routes.sanitize_url(arguments.url)
+
+
     envelope = {
         "mode": context.mode,
         "tokens": context.tokens,
@@ -461,7 +527,7 @@ async def _tools_call_result(
         "chunk_count": context.chunk_count,
         "cache_hit": context.cache_hit,
         "cache_layer": context.cache_layer,
-        "source_url": context.source_url,
+        "source_url": safe_source_url,
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "truncated": context.truncated,
@@ -489,6 +555,10 @@ async def _tools_call_result(
         request_id,
         {
             "content": [{"type": "text", "text": json.dumps(envelope)}],
+            # MCP clients validate this against TOOL_OUTPUT_SCHEMA when the
+            # tool declares an outputSchema. Keep the human-readable JSON in
+            # content[0].text while exposing the same envelope structurally.
+            "structuredContent": envelope,
             "isError": False,
         },
     )

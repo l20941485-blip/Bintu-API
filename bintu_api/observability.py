@@ -3,10 +3,12 @@ import re
 import time
 import uuid
 
+
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
 
 
 REQUEST_COUNT = Counter(
@@ -36,6 +38,7 @@ logger = logging.getLogger("bintu_api.request")
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
+
 class RequestObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         supplied_id = request.headers.get("X-Request-ID", "")
@@ -45,11 +48,12 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
         status_code = 500
         response: Response | None = None
 
+
         try:
             response = await call_next(request)
             status_code = response.status_code
         except Exception as error:
-            logger.error(
+            logger.exception(
                 "request_failed request_id=%s error_type=%s",
                 request_id,
                 type(error).__name__,
@@ -79,8 +83,10 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
                 elapsed * 1000,
             )
 
+
         response.headers["X-Request-ID"] = request_id
         return response
+
 
 
 def metrics_response() -> Response:
