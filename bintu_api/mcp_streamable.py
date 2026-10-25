@@ -5,11 +5,13 @@
 
 
 
+
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients — Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
 any other Streamable HTTP client — without adding the ``mcp`` SDK dependency.
 Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 ``2025-03-26`` during negotiation):
+
 
 
 
@@ -49,12 +51,14 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 
 
 
+
 Error mapping follows the spec: protocol failures (unknown method/tool,
 invalid arguments, malformed payloads) use JSON-RPC error codes, while tool
 execution failures (unsafe URL, rate limit, upstream errors, render_js
 disabled) are returned in-band with ``isError: true`` and a readable text so
 the model can self-correct — e.g. retrying with ``render_js=false``.
 """
+
 
 
 
@@ -72,9 +76,11 @@ from typing import Any
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+
 
 
 
@@ -104,7 +110,9 @@ from bintu_api.context import (
 )
 from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_token_usage
 from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA, TOOL_TITLE, ToolArguments
+from bintu_api.observability import log_extraction_completed, log_token_metering_failure
 from bintu_api.settings import Settings
+
 
 
 
@@ -118,7 +126,9 @@ logger = logging.getLogger("bintu_api.mcp_streamable")
 
 
 
+
 router = APIRouter(tags=["MCP"])
+
 
 
 
@@ -157,6 +167,7 @@ SERVER_INSTRUCTIONS = (
 
 
 
+
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
@@ -172,8 +183,10 @@ AUTH_REQUIRED = -32001
 
 
 
+
 def _rpc_result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
 
 
 
@@ -195,8 +208,10 @@ def _rpc_error(
 
 
 
+
 def _tool_error(message: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": message}], "isError": True}
+
 
 
 
@@ -212,12 +227,14 @@ def _protocol_version_header(request: Request) -> str:
 
 
 
+
     The spec requires ``MCP-Protocol-Version`` on every request after
     ``initialize``; when absent we cannot know the version, so we assume the
     ``2025-03-26`` fallback exactly as the specification directs.
     """
     declared = request.headers.get("mcp-protocol-version", "").strip()
     return declared or FALLBACK_PROTOCOL_VERSION
+
 
 
 
@@ -244,8 +261,10 @@ def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONRespo
 
 
 
+
 def _accept_header_serves_json(request: Request) -> bool:
     """True unless the client explicitly refuses application/json responses.
+
 
 
 
@@ -290,6 +309,7 @@ def _reject_unsupported_accept(request_id: Any) -> JSONResponse:
 
 
 
+
 def _reject_forbidden_origin() -> JSONResponse:
     return JSONResponse(
         status_code=403,
@@ -307,8 +327,10 @@ def _reject_forbidden_origin() -> JSONResponse:
 
 
 
+
 async def _empty_sse_stream(request: Request) -> Response:
     """Shared handler for GET /mcp and its /sse aliases (stateless: empty stream).
+
 
 
 
@@ -334,8 +356,10 @@ async def _empty_sse_stream(request: Request) -> Response:
 
 
 
+
 def _origin_is_allowed(request: Request) -> bool:
     """Validate the Origin header against DNS-rebinding attacks.
+
 
 
 
@@ -354,6 +378,7 @@ def _origin_is_allowed(request: Request) -> bool:
         return False
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip().lower()
     return origin.strip().lower() == f"{scheme}://{host}"
+
 
 
 
@@ -390,6 +415,7 @@ def _metering_identity(request: Request, settings: Settings) -> str:
 
 
 
+
     Reuses the same bucket as rate limiting: a keyed caller is metered under
     its key fingerprint (without the raw secret), not under the gateway's IP.
     """
@@ -399,6 +425,7 @@ def _metering_identity(request: Request, settings: Settings) -> str:
     if identity.startswith("mcp:"):
         return identity
     return f"mcp:{identity}"
+
 
 
 
@@ -429,6 +456,7 @@ def _initialize_result(settings: Settings, request_id: Any, params: dict[str, An
 
 
 
+
 def _tools_list_result(request_id: Any) -> dict[str, Any]:
     return _rpc_result(
         request_id,
@@ -445,6 +473,7 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
             ]
         },
     )
+
 
 
 
@@ -491,6 +520,7 @@ async def _tools_call_result(
 
 
 
+
     if arguments.render_js and not settings.render_js_enabled:
         return _rpc_result(
             request_id,
@@ -499,6 +529,7 @@ async def _tools_call_result(
                 "Hint: Retry with render_js=false for plain HTML extraction."
             ),
         )
+
 
 
 
@@ -585,6 +616,7 @@ async def _tools_call_result(
 
 
 
+
     # Preserve the original extraction economics when serving from the
     # persistent cache. The cached row no longer contains source HTML, so
     # recomputing these values would incorrectly report zero savings.
@@ -597,6 +629,7 @@ async def _tools_call_result(
             truncated=cached.truncated,
             extracted_at=cached.extracted_at,
         )
+
 
 
 
@@ -630,6 +663,21 @@ async def _tools_call_result(
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
 
 
+
+
+
+    log_extraction_completed(
+        request_id=getattr(getattr(request, "state", None), "request_id", None),
+        url=arguments.url,
+        mode=context.mode,
+        cache_hit=context.cache_hit,
+        cache_layer=context.cache_layer,
+        approx_tokens=context.approx_tokens,
+        html_tokens=context.html_tokens,
+        tokens_saved_estimate=context.tokens_saved_estimate,
+        truncated=context.truncated,
+        limiting_factor=context.limiting_factor,
+    )
 
 
 
@@ -674,6 +722,7 @@ async def _tools_call_result(
 
 
 
+
     envelope = {
         "mode": context.mode,
         "tokens": context.tokens,
@@ -707,7 +756,7 @@ async def _tools_call_result(
                 timeout=DATABASE_TIMEOUT_SECONDS,
             )
         except Exception as error:
-            logger.warning("token_metering_failed error_type=%s", type(error).__name__)
+            log_token_metering_failure(error)
     return _rpc_result(
         request_id,
         {
@@ -726,6 +775,7 @@ async def _tools_call_result(
 
 
 
+
 @router.post("/mcp", include_in_schema=False)
 async def mcp_messages(request: Request):
     settings: Settings = request.app.state.settings
@@ -735,9 +785,11 @@ async def mcp_messages(request: Request):
 
 
 
+
     if not _origin_is_allowed(request):
         logger.warning("mcp_forbidden_origin origin=%r", request.headers.get("origin", ""))
         return _reject_forbidden_origin()
+
 
 
 
@@ -756,6 +808,7 @@ async def mcp_messages(request: Request):
                 "Invalid Request: Content-Type must be application/json.",
             ),
         )
+
 
 
 
@@ -812,6 +865,7 @@ async def mcp_messages(request: Request):
         # Authenticated below via tools/call path; capability probes without an
         # id carry no billable work.
         return Response(status_code=202)
+
 
 
 

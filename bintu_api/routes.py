@@ -9,7 +9,9 @@ from urllib.parse import urlparse, urlunparse
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security, status
+
 
 
 
@@ -30,7 +32,11 @@ from bintu_api.database import (
     increment_developer_usage,
     upsert_cached_markdown,
 )
-from bintu_api.observability import CACHE_HITS, CACHE_MISSES
+from bintu_api.observability import (
+    log_cache_event,
+    log_extraction_completed,
+    log_upstream_error,
+)
 from bintu_api.robots import robots_decision, robots_mode
 from bintu_api.schemas import (
     CacheInfo,
@@ -63,14 +69,17 @@ from bintu_api.settings import Settings
 
 
 
+
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
 
 
 
+
 TOKEN_METHOD = "ceil(characters/4)"
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
+
 
 
 
@@ -88,6 +97,7 @@ def sanitize_url(url: str) -> str:
     return urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, safe_query, parsed.fragment)
     )
+
 
 
 
@@ -118,6 +128,7 @@ def _build_provenance(
 
 
 
+
 def _build_response(
     url: str,
     result: CachedMarkdown,
@@ -127,6 +138,7 @@ def _build_response(
     settings: Settings,
 ) -> ScrapeTextResponse:
     approx_tokens = _compute_approx_tokens(result.markdown)
+
 
 
     # Preserve the economics of the original extraction on cache hits. A
@@ -140,6 +152,7 @@ def _build_response(
         saved = 0
 
 
+
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -151,6 +164,7 @@ def _build_response(
         tokens_saved_estimate=saved,
         provenance=_build_provenance(url, result.markdown, document, cache_layer, request_id, settings),
     )
+
 
 
 
@@ -187,6 +201,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
 
 
 
+
 @router.get("/", response_model=GatewayResponse)
 def gateway_check(request: Request) -> GatewayResponse:
     settings = request.app.state.settings
@@ -196,9 +211,11 @@ def gateway_check(request: Request) -> GatewayResponse:
 
 
 
+
 @router.get("/healthz", response_model=HealthResponse, include_in_schema=False)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
+
 
 
 
@@ -218,6 +235,7 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
     )
+
 
 
 
@@ -275,6 +293,7 @@ async def scrape_text(
 
 
 
+
 @router.post(
     "/api/v1/mobile/scrape/text",
     response_model=ScrapeTextResponse,
@@ -322,6 +341,7 @@ async def mobile_scrape_text(
 
 
 
+
 async def _fetch_and_extract(
     request: Request,
     url: str,
@@ -336,10 +356,12 @@ async def _fetch_and_extract(
 
 
 
+
     Returns:
         document: FetchedHTML for a fresh fetch; None for a cache hit.
         result: extracted markdown, truncation flag, and extraction economics.
         cache_layer: "none", "memory", or "persistent".
+
 
 
 
@@ -350,6 +372,8 @@ async def _fetch_and_extract(
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
     cache_layer = "none"
+    request_id = getattr(getattr(request, "state", None), "request_id", None)
+
 
 
 
@@ -375,14 +399,20 @@ async def _fetch_and_extract(
 
 
 
+
     cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
 
 
 
     if result is not None:
-        CACHE_HITS.inc()
         cache_layer = "persistent"
-        logger.info("persistent_cache_hit url_hash=%s", cache_key[:12])
+        log_cache_event(
+            event="cache_hit",
+            url=url,
+            request_id=request_id,
+            layer=cache_layer,
+        )
+
 
 
 
@@ -410,24 +440,36 @@ async def _fetch_and_extract(
 
 
 
+
     cache = request.app.state.cache
     document = None if skip_cache else cache.get(cache_key)
 
 
 
+
     if document is not None:
-        CACHE_HITS.inc()
         cache_layer = "memory"
-        logger.info("memory_cache_hit url_hash=%s", cache_key[:12])
+        log_cache_event(
+            event="cache_hit",
+            url=url,
+            request_id=request_id,
+            layer=cache_layer,
+        )
     else:
-        CACHE_MISSES.inc()
-        logger.info("cache_miss url_hash=%s", cache_key[:12])
+        log_cache_event(
+            event="cache_miss",
+            url=url,
+            request_id=request_id,
+            layer="none",
+        )
+
 
 
 
         # robots.txt is checked before any network fetch of the page.
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
+
 
 
 
@@ -441,7 +483,9 @@ async def _fetch_and_extract(
 
 
 
+
         cache.set(cache_key, document)
+
 
 
 
@@ -456,6 +500,7 @@ async def _fetch_and_extract(
     )
 
 
+
     html_source_text = _decode_source_text(document)
     html_tokens = _compute_approx_tokens(html_source_text)
     tokens_saved_estimate = _compute_tokens_saved_estimate(
@@ -463,6 +508,7 @@ async def _fetch_and_extract(
         extracted.text,
     )
     extracted_at = datetime.now(timezone.utc).isoformat()
+
 
 
     result = CachedMarkdown(
@@ -473,6 +519,7 @@ async def _fetch_and_extract(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at,
     )
+
 
 
 
@@ -495,6 +542,12 @@ async def _fetch_and_extract(
                 ),
                 timeout=DATABASE_TIMEOUT_SECONDS,
             )
+            log_cache_event(
+                event="persistent_cache_write",
+                url=url,
+                request_id=request_id,
+                layer="persistent",
+            )
         except Exception as error:
             logger.warning(
                 "supabase_cache_upsert_failed error_type=%s",
@@ -503,7 +556,9 @@ async def _fetch_and_extract(
 
 
 
+
     return document, result, cache_layer
+
 
 
 
@@ -527,8 +582,10 @@ async def _scrape_text(
 
 
 
+
     try:
         await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
+
 
 
 
@@ -541,6 +598,7 @@ async def _scrape_text(
             render_js=render_js,
             skip_cache=skip_cache,
         )
+
 
 
 
@@ -566,7 +624,8 @@ async def _scrape_text(
 
 
 
-        return _build_response(
+
+        response = _build_response(
             url,
             result,
             document,
@@ -577,9 +636,34 @@ async def _scrape_text(
 
 
 
+        log_extraction_completed(
+            request_id=request_id,
+            url=url,
+            mode="scrape",
+            cache_hit=cache_layer != "none",
+            cache_layer=cache_layer,
+            approx_tokens=response.approx_tokens,
+            html_tokens=result.html_tokens,
+            tokens_saved_estimate=response.tokens_saved_estimate,
+            truncated=response.truncated,
+            limiting_factor=result.limiting_factor,
+        )
+
+
+
+        return response
+
+
+
+
     except HTTPException:
         raise
     except TargetURLRejected as error:
+        log_upstream_error(
+            error_type="invalid_or_unsafe_url",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=400,
             detail={
@@ -589,6 +673,11 @@ async def _scrape_text(
             },
         ) from error
     except UnsupportedMediaType as error:
+        log_upstream_error(
+            error_type="unsupported_media_type",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=415,
             detail={
@@ -598,6 +687,11 @@ async def _scrape_text(
             },
         ) from error
     except UnsupportedContentEncoding as error:
+        log_upstream_error(
+            error_type="unsupported_content_encoding",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=502,
             detail={
@@ -607,6 +701,11 @@ async def _scrape_text(
             },
         ) from error
     except PayloadTooLarge as error:
+        log_upstream_error(
+            error_type="payload_too_large",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=413,
             detail={
@@ -616,6 +715,12 @@ async def _scrape_text(
             },
         ) from error
     except UpstreamHTTPError as error:
+        log_upstream_error(
+            error_type="upstream_http_error",
+            url=url,
+            request_id=request_id,
+            status_code=error.status_code,
+        )
         logger.warning(
             "upstream_http_error status=%d reason=%s",
             error.status_code,
@@ -636,6 +741,7 @@ async def _scrape_text(
 
 
 
+
         raise HTTPException(
             status_code=502,
             detail={
@@ -645,6 +751,11 @@ async def _scrape_text(
             },
         ) from error
     except TooManyRedirects as error:
+        log_upstream_error(
+            error_type="too_many_redirects",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=502,
             detail={
@@ -654,6 +765,11 @@ async def _scrape_text(
             },
         ) from error
     except UpstreamRenderError as error:
+        log_upstream_error(
+            error_type="upstream_render_error",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=502,
             detail={
@@ -663,6 +779,11 @@ async def _scrape_text(
             },
         ) from error
     except (TimeoutError, socket.timeout) as error:
+        log_upstream_error(
+            error_type="upstream_timeout",
+            url=url,
+            request_id=request_id,
+        )
         raise HTTPException(
             status_code=504,
             detail={
@@ -672,6 +793,11 @@ async def _scrape_text(
             },
         ) from error
     except OSError as error:
+        log_upstream_error(
+            error_type="upstream_connection_error",
+            url=url,
+            request_id=request_id,
+        )
         logger.warning(
             "upstream_connection_error error_type=%s",
             type(error).__name__,
@@ -685,6 +811,11 @@ async def _scrape_text(
             },
         ) from error
     except Exception as error:
+        log_upstream_error(
+            error_type="internal_error",
+            url=url,
+            request_id=request_id,
+        )
         logger.error("scrape_failed error_type=%s", type(error).__name__)
         raise HTTPException(
             status_code=500,
@@ -693,6 +824,7 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
+
 
 
 

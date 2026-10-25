@@ -1,13 +1,16 @@
+import hashlib
 import logging
 import re
 import time
 import uuid
 
 
+
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
 
 
 
@@ -29,13 +32,153 @@ REQUEST_DURATION = Histogram(
 CACHE_HITS = Counter(
     "bintu_cache_hits_total",
     "Cache hits for scraped content.",
+    ("layer",),
 )
 CACHE_MISSES = Counter(
     "bintu_cache_misses_total",
     "Cache misses for scraped content.",
 )
+EXTRACTIONS = Counter(
+    "bintu_extractions_total",
+    "Completed text extractions.",
+    ("mode", "cache_layer", "outcome"),
+)
+EXTRACTED_TOKENS = Counter(
+    "bintu_extracted_approx_tokens_total",
+    "Approximate tokens delivered by completed extractions.",
+    ("mode", "cache_layer"),
+)
+TOKENS_SAVED = Counter(
+    "bintu_tokens_saved_estimate_total",
+    "Estimated tokens saved relative to the fetched HTML baseline.",
+    ("mode", "cache_layer"),
+)
+UPSTREAM_ERRORS = Counter(
+    "bintu_upstream_errors_total",
+    "Upstream fetch or extraction failures.",
+    ("error_type",),
+)
+TOKEN_METERING_FAILURES = Counter(
+    "bintu_token_metering_failures_total",
+    "Failures while recording token usage.",
+)
+
+
 logger = logging.getLogger("bintu_api.request")
+EXTRACTION_LOGGER = logging.getLogger("bintu_api.extraction")
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+
+
+def url_hash(url: str) -> str:
+    """Return a stable, privacy-safe hash for a target URL.
+
+    Raw URLs are never logged: they may contain sensitive paths, query
+    parameters, or identifiers. A truncated SHA-256 hash is enough to
+    correlate repeated extraction attempts without exposing the target.
+    """
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+
+
+
+
+def log_extraction_completed(
+    *,
+    request_id: str | None,
+    url: str,
+    mode: str,
+    cache_hit: bool,
+    cache_layer: str,
+    approx_tokens: int,
+    html_tokens: int,
+    tokens_saved_estimate: int,
+    truncated: bool,
+    limiting_factor: str,
+) -> None:
+    """Emit a structured, privacy-safe extraction-completion event."""
+    layer = cache_layer if cache_hit else "none"
+    outcome = "truncated" if truncated else "complete"
+
+    EXTRACTIONS.labels(mode, layer, outcome).inc()
+    EXTRACTED_TOKENS.labels(mode, layer).inc(max(0, approx_tokens))
+    TOKENS_SAVED.labels(mode, layer).inc(max(0, tokens_saved_estimate))
+
+    EXTRACTION_LOGGER.info(
+        "extraction_completed request_id=%s url_hash=%s mode=%s "
+        "cache_hit=%s cache_layer=%s approx_tokens=%d html_tokens=%d "
+        "tokens_saved_estimate=%d truncated=%s limiting_factor=%s",
+        request_id or "unknown",
+        url_hash(url),
+        mode,
+        cache_hit,
+        layer,
+        max(0, approx_tokens),
+        max(0, html_tokens),
+        max(0, tokens_saved_estimate),
+        truncated,
+        limiting_factor,
+    )
+
+
+
+
+def log_cache_event(
+    *,
+    event: str,
+    url: str,
+    request_id: str | None = None,
+    layer: str = "none",
+) -> None:
+    """Emit a privacy-safe cache lifecycle event.
+
+    Valid events: cache_hit, cache_miss, persistent_cache_write.
+    """
+    if event == "cache_hit":
+        CACHE_HITS.labels(layer).inc()
+    elif event == "cache_miss":
+        CACHE_MISSES.inc()
+
+    EXTRACTION_LOGGER.info(
+        "%s request_id=%s url_hash=%s cache_layer=%s",
+        event,
+        request_id or "unknown",
+        url_hash(url),
+        layer,
+    )
+
+
+
+
+def log_upstream_error(
+    *,
+    error_type: str,
+    url: str,
+    request_id: str | None = None,
+    status_code: int | None = None,
+) -> None:
+    """Emit a privacy-safe upstream failure event."""
+    UPSTREAM_ERRORS.labels(error_type).inc()
+
+    EXTRACTION_LOGGER.warning(
+        "upstream_error request_id=%s url_hash=%s error_type=%s status_code=%s",
+        request_id or "unknown",
+        url_hash(url),
+        error_type,
+        status_code if status_code is not None else "none",
+    )
+
+
+
+
+def log_token_metering_failure(error: Exception) -> None:
+    """Emit a privacy-safe token-metering failure event."""
+    TOKEN_METERING_FAILURES.inc()
+    EXTRACTION_LOGGER.warning(
+        "token_metering_failed error_type=%s",
+        type(error).__name__,
+    )
+
 
 
 
@@ -47,6 +190,7 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
         start_time = time.perf_counter()
         status_code = 500
         response: Response | None = None
+
 
 
         try:
@@ -84,8 +228,10 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
             )
 
 
+
         response.headers["X-Request-ID"] = request_id
         return response
+
 
 
 
