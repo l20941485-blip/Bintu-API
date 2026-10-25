@@ -37,6 +37,7 @@ from bintu_api.auth import (
 )
 from bintu_api.context import _decode_source_text, extract_context, normalize_mode
 from bintu_api.scraper import TargetURLRejected
+from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
 
 
@@ -157,19 +158,16 @@ class ToolCallRequest(BaseModel):
 class ToolArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-
     url: str
     render_js: bool = False
     mode: str = "scrape"
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     cache: bool = True
 
-
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
-
 
         - mode "chunked" (any case/whitespace) -> "chunk".
         - "chunk_token_budget" -> "max_tokens"; canonical "max_tokens" wins
@@ -178,13 +176,10 @@ class ToolArguments(BaseModel):
         if not isinstance(data, dict):
             return data
 
-
         normalized = dict(data)
-
 
         if "mode" in normalized:
             normalized["mode"] = normalize_mode(normalized["mode"])
-
 
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
@@ -195,14 +190,11 @@ class ToolArguments(BaseModel):
             else:
                 normalized["max_tokens"] = normalized.pop("chunk_token_budget")
 
-
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
 
-
         return normalized
-
 
 
 
@@ -229,7 +221,6 @@ async def list_tools(request: Request) -> dict[str, Any]:
 
 
 
-
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -246,7 +237,6 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
-
     if arguments.render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
@@ -256,7 +246,6 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
                 "hint": "Retry with render_js=false for plain HTML extraction.",
             },
         )
-
 
 
 
@@ -285,7 +274,6 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
-
     context = await extract_context(
         request,
         arguments.url,
@@ -305,7 +293,6 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         document=document,
         settings=settings,
     )
-
 
 
 
