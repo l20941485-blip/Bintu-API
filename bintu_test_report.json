@@ -1,0 +1,491 @@
+{
+  "target": "http://127.0.0.1:8000/mcp",
+  "summary": {
+    "PASS": 76,
+    "INFO": 9,
+    "WARN": 9,
+    "FAIL": 2
+  },
+  "results": [
+    {
+      "status": "PASS",
+      "test": "initialize",
+      "detail": "288 ms, server={'name': 'bintu', 'title': 'Bintu Data Extraction API', 'version': '1.0.1'}"
+    },
+    {
+      "status": "PASS",
+      "test": "notifications/initialized",
+      "detail": "status=202"
+    },
+    {
+      "status": "PASS",
+      "test": "tools/list (no key)",
+      "detail": "tools=['bintu_scrape_text']"
+    },
+    {
+      "status": "INFO",
+      "test": "Tool schema",
+      "detail": "params=['cache', 'max_tokens', 'mode', 'render_js', 'url'] required=['url']"
+    },
+    {
+      "status": "PASS",
+      "test": "tool annotations: bintu_scrape_text",
+      "detail": "present: ['destructiveHint', 'idempotentHint', 'openWorldHint', 'readOnlyHint', 'title']"
+    },
+    {
+      "status": "PASS",
+      "test": "outputSchema: bintu_scrape_text",
+      "detail": "present"
+    },
+    {
+      "status": "PASS",
+      "test": "tool title: bintu_scrape_text",
+      "detail": "Bintu Scrape Text"
+    },
+    {
+      "status": "PASS",
+      "test": "tool description: bintu_scrape_text",
+      "detail": "1175 chars; shown to the model, so it must say when to use the tool, limits and errors"
+    },
+    {
+      "status": "INFO",
+      "test": "full tool object: bintu_scrape_text",
+      "detail": "{\"name\": \"bintu_scrape_text\", \"title\": \"Bintu Scrape Text\", \"description\": \"Token-Sanitized Context Gateway for AI agents: fetches one public absolute http(s) URL (1 MiB cap, HTML/XHTML only, nav/ads/footer stripped, article/main preferred) and returns readable text capped at 6,000 characters. Default mode=scrape returns the token-metered envelope. Use mode=chunk (alias chunked) to split text into"
+    },
+    {
+      "status": "WARN",
+      "test": "stateless request, no initialize (spec 2026-07-28)",
+      "detail": "status=400 {\"jsonrpc\":\"2.0\",\"id\":4,\"error\":{\"code\":-32602,\"message\":\"Unsupported MCP protocol version '2026-07-28'.\",\"data\":{\"suppo - clients on the newest spec may fail to connect"
+    },
+    {
+      "status": "WARN",
+      "test": "GET /.well-known/mcp/server-card.json",
+      "detail": "status=404 (MCP server card for discovery)"
+    },
+    {
+      "status": "WARN",
+      "test": "GET /.well-known/glama.json",
+      "detail": "status=404 (Glama directory ownership proof)"
+    },
+    {
+      "status": "WARN",
+      "test": "GET /llms.txt",
+      "detail": "status=404 (agent-readable docs)"
+    },
+    {
+      "status": "WARN",
+      "test": "GET /robots.txt",
+      "detail": "status=404 (crawler policy for your API host)"
+    },
+    {
+      "status": "PASS",
+      "test": "GET /healthz",
+      "detail": "status=200 (health endpoint for uptime monitors / keep-alive)"
+    },
+    {
+      "status": "PASS",
+      "test": "GET /openapi.json",
+      "detail": "status=200 (REST schema (RapidAPI))"
+    },
+    {
+      "status": "PASS",
+      "test": "Malformed JSON body",
+      "detail": "status=400"
+    },
+    {
+      "status": "PASS",
+      "test": "Unknown method",
+      "detail": "status=200"
+    },
+    {
+      "status": "PASS",
+      "test": "Unknown tool name",
+      "detail": "status=200"
+    },
+    {
+      "status": "PASS",
+      "test": "Wrong Content-Type",
+      "detail": "status=400"
+    },
+    {
+      "status": "INFO",
+      "test": "GET /mcp",
+      "detail": "status=200 (405 or SSE stream are both normal)"
+    },
+    {
+      "status": "WARN",
+      "test": "3 MB request body",
+      "detail": "status=200 (expected (400, 413))"
+    },
+    {
+      "status": "PASS",
+      "test": "Origin validation",
+      "detail": "evil Origin rejected (403)"
+    },
+    {
+      "status": "INFO",
+      "test": "Bad protocol-version header",
+      "detail": "status=400 (spec suggests 400)"
+    },
+    {
+      "status": "FAIL",
+      "test": "tools/call without key",
+      "detail": "call succeeded with no key - auth is not enforced"
+    },
+    {
+      "status": "FAIL",
+      "test": "tools/call with wrong key",
+      "detail": "succeeded with an invalid key"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: missing url",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: url is a number",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: url empty string",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: url 10,000 chars",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: mode invalid",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: mode null",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: max_tokens string",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: max_tokens float",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: max_tokens 99 (below min)",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: max_tokens 50001 (above max)",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: max_tokens negative",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: render_js string",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "validation: cache string",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "INFO",
+      "test": "unknown extra argument",
+      "detail": "rpc_error"
+    },
+    {
+      "status": "PASS",
+      "test": "mode=scrape",
+      "detail": "tokens=28 chunks=1 953 ms"
+    },
+    {
+      "status": "PASS",
+      "test": "mode=chunk",
+      "detail": "tokens=28 chunks=1 605 ms"
+    },
+    {
+      "status": "PASS",
+      "test": "mode=summarize",
+      "detail": "tokens=28 chunks=1 487 ms"
+    },
+    {
+      "status": "PASS",
+      "test": "mode=chunked",
+      "detail": "tokens=28 chunks=1 1287 ms"
+    },
+    {
+      "status": "INFO",
+      "test": "chunk_token_budget alias",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "test": "miss then hit",
+      "detail": "first=False second=True"
+    },
+    {
+      "status": "PASS",
+      "test": "cache=false bypasses cache",
+      "detail": "cache_hit=False"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://localhost/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://127.0.0.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://[::1]/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://2130706433/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://0x7f000001/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://0177.0.0.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://127.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://0.0.0.0/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://169.254.169.254/latest/meta-data/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://metadata.google.internal/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://[::ffff:127.0.0.1]/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://[::ffff:7f00:1]/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://localtest.me/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://10.0.0.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://192.168.1.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://172.16.0.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://100.64.0.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: ftp://example.com/x",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: file:///etc/passwd",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: gopher://example.com/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: javascript:alert(1)",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: data:text/html,hello",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://user:pass@example.com/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://127.0.0.1#@example.com/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: http://127.0.0.1\\@example.com/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: https://httpbin.org/redirect-to?url=http://169.254.169.254/latest/meta-data/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "PASS",
+      "test": "SSRF: https://httpbin.org/redirect-to?url=http://127.0.0.1/",
+      "detail": "tool_error"
+    },
+    {
+      "status": "INFO",
+      "test": "probe: https://example.com:22/",
+      "detail": "tool_error invalid_or_unsafe_url: Only ports 80 and 443 are allowed by default. Hint: URL must start with http:"
+    },
+    {
+      "status": "INFO",
+      "test": "probe: https://example.com:8443/",
+      "detail": "tool_error invalid_or_unsafe_url: Only ports 80 and 443 are allowed by default. Hint: URL must start with http:"
+    },
+    {
+      "status": "INFO",
+      "test": "probe: http://example.com#@127.0.0.1/",
+      "detail": "ok {\"mode\": \"scrape\", \"tokens\": 28, \"approx_tokens\": 28, \"html_tokens\": 38, \"token_method\": \"whitespace"
+    },
+    {
+      "status": "PASS",
+      "test": "JSON response -> tool_error",
+      "detail": "1381 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "PDF -> tool_error",
+      "detail": "515 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "PNG image -> tool_error",
+      "detail": "859 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "404 page -> tool_error",
+      "detail": "910 ms; upstream_http_error: The target returned HTTP 404.. Hint: The target server returned an error. Try again later."
+    },
+    {
+      "status": "PASS",
+      "test": "500 page -> tool_error",
+      "detail": "1284 ms; upstream_http_error: The target returned HTTP 500.. Hint: The target server returned an error. Try again later."
+    },
+    {
+      "status": "WARN",
+      "test": "204 empty -> ok but EMPTY",
+      "detail": "success with no content - should be an error so the caller is not billed"
+    },
+    {
+      "status": "PASS",
+      "test": "redirect x3 -> tool_error",
+      "detail": "3624 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "redirect x12 (loop-ish) -> tool_error",
+      "detail": "5046 ms; too_many_redirects: The target exceeded the redirect limit. Hint: The page has too many redirects"
+    },
+    {
+      "status": "PASS",
+      "test": "8s delay -> tool_error",
+      "detail": "8900 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "40s delay (timeout test) -> tool_error",
+      "detail": "10758 ms; upstream_timeout: The target did not respond in time.. Hint: The target server is slow or unresponsive. Try again later."
+    },
+    {
+      "status": "PASS",
+      "test": "unresolvable domain -> tool_error",
+      "detail": "150 ms; invalid_or_unsafe_url: The target hostname could not be resolved. Hint: URL must start with http:// or https:// and be publicly accessible"
+    },
+    {
+      "status": "PASS",
+      "test": "IDN domain -> tool_error",
+      "detail": "3420 ms; upstream_connection_error: Could not connect to the target.. Hint: The target server may be down or unreachable."
+    },
+    {
+      "status": "PASS",
+      "test": "non-UTF8 / legacy encoding -> ok",
+      "detail": "1726 ms; tokens=929: # Unicode Demo\nTaken from http://www.cl.cam.ac.uk/~mgk25/ucs/examples/UTF-8-demo"
+    },
+    {
+      "status": "PASS",
+      "test": "gzip -> tool_error",
+      "detail": "1508 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "binary 2 MB -> tool_error",
+      "detail": "1461 ms; unsupported_media_type: Only HTML and XHTML responses are supported. Hint: Only HTML and XHTML pages are supported"
+    },
+    {
+      "status": "PASS",
+      "test": "truncated flag",
+      "detail": "len=5992 truncated=True"
+    },
+    {
+      "status": "WARN",
+      "test": "link noise",
+      "detail": "64% of output characters are URLs (consider a strip_links option)"
+    },
+    {
+      "status": "PASS",
+      "test": "tokens_saved_estimate",
+      "detail": "value=48432 on a nav-heavy page"
+    },
+    {
+      "status": "WARN",
+      "test": "code fidelity",
+      "detail": "found spaced-out tags such as '< div >'"
+    }
+  ]
+}
