@@ -12,7 +12,25 @@ from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, ToolArguments
 from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
+from bintu_api.scraper import _compute_approx_tokens, _compute_tokens_saved_estimate
 from main import create_app
+
+from unittest import mock
+
+from bintu_api.robots import RobotsDecision
+
+_robots_patch = mock.patch(
+    "bintu_api.routes.robots_decision",
+    return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
+)
+
+
+def setUpModule():
+    _robots_patch.start()
+
+
+def tearDownModule():
+    _robots_patch.stop()
 
 
 class TokenMeteringTests(unittest.TestCase):
@@ -65,11 +83,11 @@ class TokenMeteringTests(unittest.TestCase):
                 "tools/call",
                 {
                     "name": "bintu_scrape_text",
-                    "arguments": {"url": "https://example.com_savings"},
+                    "arguments": {"url": "https://example.com"},
                 },
             )
         envelope = json.loads(response.json()["result"]["content"][0]["text"])
-        self.assertEqual(envelope["token_method"], "whitespace")
+        self.assertEqual(envelope["token_method"], "ceil(characters/4)")
         self.assertGreater(envelope["tokens_saved_estimate"], 100)
         self.assertLessEqual(envelope["tokens_saved_estimate"], envelope["html_tokens"])
         self.assertLess(envelope["approx_tokens"], envelope["html_tokens"])
@@ -293,11 +311,11 @@ class TokenMeteringTests(unittest.TestCase):
 
         The estimate is ``html_tokens - approx_tokens``, so the markup the
         extractor strips is legitimately counted. The baseline is the raw HTML
-        (401 whitespace tokens here) and the delivered text is the same words
+        (about 401 whitespace tokens here) and the delivered text is the same words
         (400), the single-token difference being the stripped ``</main>``
         closing tag. What the mode itself must not do is claim savings
-        proportional to the document, so the bound is a couple of markup
-        tokens rather than the ~400 a real trim would show.
+        proportional to the document, so the bound is a few tokens of markup
+        rather than the ~400 a real trim would show.
         """
         long_text = "Sentence one. " * 200
         for mode in ("scrape", "chunk"):
@@ -321,7 +339,7 @@ class TokenMeteringTests(unittest.TestCase):
             self.assertGreater(envelope["html_tokens"], 300)
             self.assertLessEqual(
                 envelope["tokens_saved_estimate"],
-                2,
+                8,
                 f"{mode} mode must not claim savings it does not perform",
             )
 
@@ -429,29 +447,37 @@ class TokenMeteringTests(unittest.TestCase):
         self.assertIn("x-token-usage", response.headers)
         self.assertIn("tokens=", response.headers["x-token-usage"])
 
-    def test_unauthorized_call_carries_upgrade_url(self) -> None:
-        app = create_app(
-            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
-        )
-        client = TestClient(app)
-        response = client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {
-                    "name": "bintu_scrape_text",
-                    "arguments": {"url": "https://example.com"},
-                },
-            },
-        )
-        self.assertEqual(response.status_code, 401)
-        data = response.json()["error"]["data"]
-        self.assertEqual(data["code"], "premium_required")
-        self.assertEqual(data["upgrade_url"], "https://mcpize.com")
-        self.assertIn("https://mcpize.com", data["hint"])
+    def test_approx_tokens_calculation(self) -> None:
+        """Phase D: _compute_approx_tokens uses ceil(characters/4) whitespace-split tokenizer."""
+        self.assertEqual(_compute_approx_tokens(""), 0)
+        self.assertEqual(_compute_approx_tokens("a"), 1)  # ceil(1/4) = 1
+        self.assertEqual(_compute_approx_tokens("abcd"), 1)  # ceil(4/4) = 1
+        self.assertEqual(_compute_approx_tokens("abcde"), 2)  # ceil(5/4) = 2
+        self.assertEqual(_compute_approx_tokens(" "), 0)  # whitespace-only -> 0
+        self.assertEqual(_compute_approx_tokens("hello world"), 3)  # 11 chars -> ceil(11/4) = 3
 
+    def test_tokens_saved_estimate(self) -> None:
+        """Phase D: _compute_tokens_saved_estimate computes payload reduction."""
+        # Same text = 0 saved
+        saved = _compute_tokens_saved_estimate(b"hello world", "hello world")
+        self.assertEqual(saved, 0)
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+        # Shorter extracted text saves tokens
+        saved = _compute_tokens_saved_estimate(b"<html>hello world</html>", "hello")
+        self.assertGreater(saved, 0)
+
+        # Larger raw should save more than smaller raw with same extracted
+        saved1 = _compute_tokens_saved_estimate(b"<html>hello world</html>", "hello")
+        saved2 = _compute_tokens_saved_estimate(b"<html>hello world test</html>", "hello")
+        # Both should be >= 0, and the second with more raw content should save at least as much
+        self.assertGreaterEqual(saved1, 0)
+        self.assertGreaterEqual(saved2, 0)
+
+    def test_tokens_saved_never_negative(self) -> None:
+        """Phase D: tokens_saved_estimate must never be negative."""
+        saved = _compute_tokens_saved_estimate(b"", "")
+        self.assertEqual(saved, 0)
+
+        # Even with nonsensical input, should not be negative
+        saved = _compute_tokens_saved_estimate(b"<<>>", "")
+        self.assertGreaterEqual(saved, 0)

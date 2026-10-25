@@ -78,5 +78,10 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertFalse(self._from_env({"REQUIRE_AUTH": "false"}).require_auth)
 
 
+def test_service_version_is_1_1_0(self) -> None:
+    """Phase D: service_version must be 1.1.0 after version bump."""
+    settings = self._from_env({})
+    self.assertEqual(settings.service_version, "1.1.0")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

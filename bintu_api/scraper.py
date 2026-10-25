@@ -5,6 +5,7 @@ import codecs
 import http.client
 import ipaddress
 import logging
+import math
 import re
 import socket
 import ssl
@@ -22,7 +23,26 @@ from bintu_api.settings import Settings
 logger = logging.getLogger(__name__)
 READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
-USER_AGENT = "BintuAPI/1.0 (+https://rapidapi.com; public web text extraction)"
+
+
+def get_user_agent(settings) -> str:
+    """Build the honest, identifiable User-Agent: BintuBot/<version> (+<info url>; <contact>).
+
+    The parenthesised parts appear only for settings that are actually configured.
+    Never imitates a browser.
+    """
+    version = (getattr(settings, "service_version", "") or "").strip() or "0"
+    details = []
+    info_url = (getattr(settings, "bot_info_url", "") or "").strip()
+    contact = (getattr(settings, "contact_email", "") or "").strip()
+    if info_url:
+        details.append(f"+{info_url}")
+    if contact:
+        details.append(contact)
+    suffix = f" ({'; '.join(details)})" if details else ""
+    return f"BintuBot/{version}{suffix}"
+
+
 BLOCK_TAGS = {
     "address",
     "article",
@@ -72,6 +92,19 @@ class FetchedHTML:
 class ExtractedText:
     text: str
     truncated: bool
+
+
+def _compute_approx_tokens(text: str) -> int:
+    """Approximate token count: ceil(characters / 4). An estimate, not a tokenizer count."""
+    if not text or not text.strip():
+        return 0
+    return math.ceil(len(text) / 4)
+
+
+def _compute_tokens_saved_estimate(raw_html_bytes: bytes, extracted_text: str) -> int:
+    """Approximate tokens of the fetched HTML minus approximate tokens of the returned text, floored at 0."""
+    html_text = raw_html_bytes.decode("utf-8", errors="replace")
+    return max(0, _compute_approx_tokens(html_text) - _compute_approx_tokens(extracted_text))
 
 
 class TargetURLRejected(ValueError):
@@ -173,8 +206,14 @@ def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, s
             port = parsed.port
         # Only 80/443 (plus an operator-configured extra list) may be fetched:
         # arbitrary ports turn the service into a public host/port probe (S8).
-        if port not in (settings.allowed_port_set() if settings is not None else {80, 443}):
+        if port not in (getattr(settings, "allowed_port_set", lambda: {80, 443})() if settings is not None else {80, 443}):
             raise TargetURLRejected("Only ports 80 and 443 are allowed by default")
+        # C5: Reject NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embedding private/metadata IPv4
+        if _is_nat64_or_6to4_address(host):
+            raise TargetURLRejected(
+                f"URL host {host} uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
+                f"with private/metadata IPv4, which is not allowed"
+            )
     except (UnicodeError, ValueError) as error:
         if isinstance(error, TargetURLRejected):
             raise
@@ -205,6 +244,41 @@ def fetch_html(url: str, settings: Settings) -> bytes:
     return fetch_html_document(url, settings).body
 
 
+def _is_multicast_address(host: str) -> bool:
+    """True when host is a literal multicast address (IPv4 224.0.0.0/4 or IPv6 ff00::/8)."""
+    try:
+        return ipaddress.ip_address(host).is_multicast
+    except ValueError:
+        return False
+
+
+def _embedded_ipv4(address: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """IPv4 address embedded in an IPv4-mapped, NAT64 (64:ff9b::/96) or 6to4 (2002::/16) IPv6 address."""
+    mapped = address.ipv4_mapped
+    if mapped is not None:
+        return mapped
+    packed = address.packed
+    if packed[:12] == bytes.fromhex("0064ff9b0000000000000000"):  # 64:ff9b::/96
+        return ipaddress.IPv4Address(packed[12:16])
+    if packed[:2] == b"\x20\x02":  # 6to4: 2002:<IPv4 address>::/48
+        return ipaddress.IPv4Address(packed[2:6])
+    return None
+
+
+def _is_nat64_or_6to4_address(host: str) -> bool:
+    """True when host is an IPv6 literal that embeds a non-public IPv4 address."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    if address.version != 6:
+        return False
+    embedded = _embedded_ipv4(address)
+    if embedded is None:
+        return False
+    return (not embedded.is_global) or embedded.is_multicast
+
+
 def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     """Fetch a public HTML page, following redirects and re-validating every hop.
 
@@ -216,6 +290,28 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     current_scheme = urlsplit(url).scheme
     for _ in range(settings.max_redirects + 1):
         parsed, host, port, path = _parse_target(current_url, settings)
+
+        # S8: Runtime port validation in fetch loop (not just parse time)
+        if port not in settings.allowed_port_set():
+            raise TargetURLRejected(
+                f"Port {port} is not in the allowed port list "
+                f"(default: 80/443, extra: {settings.allowed_ports or 'none'})"
+            )
+
+        # S7: Multicast address block at resolution
+        if _is_multicast_address(host):
+            raise TargetURLRejected(
+                f"Multicast address {host} is not allowed (IPv4: 224.0.0.0/4, "
+                f"IPv6: ff00::/8)"
+            )
+
+        # C5: Reject NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embedding private/metadata IPv4
+        if _is_nat64_or_6to4_address(host):
+            raise TargetURLRejected(
+                f"URL host {host} uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
+                f"with private/metadata IPv4, which is not allowed"
+            )
+
         if parsed.scheme != current_scheme:
             if current_scheme == "https" and parsed.scheme == "http":
                 # An https page must not hand us down to cleartext mid-chain:
@@ -233,7 +329,7 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
                     "Accept-Encoding": "identity",
                     "Connection": "close",
                     "Host": _host_header(host, port, parsed.scheme),
-                    "User-Agent": USER_AGENT,
+                    "User-Agent": get_user_agent(settings),
                 },
             )
             response = connection.getresponse()

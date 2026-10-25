@@ -1,10 +1,12 @@
 """Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
+
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients — Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
 any other Streamable HTTP client — without adding the ``mcp`` SDK dependency.
 Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 ``2025-03-26`` during negotiation):
+
 
 - POST /mcp accepts one JSON-RPC message per request and answers with a
   single ``application/json`` response (the spec allows skipping SSE when
@@ -34,6 +36,7 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
   (unknown versions get 400); a missing header falls back to ``2025-03-26``
   per the spec. ``Origin`` is validated against DNS rebinding (403).
 
+
 Error mapping follows the spec: protocol failures (unknown method/tool,
 invalid arguments, malformed payloads) use JSON-RPC error codes, while tool
 execution failures (unsafe URL, rate limit, upstream errors, render_js
@@ -41,28 +44,36 @@ disabled) are returned in-band with ``isError: true`` and a readable text so
 the model can self-correct — e.g. retrying with ``render_js=false``.
 """
 
+
 import asyncio
 import json
 import logging
 from typing import Any
 
+
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+
+from bintu_api import routes
 from bintu_api.auth import (
     mcp_rate_limit_identity,
     mcp_upgrade_url,
     verify_mcp_execution_access,
 )
-from bintu_api.context import extract_context, normalize_mode
+from bintu_api.context import _decode_source_text, extract_context, normalize_mode
 from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_token_usage
 from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA, TOOL_TITLE, ToolArguments
+from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
+
 
 logger = logging.getLogger("bintu_api.mcp_streamable")
 
+
 router = APIRouter(tags=["MCP"])
+
 
 SERVER_NAME = "bintu"
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26")
@@ -91,6 +102,7 @@ SERVER_INSTRUCTIONS = (
     "public; tools/call requires X-API-Key or Authorization: Bearer."
 )
 
+
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
@@ -101,8 +113,10 @@ INVALID_PARAMS = -32602
 AUTH_REQUIRED = -32001
 
 
+
 def _rpc_result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
 
 
 def _rpc_error(
@@ -114,12 +128,15 @@ def _rpc_error(
     return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
 
+
 def _tool_error(message: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": message}], "isError": True}
 
 
+
 def _protocol_version_header(request: Request) -> str:
     """Return the client's declared protocol version for Streamable HTTP.
+
 
     The spec requires ``MCP-Protocol-Version`` on every request after
     ``initialize``; when absent we cannot know the version, so we assume the
@@ -127,6 +144,7 @@ def _protocol_version_header(request: Request) -> str:
     """
     declared = request.headers.get("mcp-protocol-version", "").strip()
     return declared or FALLBACK_PROTOCOL_VERSION
+
 
 
 def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONResponse:
@@ -143,8 +161,10 @@ def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONRespo
     )
 
 
+
 def _accept_header_serves_json(request: Request) -> bool:
     """True unless the client explicitly refuses application/json responses.
+
 
     The transport requires clients to send ``Accept: application/json,
     text/event-stream``. This server answers every POST with a single JSON
@@ -162,6 +182,7 @@ def _accept_header_serves_json(request: Request) -> bool:
     return any(part in {"application/json", "*/*", "application/*"} for part in offered)
 
 
+
 def _reject_unsupported_accept(request_id: Any) -> JSONResponse:
     return JSONResponse(
         status_code=406,
@@ -172,6 +193,7 @@ def _reject_unsupported_accept(request_id: Any) -> JSONResponse:
             "responses; the Accept header must include application/json.",
         ),
     )
+
 
 
 def _reject_forbidden_origin() -> JSONResponse:
@@ -186,8 +208,10 @@ def _reject_forbidden_origin() -> JSONResponse:
     )
 
 
+
 async def _empty_sse_stream(request: Request) -> Response:
     """Shared handler for GET /mcp and its /sse aliases (stateless: empty stream).
+
 
     GET is the tokenless liveness surface: gateway health-checkers and
     marketplace audits probe it without credentials, and no extraction ever
@@ -203,8 +227,10 @@ async def _empty_sse_stream(request: Request) -> Response:
     )
 
 
+
 def _origin_is_allowed(request: Request) -> bool:
     """Validate the Origin header against DNS-rebinding attacks.
+
 
     Absent Origin (non-browser clients such as Claude Code or curl) is
     allowed. When present, the origin must match the request's own scheme +
@@ -218,6 +244,7 @@ def _origin_is_allowed(request: Request) -> bool:
         return False
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip().lower()
     return origin.strip().lower() == f"{scheme}://{host}"
+
 
 
 def _http_detail_text(detail: Any) -> str:
@@ -236,8 +263,10 @@ def _http_detail_text(detail: Any) -> str:
     return str(detail)
 
 
+
 def _metering_identity(request: Request, settings: Settings) -> str:
     """Identity for token metering: RapidAPI subscriber, MCP key, or IP.
+
 
     Reuses the same bucket as rate limiting: a keyed caller is metered under
     its key fingerprint (without the raw secret), not under the gateway's IP.
@@ -248,6 +277,7 @@ def _metering_identity(request: Request, settings: Settings) -> str:
     if identity.startswith("mcp:"):
         return identity
     return f"mcp:{identity}"
+
 
 
 def _initialize_result(settings: Settings, request_id: Any, params: dict[str, Any]) -> dict[str, Any]:
@@ -268,6 +298,7 @@ def _initialize_result(settings: Settings, request_id: Any, params: dict[str, An
     )
 
 
+
 def _tools_list_result(request_id: Any) -> dict[str, Any]:
     return _rpc_result(
         request_id,
@@ -284,6 +315,7 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
             ]
         },
     )
+
 
 
 async def _tools_call_result(
@@ -316,6 +348,7 @@ async def _tools_call_result(
         location = ".".join(str(part) for part in first.get("loc", ())) or "arguments"
         return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: {location}: {first['msg']}")
 
+
     if arguments.render_js and not settings.render_js_enabled:
         return _rpc_result(
             request_id,
@@ -324,6 +357,40 @@ async def _tools_call_result(
                 "Hint: Retry with render_js=false for plain HTML extraction."
             ),
         )
+
+
+    try:
+        # MCP tool calls use the same SSRF-guarded page fetch and extractor as
+        # the REST endpoint. Call through the routes module so tests can patch
+        # the shared network boundary at bintu_api.routes.fetch_html_document.
+        document = await asyncio.to_thread(
+            routes.fetch_html_document, arguments.url, settings
+        )
+    except TargetURLRejected as error:
+        logger.info("mcp_tool_error detail=%r", str(error))
+        return _rpc_result(
+            request_id,
+            _tool_error(
+                "invalid_or_unsafe_url: "
+                + str(error)
+                + ". Hint: URL must start with http:// or https:// and be publicly accessible."
+            ),
+        )
+    except HTTPException as error:
+        logger.info("mcp_tool_error detail=%r", error.detail)
+        return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
+
+
+    extracted = routes.extract_text_result(
+        document.body,
+        settings.max_text_characters,
+        include_nav=False,
+        include_header=False,
+        include_footer=False,
+        from_encoding=document.charset,
+        base_url=document.final_url or arguments.url,
+    )
+
 
     try:
         context = await extract_context(
@@ -337,6 +404,12 @@ async def _tools_call_result(
             include_header=False,
             include_footer=False,
             identity=mcp_rate_limit_identity(request, settings),
+            raw_text=extracted.text,
+            content_truncated=extracted.truncated,
+            html_source_text=_decode_source_text(document),
+            cache_hit=False,
+            cache_layer="none",
+            document=document,
             settings=settings,
         )
     except HTTPException as error:
@@ -346,11 +419,38 @@ async def _tools_call_result(
         logger.info("mcp_tool_error value_error=%r", error)
         return _rpc_error(request_id, INVALID_PARAMS, f"Invalid arguments: {error}")
 
+
     # Unified Token Tax envelope in content[0].text across ALL modes for
     # predictable context budgets (no tier caps in code; dashboards own quota).
     # `tokens` is a deprecated alias of `approx_tokens` (kept for one release);
     # `token_method` names the counter; `html_tokens` is the fetched-document
     # baseline for `tokens_saved_estimate`; `limiting_factor` says which cap bound.
+    # provenance is added additively (Phase D): same shape as REST response.
+    provenance_dict: dict[str, object] = {}
+    if context.request_id is not None:
+        provenance_dict["request_id"] = context.request_id
+    if context.fetched_at is not None:
+        provenance_dict["fetched_at"] = context.fetched_at
+    if context.requested_url is not None:
+        provenance_dict["requested_url"] = context.requested_url
+    if context.final_url is not None:
+        provenance_dict["final_url"] = context.final_url
+    if context.content_type is not None:
+        provenance_dict["content_type"] = context.content_type
+    if context.bytes_fetched is not None:
+        provenance_dict["bytes_fetched"] = context.bytes_fetched
+    if context.content_sha256 is not None:
+        provenance_dict["content_sha256"] = context.content_sha256
+    if context.cache is not None:
+        provenance_dict["cache"] = {
+            "hit": context.cache.hit,
+            "layer": context.cache.layer,
+            "age_seconds": context.cache.age_seconds,
+        }
+    if context.extractor_version is not None:
+        provenance_dict["extractor_version"] = context.extractor_version
+
+
     envelope = {
         "mode": context.mode,
         "tokens": context.tokens,
@@ -360,12 +460,15 @@ async def _tools_call_result(
         "limiting_factor": context.limiting_factor,
         "chunk_count": context.chunk_count,
         "cache_hit": context.cache_hit,
+        "cache_layer": context.cache_layer,
         "source_url": context.source_url,
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "truncated": context.truncated,
         "split": context.split,
         "chunks": context.chunks,
+        # Add provenance additively (Phase D)
+        **provenance_dict,
     }
     # Fire-and-forget token metering (2s, never blocks extraction): counts
     # even cache hits so dashboards can bill per token slice.
@@ -391,13 +494,16 @@ async def _tools_call_result(
     )
 
 
+
 @router.post("/mcp", include_in_schema=False)
 async def mcp_messages(request: Request):
     settings: Settings = request.app.state.settings
 
+
     if not _origin_is_allowed(request):
         logger.warning("mcp_forbidden_origin origin=%r", request.headers.get("origin", ""))
         return _reject_forbidden_origin()
+
 
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type != "application/json":
@@ -411,6 +517,7 @@ async def mcp_messages(request: Request):
                 "Invalid Request: Content-Type must be application/json.",
             ),
         )
+
 
     if not _accept_header_serves_json(request):
         # The transport requires clients to accept application/json; this
@@ -426,6 +533,7 @@ async def mcp_messages(request: Request):
             ),
         )
 
+
     try:
         payload = json.loads(await request.body())
     except json.JSONDecodeError:
@@ -435,6 +543,7 @@ async def mcp_messages(request: Request):
             content=_rpc_error(None, PARSE_ERROR, "Parse error"),
         )
 
+
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0" or not isinstance(payload.get("method"), str):
         request_id = payload.get("id") if isinstance(payload, dict) else None
         return JSONResponse(
@@ -442,12 +551,14 @@ async def mcp_messages(request: Request):
             content=_rpc_error(request_id, INVALID_REQUEST, "Invalid Request"),
         )
 
+
     request_id = payload.get("id")
     if request_id is None:
         # Notification (e.g. notifications/initialized): 202, no body.
         # Authenticated below via tools/call path; capability probes without an
         # id carry no billable work.
         return Response(status_code=202)
+
 
     method = payload["method"]
     if method == "initialize":
@@ -465,6 +576,7 @@ async def mcp_messages(request: Request):
                 content=_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"),
             )
         return JSONResponse(_initialize_result(settings, request_id, params))
+
 
     if method not in PUBLIC_MCP_METHODS:
         # Billable work (tools/call) and any other non-discovery method:
@@ -493,6 +605,7 @@ async def mcp_messages(request: Request):
                 ),
             )
 
+
     if not _accept_header_serves_json(request):
         # See the transport-level check above; initialize is public so the
         # request id is known here and belongs in the envelope.
@@ -502,10 +615,12 @@ async def mcp_messages(request: Request):
         logger.info("mcp_unsupported_protocol_version version=%r", declared_version)
         return _reject_unknown_protocol_version(request_id, declared_version)
 
+
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         # MCP defines object params only; arrays (by-position) are not used.
         return JSONResponse(_rpc_error(request_id, INVALID_PARAMS, "Invalid params: expected an object"))
+
 
     if method == "ping":
         return JSONResponse(_rpc_result(request_id, {}))
@@ -537,11 +652,13 @@ async def mcp_messages(request: Request):
     return JSONResponse(_rpc_error(request_id, METHOD_NOT_FOUND, f"Method not found: {method}"))
 
 
+
 @router.get("/mcp", include_in_schema=False)
 async def mcp_listen(request: Request) -> Response:
     # Stateless server: no streams to resume, so answer the mandatory GET with
     # an immediately-closing empty SSE stream instead of 405.
     return await _empty_sse_stream(request)
+
 
 
 @router.get("/sse", include_in_schema=False)
@@ -552,11 +669,13 @@ async def mcp_listen_alias(request: Request) -> Response:
     return await _empty_sse_stream(request)
 
 
+
 @router.get("/mcp/sse", include_in_schema=False)
 async def mcp_listen_nested_alias(request: Request) -> Response:
     # Compatibility alias: some gateways append /sse to the configured Base URL
     # (e.g. Base URL .../mcp -> GET .../mcp/sse). Same empty stream as GET /mcp.
     return await _empty_sse_stream(request)
+
 
 
 @router.api_route("/mcp", methods=["DELETE", "PUT", "PATCH"], include_in_schema=False)

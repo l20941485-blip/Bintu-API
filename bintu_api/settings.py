@@ -6,6 +6,7 @@ from typing import ClassVar
 logger = logging.getLogger("bintu_api.settings")
 
 DEFAULT_CACHE_TTL_SECONDS = 300
+ROBOTS_MODES = ("enforce", "warn", "off")
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -45,6 +46,17 @@ def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int
     return value
 
 
+def _robots_mode_env() -> str:
+    """ROBOTS_MODE: enforce (default) | warn | off. Unknown values fall back to enforce."""
+    raw = os.getenv("ROBOTS_MODE", "").strip().lower()
+    if not raw:
+        return "enforce"
+    if raw not in ROBOTS_MODES:
+        logger.warning("invalid_env_value name=ROBOTS_MODE value=%r using_default=enforce", raw)
+        return "enforce"
+    return raw
+
+
 @dataclass(frozen=True)
 class Settings:
     api_key: str
@@ -81,7 +93,16 @@ class Settings:
     # render_js_enabled, keeping tests that patch os.environ deterministic.
     require_auth: bool = False
     service_title: str = "Bintu Data Extraction API"
-    service_version: str = "1.0.1"
+    service_version: str = "1.1.0"
+    # BintuBot identity (RFC 9309 / honest User-Agent). Leave empty until a real
+    # info page and contact exist; the User-Agent then simply omits them.
+    # Set BOT_INFO_URL and CONTACT_EMAIL in the environment.
+    bot_info_url: str = ""
+    contact_email: str = ""
+    # robots.txt handling: enforce (default) blocks disallowed fetches, warn only
+    # reports, off skips the check. Cache TTL is in seconds (0..86400).
+    robots_mode: str = "enforce"
+    robots_cache_ttl_seconds: int = 3600
     # Comma-separated extra browser origins allowed to send credentialed
     # cross-origin requests. The MCPize gateway origin below is always allowed;
     # this setting exists so operators can add their own dashboards without a
@@ -129,7 +150,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        return cls(
+        settings = cls(
             api_key=os.getenv("API_KEY", "").strip(),
             rapidapi_proxy_secret=os.getenv("RAPIDAPI_PROXY_SECRET", "").strip(),
             mcp_api_key=os.getenv("MCP_API_KEY", "").strip(),
@@ -144,6 +165,24 @@ class Settings:
             or "https://mcpize.com",
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
             require_auth=_bool_env("REQUIRE_AUTH", default=False),
+            bot_info_url=os.getenv("BOT_INFO_URL", "").strip(),
+            contact_email=os.getenv("CONTACT_EMAIL", "").strip(),
+            robots_mode=_robots_mode_env(),
+            robots_cache_ttl_seconds=_bounded_int_env(
+                "ROBOTS_CACHE_TTL_SECONDS", 3600, minimum=0, maximum=86400
+            ),
             cors_allowed_origins=os.getenv("CORS_ALLOWED_ORIGINS", "").strip(),
             allowed_ports=os.getenv("ALLOWED_PORTS", "").strip(),
         )
+        if settings.render_js_enabled:
+            logger.warning(
+                "RENDER_JS_ENABLED is true: JavaScript rendering boots Chromium (2-4s startup, "
+                "extra RAM) and its DNS validation is not yet pinned to the connection. "
+                "Keep it off on free-tier infrastructure."
+            )
+        if not settings.bot_info_url or not settings.contact_email:
+            logger.warning(
+                "BOT_INFO_URL or CONTACT_EMAIL is empty: the BintuBot User-Agent will not "
+                "identify an info page or contact. Set both in the environment."
+            )
+        return settings
