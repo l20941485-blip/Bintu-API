@@ -6,10 +6,12 @@ import uuid
 
 
 
+
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
 
 
 
@@ -62,6 +64,14 @@ TOKEN_METERING_FAILURES = Counter(
     "bintu_token_metering_failures_total",
     "Failures while recording token usage.",
 )
+EXTRACTION_FAILURES = Counter(
+    "bintu_extraction_failures_total",
+    "Failed text extractions.",
+    ("mode", "failure_code", "error_type"),
+)
+
+
+
 
 
 logger = logging.getLogger("bintu_api.request")
@@ -71,14 +81,17 @@ _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 
+
 def url_hash(url: str) -> str:
     """Return a stable, privacy-safe hash for a target URL.
+
 
     Raw URLs are never logged: they may contain sensitive paths, query
     parameters, or identifiers. A truncated SHA-256 hash is enough to
     correlate repeated extraction attempts without exposing the target.
     """
     return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+
 
 
 
@@ -100,9 +113,11 @@ def log_extraction_completed(
     layer = cache_layer if cache_hit else "none"
     outcome = "truncated" if truncated else "complete"
 
+
     EXTRACTIONS.labels(mode, layer, outcome).inc()
     EXTRACTED_TOKENS.labels(mode, layer).inc(max(0, approx_tokens))
     TOKENS_SAVED.labels(mode, layer).inc(max(0, tokens_saved_estimate))
+
 
     EXTRACTION_LOGGER.info(
         "extraction_completed request_id=%s url_hash=%s mode=%s "
@@ -123,6 +138,42 @@ def log_extraction_completed(
 
 
 
+
+def log_extraction_failed(
+    *,
+    request_id: str | None,
+    url: str,
+    mode: str,
+    failure_code: str,
+    error_type: str,
+    duration_ms: float | None = None,
+    status_code: int | None = None,
+) -> None:
+    """Emit a structured, privacy-safe extraction-failure event.
+
+
+    Raw URLs and extracted content are never logged. The target is identified
+    only by its stable truncated SHA-256 hash.
+    """
+    EXTRACTION_FAILURES.labels(mode, failure_code, error_type).inc()
+
+
+    EXTRACTION_LOGGER.warning(
+        "extraction_failed request_id=%s url_hash=%s mode=%s "
+        "failure_code=%s error_type=%s duration_ms=%s status_code=%s",
+        request_id or "unknown",
+        url_hash(url),
+        mode,
+        failure_code,
+        error_type,
+        f"{duration_ms:.2f}" if duration_ms is not None else "none",
+        status_code if status_code is not None else "none",
+    )
+
+
+
+
+
 def log_cache_event(
     *,
     event: str,
@@ -132,12 +183,14 @@ def log_cache_event(
 ) -> None:
     """Emit a privacy-safe cache lifecycle event.
 
+
     Valid events: cache_hit, cache_miss, persistent_cache_write.
     """
     if event == "cache_hit":
         CACHE_HITS.labels(layer).inc()
     elif event == "cache_miss":
         CACHE_MISSES.inc()
+
 
     EXTRACTION_LOGGER.info(
         "%s request_id=%s url_hash=%s cache_layer=%s",
@@ -146,6 +199,7 @@ def log_cache_event(
         url_hash(url),
         layer,
     )
+
 
 
 
@@ -160,6 +214,7 @@ def log_upstream_error(
     """Emit a privacy-safe upstream failure event."""
     UPSTREAM_ERRORS.labels(error_type).inc()
 
+
     EXTRACTION_LOGGER.warning(
         "upstream_error request_id=%s url_hash=%s error_type=%s status_code=%s",
         request_id or "unknown",
@@ -167,6 +222,7 @@ def log_upstream_error(
         error_type,
         status_code if status_code is not None else "none",
     )
+
 
 
 
@@ -182,6 +238,7 @@ def log_token_metering_failure(error: Exception) -> None:
 
 
 
+
 class RequestObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         supplied_id = request.headers.get("X-Request-ID", "")
@@ -190,6 +247,7 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
         start_time = time.perf_counter()
         status_code = 500
         response: Response | None = None
+
 
 
 
@@ -229,8 +287,10 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
 
 
 
+
         response.headers["X-Request-ID"] = request_id
         return response
+
 
 
 
