@@ -2,7 +2,9 @@
 
 
 
+
 All notable changes to the Bintu Data Extraction API will be documented here.
+
 
 
 
@@ -10,7 +12,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ### Added
+
 
 
 
@@ -19,11 +23,16 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 - Privacy-safe `extraction_failed` telemetry for MCP extraction failures.
 - Failure metrics grouped by extraction mode, canonical failure code, and error type.
 - Failure duration and upstream status telemetry without exposing target URLs or extracted content.
+- Privacy-safe cache lookup telemetry with hit/miss outcome, cache layer, and persistent-cache age.
+- Aggregate cache token-savings metrics by extraction mode and cache layer.
+- Regression tests ensuring extraction and cache telemetry use hashed URLs and never expose raw target URLs or extracted content.
 - Token-metering failure telemetry that records the error type without exposing API keys, target URLs, or extracted content.
 
 
 
+
 ### Changed
+
 
 
 
@@ -32,11 +41,14 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ## [1.1.0] — 2026-10-22
 
 
 
+
 ### Response-shape changes
+
 
 
 
@@ -58,7 +70,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
   - `removed`: RemovedStats instructional cleaning metrics (NOT security control validation)
 
 
+
 ### Phase E: Compliance Policy Ingestion
+
 
 
 
@@ -69,7 +83,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ### Backwards-incompatible / deprecations
+
 
 
 
@@ -77,7 +93,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ### Tests
+
 
 
 
@@ -92,7 +110,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ### Security / SSRF (Phase 1a)
+
 
 
 
@@ -103,7 +123,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ### Code health
+
 
 
 
@@ -112,7 +134,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ### Test-suite corrections
+
 
 
 
@@ -121,7 +145,9 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+
 ## [1.0.0] — 2026-10-15
+
 
 
 
