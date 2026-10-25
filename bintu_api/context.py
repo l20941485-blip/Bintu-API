@@ -1,11 +1,13 @@
 """Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
 
+
 Modes:
-  scrape    — plain readable text (existing behavior), with token count + provenance
-  chunk     — text split into max_tokens-sized chunks, each with token count,
-              ready to drop straight into a vector database
-  summarize — condensed text truncated to max_tokens (sentence-aware)
+  scrape    — plain readable text (existing behavior), with token count + provenance
+  chunk     — text split into max_tokens-sized chunks, each with token count,
+              ready to drop straight into a vector database
+  summarize — condensed text truncated to max_tokens (sentence-aware)
+
 
 
 Designed for AI-agent context engineering: instead of returning a raw blob of
@@ -14,7 +16,9 @@ agents and callers can budget LLM context precisely.
 """
 
 
+
 from __future__ import annotations
+
 
 
 import asyncio
@@ -26,7 +30,9 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 
+
 from fastapi import Request
+
 
 
 from bintu_api.auth import rate_limit_identity
@@ -35,13 +41,17 @@ from bintu_api.scraper import FetchedHTML, extract_text_result
 from bintu_api.settings import Settings
 
 
+
 from bintu_api.schemas import CacheInfo
+
 
 
 logger = logging.getLogger("bintu_api.context")
 
 
+
 ContextMode = Literal["scrape", "chunk", "summarize"]
+
 
 
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
@@ -51,8 +61,10 @@ MODE_ALIASES = {"chunked": "chunk"}
 
 
 
+
 def normalize_mode(value: Any) -> str:
     """Normalize a mode value to its canonical form (case/whitespace tolerant).
+
 
     Raises ValueError for unknown modes so callers can reject them with
     HTTP 400 (REST) or JSON-RPC -32602 (MCP) instead of a 500.
@@ -66,14 +78,17 @@ def normalize_mode(value: Any) -> str:
     return canonical
 
 
+
 # Approximate token method: ceil(characters/4) - dependency-free token counting
 TOKEN_METHOD = "ceil(characters/4)"
+
 
 
 def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
     from bintu_api.scraper import _compute_approx_tokens
     return _compute_approx_tokens(text)
+
 
 
 @dataclass(frozen=True)
@@ -118,8 +133,24 @@ class ContextResult:
 
 
 
+
+@dataclass(frozen=True)
+class CacheEconomics:
+    """Extraction economics preserved across persistent-cache hits."""
+
+
+    html_tokens: int
+    tokens_saved_estimate: int
+    limiting_factor: str
+    truncated: bool
+    extracted_at: str
+
+
+
+
 def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
+
 
 
     The baseline deliberately counts the raw document — markup included — so
@@ -135,8 +166,10 @@ def _decode_source_text(document: FetchedHTML) -> str:
 
 
 
+
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     """Split ``text`` into chunks of at most ``max_tokens`` tokens.
+
 
 
     Preserves paragraph and sentence boundaries where possible using a
@@ -149,7 +182,9 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
         return [text]
 
 
+
     separators = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
+
 
 
     def _split(text: str, sep_index: int) -> list[str]:
@@ -161,10 +196,12 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
             return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
+
         sep = separators[sep_index]
         parts = text.split(sep) if sep else list(text)
         chunks: list[str] = []
         current = ""
+
 
 
         for part in parts:
@@ -179,12 +216,15 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
                 current = ""
 
 
+
         if current:
             chunks.append(current)
         return chunks
 
 
+
     return _split(text, 0)
+
 
 
 
@@ -206,9 +246,10 @@ async def extract_context(
     cache_layer: str = "none",
     document: FetchedHTML | None = None,
     settings: Settings | None = None,
+    cache_economics: CacheEconomics | None = None,
 ) -> ContextResult:
-    
     """Fetch, extract, and transform a page into a context-ready document.
+
 
 
     Reuses the existing fetch → extract → cache pipeline from
@@ -221,6 +262,7 @@ async def extract_context(
         identity = rate_limit_identity(request, settings)
 
 
+
     # Canonicalize pitch-name aliases up front so downstream logic always
     # operates on canonical values. The caller supplies the extraction inputs;
     # this function must not overwrite them.
@@ -228,8 +270,25 @@ async def extract_context(
     if mode not in ("scrape", "chunk", "summarize"):
         raise ValueError(f"Unknown context mode: {mode}")
 
+
     raw_text = raw_text or ""
     html_source_text = html_source_text or ""
+
+
+
+    # Preserve the original extraction economics when serving from a
+    # persistent cache. Without this, a cache hit would incorrectly report
+    # html_tokens=0 and tokens_saved_estimate=0 because the original HTML
+    # is no longer available.
+    if cache_hit and cache_economics is not None:
+        html_tokens = cache_economics.html_tokens
+        tokens_saved_estimate: int | None = cache_economics.tokens_saved_estimate
+        extracted_at = cache_economics.extracted_at
+    else:
+        html_tokens = count_tokens(html_source_text)
+        tokens_saved_estimate = None
+        extracted_at = datetime.now(timezone.utc).isoformat()
+
 
 
     # --- Mode transformation -----------------------------------------------
@@ -239,7 +298,6 @@ async def extract_context(
     # difference, so it includes nav/ads/footer stripping, the character cap,
     # and any mode-level trimming (never negative). Both figures use the same
     # dependency-free counter, named in `token_method`.
-    html_tokens = count_tokens(html_source_text)
     raw_tokens = count_tokens(raw_text)
     # Which cap bound the result? The character cap binds when the upstream
     # extractor cut the document; otherwise the caller's token budget binds
@@ -314,7 +372,10 @@ async def extract_context(
         raise ValueError(f"Unknown context mode: {mode}")
 
 
-    tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+
+    if tokens_saved_estimate is None:
+        tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+
 
 
     return ContextResult(
@@ -323,16 +384,24 @@ async def extract_context(
         approx_tokens=approx_tokens,
         html_tokens=html_tokens,
         token_method=TOKEN_METHOD,
-        limiting_factor=limiting_factor,
+        limiting_factor=(
+            cache_economics.limiting_factor
+            if cache_hit and cache_economics is not None
+            else limiting_factor
+        ),
         tokens=approx_tokens,
         chunk_count=len(chunks),
         cache_hit=cache_hit,
         cache_layer=cache_layer,
         chunks=chunks,
         source_url=url,
-        extracted_at=datetime.now(timezone.utc).isoformat(),
+        extracted_at=extracted_at,
         tokens_saved_estimate=tokens_saved_estimate,
-        truncated=truncated,
+        truncated=(
+            cache_economics.truncated
+            if cache_hit and cache_economics is not None
+            else truncated
+        ),
         split=split,
         # Provenance fields - callers should populate these from the actual
         # request context and fetch results

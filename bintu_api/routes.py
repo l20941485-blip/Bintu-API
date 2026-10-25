@@ -8,7 +8,9 @@ from urllib.parse import urlparse, urlunparse
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security, status
+
 
 
 
@@ -20,6 +22,7 @@ from bintu_api.auth import (
     verify_api_access,
     verify_supabase_user,
 )
+from bintu_api.context import _decode_source_text
 from bintu_api.database import (
     CachedMarkdown,
     DATABASE_TIMEOUT_SECONDS,
@@ -59,13 +62,16 @@ from bintu_api.settings import Settings
 
 
 
+
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
 
 
+
 TOKEN_METHOD = "ceil(characters/4)"
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
+
 
 
 
@@ -82,6 +88,7 @@ def sanitize_url(url: str) -> str:
     return urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, safe_query, parsed.fragment)
     )
+
 
 
 
@@ -110,6 +117,7 @@ def _build_provenance(
 
 
 
+
 def _build_response(
     url: str,
     result: CachedMarkdown,
@@ -119,11 +127,19 @@ def _build_response(
     settings: Settings,
 ) -> ScrapeTextResponse:
     approx_tokens = _compute_approx_tokens(result.markdown)
-    saved = (
-        _compute_tokens_saved_estimate(document.body, result.markdown)
-        if document is not None
-        else 0
-    )
+
+
+    # Preserve the economics of the original extraction on cache hits. A
+    # persistent-cache row no longer has the source HTML, so recomputing savings
+    # would incorrectly report zero.
+    if cache_layer == "persistent" and result.tokens_saved_estimate > 0:
+        saved = result.tokens_saved_estimate
+    elif document is not None:
+        saved = _compute_tokens_saved_estimate(document.body, result.markdown)
+    else:
+        saved = 0
+
+
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -139,8 +155,10 @@ def _build_response(
 
 
 
+
 async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     """Check robots.txt before any network fetch of the page.
+
 
 
 
@@ -168,6 +186,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
 
 
 
+
 @router.get("/", response_model=GatewayResponse)
 def gateway_check(request: Request) -> GatewayResponse:
     settings = request.app.state.settings
@@ -176,9 +195,11 @@ def gateway_check(request: Request) -> GatewayResponse:
 
 
 
+
 @router.get("/healthz", response_model=HealthResponse, include_in_schema=False)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
+
 
 
 
@@ -197,6 +218,7 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
     )
+
 
 
 
@@ -252,6 +274,7 @@ async def scrape_text(
 
 
 
+
 @router.post(
     "/api/v1/mobile/scrape/text",
     response_model=ScrapeTextResponse,
@@ -298,6 +321,7 @@ async def mobile_scrape_text(
 
 
 
+
 async def _fetch_and_extract(
     request: Request,
     url: str,
@@ -311,10 +335,12 @@ async def _fetch_and_extract(
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
 
+
     Returns:
         document: FetchedHTML for a fresh fetch; None for a cache hit.
-        result: extracted markdown and truncation flag.
+        result: extracted markdown, truncation flag, and extraction economics.
         cache_layer: "none", "memory", or "persistent".
+
 
 
     Raises the same HTTPException and scraper exceptions as the REST endpoint.
@@ -324,6 +350,7 @@ async def _fetch_and_extract(
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
     cache_layer = "none"
+
 
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
@@ -347,7 +374,9 @@ async def _fetch_and_extract(
             )
 
 
+
     cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
+
 
 
     if result is not None:
@@ -356,7 +385,10 @@ async def _fetch_and_extract(
         logger.info("persistent_cache_hit url_hash=%s", cache_key[:12])
 
 
+
         # Persistent-cache rows contain already-extracted text, not HTML.
+        # Preserve the original extraction economics rather than recomputing
+        # them from a missing HTML source.
         extracted = extract_text_result(
             result.markdown,
             settings.max_text_characters,
@@ -369,12 +401,18 @@ async def _fetch_and_extract(
         result = CachedMarkdown(
             markdown=extracted.text,
             truncated=extracted.truncated,
+            html_tokens=result.html_tokens,
+            tokens_saved_estimate=result.tokens_saved_estimate,
+            limiting_factor=result.limiting_factor,
+            extracted_at=result.extracted_at,
         )
         return document, result, cache_layer
 
 
+
     cache = request.app.state.cache
     document = None if skip_cache else cache.get(cache_key)
+
 
 
     if document is not None:
@@ -386,9 +424,11 @@ async def _fetch_and_extract(
         logger.info("cache_miss url_hash=%s", cache_key[:12])
 
 
+
         # robots.txt is checked before any network fetch of the page.
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
+
 
 
         if render_js:
@@ -400,7 +440,9 @@ async def _fetch_and_extract(
             document = await asyncio.to_thread(fetch_html_document, url, settings)
 
 
+
         cache.set(cache_key, document)
+
 
 
     extracted = extract_text_result(
@@ -412,10 +454,26 @@ async def _fetch_and_extract(
         from_encoding=document.charset,
         base_url=document.final_url or url,
     )
+
+
+    html_source_text = _decode_source_text(document)
+    html_tokens = _compute_approx_tokens(html_source_text)
+    tokens_saved_estimate = _compute_tokens_saved_estimate(
+        document.body,
+        extracted.text,
+    )
+    extracted_at = datetime.now(timezone.utc).isoformat()
+
+
     result = CachedMarkdown(
         markdown=extracted.text,
         truncated=extracted.truncated,
+        html_tokens=html_tokens,
+        tokens_saved_estimate=tokens_saved_estimate,
+        limiting_factor="char_cap" if extracted.truncated else "none",
+        extracted_at=extracted_at,
     )
+
 
 
     if database_client is not None:
@@ -430,6 +488,10 @@ async def _fetch_and_extract(
                     include_footer,
                     result.markdown,
                     result.truncated,
+                    html_tokens=result.html_tokens,
+                    tokens_saved_estimate=result.tokens_saved_estimate,
+                    limiting_factor=result.limiting_factor,
+                    extracted_at=result.extracted_at,
                 ),
                 timeout=DATABASE_TIMEOUT_SECONDS,
             )
@@ -440,7 +502,9 @@ async def _fetch_and_extract(
             )
 
 
+
     return document, result, cache_layer
+
 
 
 
@@ -462,8 +526,10 @@ async def _scrape_text(
     )
 
 
+
     try:
         await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
+
 
 
         document, result, cache_layer = await _fetch_and_extract(
@@ -475,6 +541,7 @@ async def _scrape_text(
             render_js=render_js,
             skip_cache=skip_cache,
         )
+
 
 
         if (
@@ -498,6 +565,7 @@ async def _scrape_text(
                     )
 
 
+
         return _build_response(
             url,
             result,
@@ -506,6 +574,7 @@ async def _scrape_text(
             request_id,
             settings,
         )
+
 
 
     except HTTPException:
@@ -542,7 +611,7 @@ async def _scrape_text(
             status_code=413,
             detail={
                 "code": "payload_too_large",
-                "message": str(error),
+                "message": "The page exceeds the 1 MiB size limit",
                 "hint": "The page exceeds the 1 MiB size limit",
             },
         ) from error
@@ -564,6 +633,7 @@ async def _scrape_text(
                     "upstream_status": error.status_code,
                 },
             ) from error
+
 
 
         raise HTTPException(
@@ -623,6 +693,7 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
+
 
 
 

@@ -2,7 +2,9 @@
 
 
 
+
 Two surfaces exist on purpose:
+
 
 
 
@@ -17,6 +19,7 @@ Two surfaces exist on purpose:
 
 
 
+
 import asyncio
 import json
 import logging
@@ -24,8 +27,10 @@ from typing import Any
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
 
 
 
@@ -35,15 +40,21 @@ from bintu_api.auth import (
     mcp_rate_limit_identity,
     verify_mcp_api_access,
 )
-from bintu_api.context import _decode_source_text, extract_context, normalize_mode
-from bintu_api.scraper import TargetURLRejected
+from bintu_api.context import (
+    CacheEconomics,
+    _decode_source_text,
+    extract_context,
+    normalize_mode,
+)
 from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
 
 
 
 
+
 router = APIRouter(prefix="/mcp", tags=["MCP"])
+
 
 
 
@@ -148,6 +159,7 @@ TOOL_INPUT_SCHEMA = {
 
 
 
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any]
@@ -155,8 +167,10 @@ class ToolCallRequest(BaseModel):
 
 
 
+
 class ToolArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
 
     url: str
     render_js: bool = False
@@ -164,10 +178,12 @@ class ToolArguments(BaseModel):
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     cache: bool = True
 
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
+
 
         - mode "chunked" (any case/whitespace) -> "chunk".
         - "chunk_token_budget" -> "max_tokens"; canonical "max_tokens" wins
@@ -176,10 +192,13 @@ class ToolArguments(BaseModel):
         if not isinstance(data, dict):
             return data
 
+
         normalized = dict(data)
+
 
         if "mode" in normalized:
             normalized["mode"] = normalize_mode(normalized["mode"])
+
 
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
@@ -190,11 +209,14 @@ class ToolArguments(BaseModel):
             else:
                 normalized["max_tokens"] = normalized.pop("chunk_token_budget")
 
+
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
 
+
         return normalized
+
 
 
 
@@ -221,6 +243,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
 
 
 
+
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -237,6 +260,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
+
     if arguments.render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
@@ -246,6 +270,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
                 "hint": "Retry with render_js=false for plain HTML extraction.",
             },
         )
+
 
 
 
@@ -274,6 +299,23 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
+
+    # Preserve the original extraction economics when the response came from
+    # the persistent cache. The cached row no longer contains source HTML, so
+    # recomputing these values would incorrectly report zero savings.
+    cache_economics = None
+    if cache_layer == "persistent":
+        cache_economics = CacheEconomics(
+            html_tokens=cached.html_tokens,
+            tokens_saved_estimate=cached.tokens_saved_estimate,
+            limiting_factor=cached.limiting_factor,
+            truncated=cached.truncated,
+            extracted_at=cached.extracted_at,
+        )
+
+
+
+
     context = await extract_context(
         request,
         arguments.url,
@@ -292,7 +334,9 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         cache_layer=cache_layer,
         document=document,
         settings=settings,
+        cache_economics=cache_economics,
     )
+
 
 
 
