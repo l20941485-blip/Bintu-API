@@ -1,7 +1,9 @@
 """Asynchronous Supabase access for persistent scrape caching and usage counts."""
 
 
+
 from __future__ import annotations
+
 
 
 import logging
@@ -10,7 +12,9 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 
+
 from bintu_api.settings import Settings
+
 
 
 if TYPE_CHECKING:
@@ -26,9 +30,17 @@ else:
 
 
 
+
 logger = logging.getLogger("bintu_api.database")
 CACHE_TTL = timedelta(hours=24)
 DATABASE_TIMEOUT_SECONDS = 2.0
+
+
+
+
+class CacheWriteFailed(RuntimeError):
+    """Supabase accepted the request but did not return a persisted cache row."""
+
 
 
 
@@ -43,10 +55,12 @@ class CachedMarkdown:
 
 
 
+
 async def create_supabase_client(settings: Settings) -> AsyncClient | None:
     """Create a server-side client only when the private database key is configured."""
     if not settings.supabase_url or not settings.supabase_service_role_key:
         return None
+
 
 
     try:
@@ -57,12 +71,15 @@ async def create_supabase_client(settings: Settings) -> AsyncClient | None:
         ) from exc
 
 
+
     return await create_async_client(settings.supabase_url, settings.supabase_service_role_key)
+
 
 
 
 async def close_supabase_client(client: AsyncClient) -> None:
     await client.aclose()
+
 
 
 
@@ -107,15 +124,17 @@ async def get_cached_markdown(
         return None
     markdown = row.get("markdown")
     truncated = row.get("truncated", False)
-    if not isinstance(markdown, str) or not isinstance(truncated, bool):
+    if not isinstance(markdown, str) or not markdown or not isinstance(truncated, bool):
         logger.warning("supabase_cache_invalid_row")
         return None
+
 
 
     html_tokens = _safe_int(row.get("html_tokens"), default=0)
     tokens_saved_estimate = _safe_int(row.get("tokens_saved_estimate"), default=0)
     limiting_factor = row.get("limiting_factor")
     extracted_at = row.get("extracted_at")
+
 
 
     return CachedMarkdown(
@@ -137,6 +156,7 @@ async def get_cached_markdown(
 
 
 
+
 async def upsert_cached_markdown(
     client: AsyncClient,
     url: str,
@@ -151,12 +171,25 @@ async def upsert_cached_markdown(
     limiting_factor: str = "none",
     extracted_at: str | None = None,
 ) -> None:
-    """Store extracted text plus the economics needed to rehydrate cache hits."""
+    """Store extracted text plus the economics needed to rehydrate cache hits.
+
+
+    Raises CacheWriteFailed when Supabase does not return exactly one persisted
+    row. The route already catches unexpected database failures and logs them
+    without exposing URL material.
+    """
+    if not url:
+        raise ValueError("cache url is required")
+    if not isinstance(markdown, str) or not markdown.strip():
+        # Do not persist empty extractions: they would poison later cache hits.
+        raise ValueError("refusing to cache empty extraction")
+
     if extracted_at is None:
         extracted_at = datetime.now(timezone.utc).isoformat()
 
 
-    await (
+
+    response = await (
         client.table("scrape_cache")
         .upsert(
             {
@@ -178,6 +211,16 @@ async def upsert_cached_markdown(
         .execute()
     )
 
+    rows = getattr(response, "data", None)
+    if not isinstance(rows, list) or len(rows) != 1:
+        logger.warning(
+            "supabase_cache_write_unverified rows_type=%s rows_count=%s",
+            type(rows).__name__,
+            len(rows) if isinstance(rows, list) else "not_a_list",
+        )
+        raise CacheWriteFailed("supabase did not return a persisted cache row")
+
+
 
 
 def _safe_int(value: Any, *, default: int = 0) -> int:
@@ -185,6 +228,7 @@ def _safe_int(value: Any, *, default: int = 0) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return default
     return max(0, int(value))
+
 
 
 
@@ -197,10 +241,12 @@ async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> 
 
 
 
+
 async def increment_token_usage(
     client: AsyncClient, rapidapi_user: str, tokens: int = 1, mode: str = "scrape"
 ) -> None:
     """Count one billable MCP execution with its token volume.
+
 
 
     Fire-and-forget with a 2s timeout at the call site (never blocks
