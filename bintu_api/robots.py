@@ -1,19 +1,24 @@
 """robots.txt support for BintuBot (RFC 9309).
 
+
 Parsing, safe fetching, per-origin caching and the allow/deny decision live here, so
 scraper.py stays focused on SSRF-safe page fetching and text extraction. robots.txt
 is fetched through the same guards as pages: public addresses only, connections
 pinned to the validated address, allowed ports only, no https -> http downgrade.
 """
 
+
 from __future__ import annotations
 
+
 import http.client
+import socket
 import threading
 import time
 import zlib
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
+
 
 from bintu_api.scraper import (
     REDIRECT_STATUSES,
@@ -26,6 +31,7 @@ from bintu_api.scraper import (
 )
 from bintu_api.settings import Settings
 
+
 PRODUCT_TOKEN = "bintubot"
 MAX_ROBOTS_BYTES = 512 * 1024
 MAX_PATTERN_LENGTH = 1024
@@ -34,18 +40,25 @@ MAX_ROBOTS_REDIRECTS = 5
 UNREACHABLE_TTL_SECONDS = 60
 MAX_CACHE_ENTRIES = 512
 VALID_MODES = ("enforce", "warn", "off")
+# robots.txt is metadata, not user content: do not let a slow robots endpoint
+# consume the whole page-fetch budget.
+ROBOTS_TIMEOUT_SECONDS = 8.0
+
 
 
 class RobotsUnreachable(Exception):
     """robots.txt could not be retrieved (5xx, timeout, connection problem). RFC 9309: treat as disallow."""
 
 
+
 @dataclass(frozen=True)
 class RobotsRules:
     """The rules that apply to BintuBot, chosen per RFC 9309."""
 
+
     rules: tuple  # tuple of (allow: bool, pattern: str)
     matched_group: str  # "own", "*" or "none"
+
 
     def is_allowed(self, path_and_query: str) -> bool:
         target = path_and_query or "/"
@@ -61,12 +74,15 @@ class RobotsRules:
         return best_allow
 
 
+
 @dataclass(frozen=True)
 class RobotsDecision:
     allowed: bool
     reason: str
     checked: bool = True
     matched_group: str = "none"
+    unreachable: bool = False
+
 
 
 def _glob_full_match(pattern: str, text: str) -> bool:
@@ -93,12 +109,14 @@ def _glob_full_match(pattern: str, text: str) -> bool:
     return p == len(pattern)
 
 
+
 def _rule_matches(pattern: str, target: str) -> bool:
     if len(pattern) > MAX_PATTERN_LENGTH:
         return False
     if pattern.endswith("$"):
         return _glob_full_match(pattern[:-1], target)
     return _glob_full_match(pattern + "*", target)
+
 
 
 def parse_robots_rules(content: str, product_token: str = PRODUCT_TOKEN) -> RobotsRules:
@@ -130,6 +148,7 @@ def parse_robots_rules(content: str, product_token: str = PRODUCT_TOKEN) -> Robo
     if agents:
         groups.append((agents, rules))
 
+
     own = [group_rules for group_agents, group_rules in groups if token in group_agents]
     wildcard = [group_rules for group_agents, group_rules in groups if "*" in group_agents]
     if own:
@@ -144,6 +163,7 @@ def parse_robots_rules(content: str, product_token: str = PRODUCT_TOKEN) -> Robo
     )
 
 
+
 def robots_target(url: str) -> str:
     """The path (plus query) that robots rules are matched against."""
     parts = urlsplit(url)
@@ -151,9 +171,11 @@ def robots_target(url: str) -> str:
     return path + (f"?{parts.query}" if parts.query else "")
 
 
+
 def robots_mode(settings) -> str:
     mode = str(getattr(settings, "robots_mode", "enforce") or "enforce").strip().lower()
     return mode if mode in VALID_MODES else "enforce"
+
 
 
 def _read_robots_body(response) -> str:
@@ -169,8 +191,10 @@ def _read_robots_body(response) -> str:
     return raw[:MAX_ROBOTS_BYTES].decode("utf-8", errors="replace")
 
 
+
 def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
     """Fetch /robots.txt for an origin through the same SSRF guards as page fetches.
+
 
     Returns the text, or None when the file does not exist (any 4xx, or a redirect
     chain that is too long). Raises RobotsUnreachable for 5xx, timeouts and
@@ -190,7 +214,7 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
         if current_scheme == "https" and parsed.scheme == "http":
             raise RobotsUnreachable("redirect from https to http")
         current_scheme = parsed.scheme
-        connection = _make_connection(parsed, host, address, port, settings.request_timeout_seconds)
+        connection = _make_connection(parsed, host, address, port, ROBOTS_TIMEOUT_SECONDS)
         try:
             connection.request(
                 "GET",
@@ -216,20 +240,25 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
             if not 200 <= status < 300:
                 raise RobotsUnreachable(f"HTTP {status}")
             return _read_robots_body(response)
-        except (OSError, http.client.HTTPException) as error:
-            raise RobotsUnreachable("connection problem") from error
+        except (OSError, http.client.HTTPException, socket.timeout, TimeoutError) as error:
+            raise RobotsUnreachable(
+                f"connection problem ({type(error).__name__})"
+            ) from error
         finally:
             connection.close()
     return None
+
 
 
 _cache: dict = {}
 _cache_lock = threading.Lock()
 
 
+
 def clear_robots_cache() -> None:
     with _cache_lock:
         _cache.clear()
+
 
 
 def _cache_ttl(settings) -> int:
@@ -238,6 +267,7 @@ def _cache_ttl(settings) -> int:
     except (TypeError, ValueError):
         ttl = 3600
     return max(0, min(ttl, 86400))
+
 
 
 def _rules_for_origin(origin: str, settings: Settings):
@@ -260,12 +290,19 @@ def _rules_for_origin(origin: str, settings: Settings):
     return entry[1], entry[2]
 
 
+
 def robots_decision(url: str, settings: Settings) -> RobotsDecision:
     """Decide whether BintuBot may fetch this URL.
+
 
     Fail-closed: if robots.txt cannot be retrieved (5xx, timeout, connection problem) the
     answer is "not allowed". A URL the safety checks reject raises TargetURLRejected,
     so callers report it exactly as they report an unsafe page URL.
+
+
+    An explicit robots rule produces ``blocked_by_robots``. A retrieval failure
+    produces ``robots_unreachable``; both deny access, but they have different
+    operational meanings.
     """
     if robots_mode(settings) == "off":
         return RobotsDecision(allowed=True, reason="robots checking is off", checked=False)
@@ -276,6 +313,7 @@ def robots_decision(url: str, settings: Settings) -> RobotsDecision:
         return RobotsDecision(
             allowed=False,
             reason=f"robots.txt could not be retrieved ({problem})",
+            unreachable=True,
         )
     if rules.is_allowed(robots_target(url)):
         return RobotsDecision(
