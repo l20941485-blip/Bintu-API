@@ -10,7 +10,9 @@ from urllib.parse import urlparse, urlunparse
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security, status
+
 
 
 
@@ -70,6 +72,7 @@ from bintu_api.settings import Settings
 
 
 
+
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
@@ -77,8 +80,10 @@ router = APIRouter()
 
 
 
+
 TOKEN_METHOD = "ceil(characters/4)"
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
+
 
 
 
@@ -97,6 +102,7 @@ def sanitize_url(url: str) -> str:
     return urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, safe_query, parsed.fragment)
     )
+
 
 
 
@@ -129,6 +135,7 @@ def _build_provenance(
 
 
 
+
 def _build_response(
     url: str,
     result: CachedMarkdown,
@@ -141,6 +148,7 @@ def _build_response(
 
 
 
+
     # Preserve the economics of the original extraction on cache hits. A
     # persistent-cache row no longer has the source HTML, so recomputing savings
     # would incorrectly report zero.
@@ -150,6 +158,7 @@ def _build_response(
         saved = _compute_tokens_saved_estimate(document.body, result.markdown)
     else:
         saved = 0
+
 
 
 
@@ -170,14 +179,17 @@ def _build_response(
 
 
 
+
 async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     """Check robots.txt before any network fetch of the page.
 
 
 
 
-    enforce: a disallowed (or unretrievable) robots.txt blocks with 403.
-    warn:    log and continue.   off: skipped inside robots_decision.
+
+    enforce: an explicit robots disallow blocks with 403. A robots.txt retrieval
+    failure also blocks with 403, but is reported as ``robots_unreachable``.
+    warn: log and continue. off: skipped inside robots_decision.
     The blocking check runs in a worker thread. URLs are never logged, only a hash.
     """
     mode = robots_mode(settings)
@@ -186,8 +198,26 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     decision = await asyncio.to_thread(robots_decision, url, settings)
     if decision.allowed:
         return
-    logger.info("robots_not_allowed url_hash=%s mode=%s reason=%s", url_hash, mode, decision.reason)
+    logger.info(
+        "robots_not_allowed url_hash=%s mode=%s unreachable=%s reason=%s",
+        url_hash,
+        mode,
+        decision.unreachable,
+        decision.reason,
+    )
     if mode == "enforce":
+        if decision.unreachable:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "robots_unreachable",
+                    "message": f"Fetching this page is not permitted: {decision.reason}.",
+                    "hint": (
+                        "The target's robots.txt could not be retrieved. "
+                        "Access is denied while robots enforcement is enabled."
+                    ),
+                },
+            )
         raise HTTPException(
             status_code=403,
             detail={
@@ -196,6 +226,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
                 "hint": "Bintu respects robots.txt. The site owner controls this.",
             },
         )
+
 
 
 
@@ -212,9 +243,11 @@ def gateway_check(request: Request) -> GatewayResponse:
 
 
 
+
 @router.get("/healthz", response_model=HealthResponse, include_in_schema=False)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
+
 
 
 
@@ -241,6 +274,7 @@ def version_info(request: Request) -> VersionResponse:
 
 
 
+
 @router.get(
     "/api/v1/scrape/text",
     response_model=ScrapeTextResponse,
@@ -249,7 +283,7 @@ def version_info(request: Request) -> VersionResponse:
         "Fetches a public HTML or XHTML page and returns readable text. "
         "The service prefers article or main content, formats headings and tables, "
         "and reports whether the configured text limit truncated the result. "
-        "It checks the site's robots.txt first. "
+        "The service checks the site's robots.txt first. "
         "JavaScript rendering is disabled unless the service enables it."
     ),
     responses={
@@ -288,6 +322,7 @@ async def scrape_text(
         render_js,
         skip_cache,
     )
+
 
 
 
@@ -342,6 +377,7 @@ async def mobile_scrape_text(
 
 
 
+
 async def _fetch_and_extract(
     request: Request,
     url: str,
@@ -357,10 +393,12 @@ async def _fetch_and_extract(
 
 
 
+
     Returns:
         document: FetchedHTML for a fresh fetch; None for a cache hit.
         result: extracted markdown, truncation flag, and extraction economics.
         cache_layer: "none", "memory", or "persistent".
+
 
 
 
@@ -373,6 +411,7 @@ async def _fetch_and_extract(
     document: FetchedHTML | None = None
     cache_layer = "none"
     request_id = getattr(getattr(request, "state", None), "request_id", None)
+
 
 
 
@@ -400,7 +439,9 @@ async def _fetch_and_extract(
 
 
 
+
     cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
+
 
 
 
@@ -412,6 +453,7 @@ async def _fetch_and_extract(
             request_id=request_id,
             layer=cache_layer,
         )
+
 
 
 
@@ -441,8 +483,10 @@ async def _fetch_and_extract(
 
 
 
+
     cache = request.app.state.cache
     document = None if skip_cache else cache.get(cache_key)
+
 
 
 
@@ -466,9 +510,11 @@ async def _fetch_and_extract(
 
 
 
+
         # robots.txt is checked before any network fetch of the page.
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
+
 
 
 
@@ -484,7 +530,9 @@ async def _fetch_and_extract(
 
 
 
+
         cache.set(cache_key, document)
+
 
 
 
@@ -501,6 +549,7 @@ async def _fetch_and_extract(
 
 
 
+
     html_source_text = _decode_source_text(document)
     html_tokens = _compute_approx_tokens(html_source_text)
     tokens_saved_estimate = _compute_tokens_saved_estimate(
@@ -508,6 +557,7 @@ async def _fetch_and_extract(
         extracted.text,
     )
     extracted_at = datetime.now(timezone.utc).isoformat()
+
 
 
 
@@ -519,6 +569,7 @@ async def _fetch_and_extract(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at,
     )
+
 
 
 
@@ -557,7 +608,9 @@ async def _fetch_and_extract(
 
 
 
+
     return document, result, cache_layer
+
 
 
 
@@ -583,8 +636,10 @@ async def _scrape_text(
 
 
 
+
     try:
         await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
+
 
 
 
@@ -598,6 +653,7 @@ async def _scrape_text(
             render_js=render_js,
             skip_cache=skip_cache,
         )
+
 
 
 
@@ -625,6 +681,7 @@ async def _scrape_text(
 
 
 
+
         response = _build_response(
             url,
             result,
@@ -633,6 +690,7 @@ async def _scrape_text(
             request_id,
             settings,
         )
+
 
 
 
@@ -651,7 +709,9 @@ async def _scrape_text(
 
 
 
+
         return response
+
 
 
 
@@ -742,6 +802,7 @@ async def _scrape_text(
 
 
 
+
         raise HTTPException(
             status_code=502,
             detail={
@@ -824,6 +885,7 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
+
 
 
 
