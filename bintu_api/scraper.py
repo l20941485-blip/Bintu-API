@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import asyncio
 import codecs
 import http.client
@@ -14,10 +15,13 @@ from dataclasses import dataclass
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
+
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
+
 from bintu_api.settings import Settings
+
 
 
 logger = logging.getLogger(__name__)
@@ -25,8 +29,10 @@ READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
+
 def get_user_agent(settings) -> str:
     """Build the honest, identifiable User-Agent: BintuBot/<version> (+<info url>; <contact>).
+
 
     The parenthesised parts appear only for settings that are actually configured.
     Never imitates a browser.
@@ -41,6 +47,7 @@ def get_user_agent(settings) -> str:
         details.append(contact)
     suffix = f" ({'; '.join(details)})" if details else ""
     return f"BintuBot/{version}{suffix}"
+
 
 
 BLOCK_TAGS = {
@@ -81,6 +88,7 @@ BLOCK_TAGS = {
 }
 
 
+
 @dataclass(frozen=True)
 class FetchedHTML:
     body: bytes
@@ -88,10 +96,12 @@ class FetchedHTML:
     final_url: str | None = None
 
 
+
 @dataclass(frozen=True)
 class ExtractedText:
     text: str
     truncated: bool
+
 
 
 def _compute_approx_tokens(text: str) -> int:
@@ -101,26 +111,32 @@ def _compute_approx_tokens(text: str) -> int:
     return math.ceil(len(text) / 4)
 
 
+
 def _compute_tokens_saved_estimate(raw_html_bytes: bytes, extracted_text: str) -> int:
     """Approximate tokens of the fetched HTML minus approximate tokens of the returned text, floored at 0."""
     html_text = raw_html_bytes.decode("utf-8", errors="replace")
     return max(0, _compute_approx_tokens(html_text) - _compute_approx_tokens(extracted_text))
 
 
+
 class TargetURLRejected(ValueError):
     pass
+
 
 
 class UnsupportedMediaType(Exception):
     pass
 
 
+
 class UnsupportedContentEncoding(Exception):
     pass
 
 
+
 class PayloadTooLarge(Exception):
     pass
+
 
 
 class UpstreamHTTPError(Exception):
@@ -130,12 +146,15 @@ class UpstreamHTTPError(Exception):
         super().__init__(f"Upstream returned HTTP {status_code} {reason}".strip())
 
 
+
 class TooManyRedirects(Exception):
     pass
 
 
+
 class UpstreamRenderError(Exception):
     pass
+
 
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
@@ -143,16 +162,19 @@ class _PinnedHTTPConnection(http.client.HTTPConnection):
         super().__init__(host, port=port, timeout=timeout)
         self._address = address
 
+
     def connect(self) -> None:
         self.sock = socket.create_connection((self._address, self.port), self.timeout, self.source_address)
         if self._tunnel_host:
             self._tunnel()
 
 
+
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, host: str, address: str, port: int, timeout: float) -> None:
         super().__init__(host, port=port, timeout=timeout, context=ssl.create_default_context())
         self._address = address
+
 
     def connect(self) -> None:
         raw_socket = socket.create_connection((self._address, self.port), self.timeout, self.source_address)
@@ -164,15 +186,18 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         )
 
 
+
 def resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
     try:
         results = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as error:
         raise TargetURLRejected("The target hostname could not be resolved") from error
 
+
     addresses = tuple(dict.fromkeys(result[4][0] for result in results))
     if not addresses:
         raise TargetURLRejected("The target hostname has no addresses")
+
 
     for address in addresses:
         try:
@@ -186,6 +211,62 @@ def resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
     return addresses
 
 
+
+def _is_ambiguous_numeric_host(host: str) -> bool:
+    """True for non-canonical numeric host forms that should not reach DNS.
+
+
+    These forms can encode private, loopback, metadata, or otherwise unsafe
+    IPv4 addresses while looking like ordinary hostnames. Reject them before
+    DNS resolution so hostile URLs fail immediately rather than after a
+    resolver timeout.
+    """
+    candidate = host.strip().rstrip(".").lower()
+    if not candidate:
+        return False
+
+
+    # Canonical IPv4 and IPv6 literals are handled by the dedicated IP checks;
+    # do not classify those as ambiguous here.
+    try:
+        ipaddress.ip_address(candidate)
+        return False
+    except ValueError:
+        pass
+
+
+    # Decimal IPv4: 2130706433, 02130706433, etc.
+    if re.fullmatch(r"0*[0-9]{1,10}", candidate):
+        return True
+
+
+    # Hexadecimal IPv4: 0x7f000001, 0x7f.0.0.1.
+    if re.fullmatch(r"0x[0-9a-f]+", candidate) or re.fullmatch(
+        r"0x[0-9a-f]+(?:\.0x[0-9a-f]+){1,3}", candidate
+    ):
+        return True
+
+
+    # Dotted forms with any hex/octal component: 0x7f.0.0.1, 0177.0.0.1.
+    if re.fullmatch(r"(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)(?:\.(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)){1,3}", candidate):
+        return True
+
+
+    # Short-form IPv4: 127.1, 127.0.1, etc. These are not canonical dotted
+    # quads and may be interpreted as compressed IPv4 addresses.
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,2}", candidate):
+        return True
+
+
+    # IPv4-mapped IPv6 written with an IPv4 tail: ::ffff:127.0.0.1.
+    if re.fullmatch(r"(?:[0-9a-f:]*:)?(?:ffff:)?(?:0{1,4}:)?[0-9]+(?:\.[0-9]+){3}", candidate):
+        return True
+
+
+    return False
+
+
+
 def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, str, int, str]:
     if any(character in url for character in "\r\n\t"):
         raise TargetURLRejected("The URL contains invalid characters")
@@ -196,6 +277,18 @@ def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, s
         if parsed.username is not None or parsed.password is not None:
             raise TargetURLRejected("URLs containing credentials are not allowed")
         host = parsed.hostname.encode("idna").decode("ascii")
+
+
+        # Reject ambiguous numeric host forms before DNS. This prevents
+        # decimal, hex, octal, short-form, and mapped-IPv4 encodings from
+        # causing resolver latency or bypassing intuitive host validation.
+        if _is_ambiguous_numeric_host(host):
+            raise TargetURLRejected(
+                "Ambiguous numeric host forms are not allowed; use a canonical "
+                "domain name or canonical IP literal"
+            )
+
+
         # `parsed.port` is 0 for an explicit ":0" and None when absent, so the
         # default port must only be applied when no port was given at all.
         # Silently turning ":0" into 80 would smuggle a malformed target past
@@ -211,13 +304,14 @@ def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, s
         # C5: Reject NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embedding private/metadata IPv4
         if _is_nat64_or_6to4_address(host):
             raise TargetURLRejected(
-                f"URL host {host} uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
-                f"with private/metadata IPv4, which is not allowed"
+                "URL host uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
+                "with private/metadata IPv4, which is not allowed"
             )
     except (UnicodeError, ValueError) as error:
         if isinstance(error, TargetURLRejected):
             raise
         raise TargetURLRejected("The target URL is malformed") from error
+
 
     path = parsed.path or "/"
     if parsed.query:
@@ -228,9 +322,11 @@ def _parse_target(url: str, settings: Settings | None = None) -> tuple[object, s
     return parsed, host, port, path
 
 
+
 def _make_connection(parsed, host: str, address: str, port: int, timeout: float):
     connection_type = _PinnedHTTPSConnection if parsed.scheme == "https" else _PinnedHTTPConnection
     return connection_type(host, address, port, timeout)
+
 
 
 def _host_header(host: str, port: int, scheme: str) -> str:
@@ -239,9 +335,11 @@ def _host_header(host: str, port: int, scheme: str) -> str:
     return formatted_host if port == default_port else f"{formatted_host}:{port}"
 
 
+
 def fetch_html(url: str, settings: Settings) -> bytes:
     """Fetch HTML bytes, following redirects and re-validating every hop."""
     return fetch_html_document(url, settings).body
+
 
 
 def _is_multicast_address(host: str) -> bool:
@@ -250,6 +348,7 @@ def _is_multicast_address(host: str) -> bool:
         return ipaddress.ip_address(host).is_multicast
     except ValueError:
         return False
+
 
 
 def _embedded_ipv4(address: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
@@ -263,6 +362,7 @@ def _embedded_ipv4(address: ipaddress.IPv6Address) -> ipaddress.IPv4Address | No
     if packed[:2] == b"\x20\x02":  # 6to4: 2002:<IPv4 address>::/48
         return ipaddress.IPv4Address(packed[2:6])
     return None
+
 
 
 def _is_nat64_or_6to4_address(host: str) -> bool:
@@ -279,8 +379,10 @@ def _is_nat64_or_6to4_address(host: str) -> bool:
     return (not embedded.is_global) or embedded.is_multicast
 
 
+
 def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     """Fetch a public HTML page, following redirects and re-validating every hop.
+
 
     Each hop performs a fresh DNS resolution and pins the connection to a
     validated public address, so a public hostname can never redirect the
@@ -291,12 +393,14 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
     for _ in range(settings.max_redirects + 1):
         parsed, host, port, path = _parse_target(current_url, settings)
 
+
         # S8: Runtime port validation in fetch loop (not just parse time)
         if port not in settings.allowed_port_set():
             raise TargetURLRejected(
                 f"Port {port} is not in the allowed port list "
                 f"(default: 80/443, extra: {settings.allowed_ports or 'none'})"
             )
+
 
         # S7: Multicast address block at resolution
         if _is_multicast_address(host):
@@ -305,12 +409,14 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
                 f"IPv6: ff00::/8)"
             )
 
+
         # C5: Reject NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embedding private/metadata IPv4
         if _is_nat64_or_6to4_address(host):
             raise TargetURLRejected(
-                f"URL host {host} uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
-                f"with private/metadata IPv4, which is not allowed"
+                "URL host uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
+                "with private/metadata IPv4, which is not allowed"
             )
+
 
         if parsed.scheme != current_scheme:
             if current_scheme == "https" and parsed.scheme == "http":
@@ -352,7 +458,9 @@ def fetch_html_document(url: str, settings: Settings) -> FetchedHTML:
         finally:
             connection.close()
 
+
     raise TooManyRedirects("The target exceeded the redirect limit")
+
 
 
 async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedHTML:
@@ -361,10 +469,12 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError
     from playwright.async_api import Route, async_playwright
 
+
     _, host, port, _ = _parse_target(url, settings)
     await asyncio.to_thread(resolve_public_addresses, host, port)
     blocked_targets: list[Exception] = []
     browser = None
+
 
     async with async_playwright() as playwright:
         try:
@@ -375,11 +485,13 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
             context = await browser.new_context(service_workers="block")
             page = await context.new_page()
 
+
             async def validate_request(route: Route) -> None:
                 request = route.request
                 if request.resource_type in {"image", "media", "font"}:
                     await route.abort()
                     return
+
 
                 request_url = urlsplit(request.url)
                 if request_url.scheme in {"data", "blob", "about"}:
@@ -392,6 +504,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
                     await route.abort()
                     return
 
+
                 redirect_count = 0
                 redirected_request = request.redirected_from
                 while redirected_request is not None:
@@ -402,6 +515,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
                     await route.abort()
                     return
 
+
                 try:
                     _, request_host, request_port, _ = _parse_target(request.url, settings)
                     await asyncio.to_thread(resolve_public_addresses, request_host, request_port)
@@ -410,6 +524,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
                     await route.abort()
                     return
                 await route.continue_()
+
 
             await page.route("**/*", validate_request)
             try:
@@ -427,6 +542,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
                     raise blocked_targets[0] from error
                 raise UpstreamRenderError("The target could not be rendered") from error
 
+
             if blocked_targets:
                 raise blocked_targets[0]
             if response is None:
@@ -438,6 +554,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
             if media_type not in {"text/html", "application/xhtml+xml"}:
                 raise UnsupportedMediaType("Only HTML and XHTML responses are supported")
 
+
             html = await page.content()
             body = html.encode("utf-8")
             if len(body) > settings.max_html_bytes:
@@ -446,6 +563,7 @@ async def fetch_rendered_html_document(url: str, settings: Settings) -> FetchedH
         finally:
             if browser is not None:
                 await browser.close()
+
 
 
 def _content_charset(content_type: str) -> str | None:
@@ -462,6 +580,7 @@ def _content_charset(content_type: str) -> str | None:
     return charset
 
 
+
 def _read_html_response(response, max_bytes: int) -> bytes:
     content_type = response.getheader("Content-Type", "")
     media_type = content_type.split(";", 1)[0].strip().lower()
@@ -471,6 +590,7 @@ def _read_html_response(response, max_bytes: int) -> bytes:
     if content_encoding not in {"", "identity", "gzip", "x-gzip"}:
         raise UnsupportedContentEncoding(f"Unsupported content encoding: {content_encoding}")
 
+
     content_length = response.getheader("Content-Length")
     if content_length is not None:
         try:
@@ -478,6 +598,7 @@ def _read_html_response(response, max_bytes: int) -> bytes:
                 raise PayloadTooLarge("HTML responses may not exceed 1 MiB")
         except ValueError:
             pass
+
 
     html_bytes = bytearray()
     while True:
@@ -508,6 +629,7 @@ def _read_html_response(response, max_bytes: int) -> bytes:
     return bytes(html_bytes)
 
 
+
 def extract_text(
     html_bytes: bytes,
     max_characters: int,
@@ -526,6 +648,7 @@ def extract_text(
     ).text
 
 
+
 def extract_text_result(
     html_bytes: bytes,
     max_characters: int,
@@ -536,6 +659,7 @@ def extract_text_result(
     base_url: str | None = None,
 ) -> ExtractedText:
     """Extract visible text from HTML bytes.
+
 
     Args:
         html_bytes: Raw HTML content.
@@ -593,9 +717,11 @@ def extract_text_result(
         ):
             node.decompose()
 
+
     page_title = soup.title.get_text(" ", strip=True) if soup.title else ""
     if soup.title:
         soup.title.decompose()
+
 
     content_root = (
         soup.find("article")
@@ -629,12 +755,14 @@ def extract_text_result(
                     if all(parent is not content_root for parent in node.parents)
                 )
 
+
     first_heading = content_root.find(["h1", "h2", "h3", "h4", "h5", "h6"])
     heading_text = first_heading.get_text(" ", strip=True) if first_heading else ""
     normalized_title = re.sub(r"\s+", " ", page_title).strip()
     normalized_heading = re.sub(r"\s+", " ", heading_text).strip()
     if normalized_title and normalized_title == normalized_heading:
         normalized_title = ""
+
 
     for anchor in soup.find_all("a", href=True):
         label = re.sub(r"\s+", " ", anchor.get_text(" ", strip=True)).strip()
@@ -652,9 +780,11 @@ def extract_text_result(
         if destination != label:
             anchor.replace_with(NavigableString(f"{label} ({destination})"))
 
+
     boundary = "\x00BINTU_BLOCK_BOUNDARY\x00"
     while boundary in " ".join(root.get_text() for root in content_roots):
         boundary += "\x00"
+
 
     for root in content_roots:
         for row in root.find_all("tr"):
@@ -669,14 +799,17 @@ def extract_text_result(
                     row_text = f"{row_text}{boundary}{' | '.join('---' for _ in cells)}"
                 row.replace_with(NavigableString(f"{boundary}{row_text}{boundary}"))
 
+
         for node in root.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             level = int(node.name[1])
             heading = re.sub(r"\s+", " ", node.get_text(" ", strip=True)).strip()
             node.replace_with(NavigableString(f"{boundary}{'#' * level} {heading}{boundary}"))
 
+
         for node in root.find_all(BLOCK_TAGS):
             node.insert_before(boundary)
             node.insert_after(boundary)
+
 
     text = boundary.join(root.get_text(separator=" ", strip=True) for root in content_roots)
     lines = []
