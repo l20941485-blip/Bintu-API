@@ -69,6 +69,7 @@ import asyncio
 import json
 import socket
 import logging
+import time
 from typing import Any
 
 
@@ -110,7 +111,11 @@ from bintu_api.context import (
 )
 from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_token_usage
 from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA, TOOL_TITLE, ToolArguments
-from bintu_api.observability import log_extraction_completed, log_token_metering_failure
+from bintu_api.observability import (
+    log_extraction_completed,
+    log_extraction_failed,
+    log_token_metering_failure,
+)
 from bintu_api.settings import Settings
 
 
@@ -407,6 +412,31 @@ def _http_detail_text(detail: Any) -> str:
 
 
 
+def _failure_code_for_error(error: Exception) -> str:
+    """Map an upstream extraction exception to a stable privacy-safe code."""
+    if isinstance(error, UpstreamHTTPError):
+        return "upstream_http_error"
+    if isinstance(error, UnsupportedMediaType):
+        return "unsupported_media_type"
+    if isinstance(error, UnsupportedContentEncoding):
+        return "unsupported_content_encoding"
+    if isinstance(error, PayloadTooLarge):
+        return "payload_too_large"
+    if isinstance(error, TooManyRedirects):
+        return "too_many_redirects"
+    if isinstance(error, UpstreamRenderError):
+        return "upstream_render_error"
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return "upstream_timeout"
+    return "upstream_connection_error"
+
+
+
+
+
+
+
+
 def _metering_identity(request: Request, settings: Settings) -> str:
     """Identity for token metering: RapidAPI subscriber, MCP key, or IP.
 
@@ -522,6 +552,13 @@ async def _tools_call_result(
 
 
     if arguments.render_js and not settings.render_js_enabled:
+        log_extraction_failed(
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
+            url=arguments.url,
+            mode=arguments.mode,
+            failure_code="render_js_disabled",
+            error_type="ServiceConfigurationError",
+        )
         return _rpc_result(
             request_id,
             _tool_error(
@@ -530,6 +567,11 @@ async def _tools_call_result(
             ),
         )
 
+
+
+
+
+    extraction_started_at = time.perf_counter()
 
 
 
@@ -551,6 +593,14 @@ async def _tools_call_result(
             skip_cache=False,
         )
     except TargetURLRejected as error:
+        log_extraction_failed(
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
+            url=arguments.url,
+            mode=arguments.mode,
+            failure_code="invalid_or_unsafe_url",
+            error_type=type(error).__name__,
+            duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
+        )
         logger.info("mcp_tool_error detail=%r", str(error))
         return _rpc_result(
             request_id,
@@ -561,6 +611,19 @@ async def _tools_call_result(
             ),
         )
     except HTTPException as error:
+        log_extraction_failed(
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
+            url=arguments.url,
+            mode=arguments.mode,
+            failure_code=(
+                error.detail.get("code", "http_error")
+                if isinstance(error.detail, dict)
+                else "http_error"
+            ),
+            error_type=type(error).__name__,
+            duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
+            status_code=error.status_code,
+        )
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
     except (
@@ -574,6 +637,16 @@ async def _tools_call_result(
         socket.timeout,
         OSError,
     ) as error:
+        failure_code = _failure_code_for_error(error)
+        log_extraction_failed(
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
+            url=arguments.url,
+            mode=arguments.mode,
+            failure_code=failure_code,
+            error_type=type(error).__name__,
+            duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
+            status_code=getattr(error, "status_code", None),
+        )
         logger.info("mcp_tool_error error_type=%s", type(error).__name__)
         if isinstance(error, UpstreamHTTPError):
             message = (
@@ -659,6 +732,19 @@ async def _tools_call_result(
             extracted_at=cached.extracted_at,
         )
     except HTTPException as error:
+        log_extraction_failed(
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
+            url=arguments.url,
+            mode=arguments.mode,
+            failure_code=(
+                error.detail.get("code", "context_error")
+                if isinstance(error.detail, dict)
+                else "context_error"
+            ),
+            error_type=type(error).__name__,
+            duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
+            status_code=error.status_code,
+        )
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(request_id, _tool_error(_http_detail_text(error.detail)))
 
@@ -678,6 +764,7 @@ async def _tools_call_result(
         truncated=context.truncated,
         limiting_factor=context.limiting_factor,
     )
+
 
 
 
@@ -711,6 +798,7 @@ async def _tools_call_result(
         }
     if context.extractor_version is not None:
         provenance_dict["extractor_version"] = context.extractor_version
+
 
 
 
