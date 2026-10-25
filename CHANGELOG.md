@@ -8,7 +8,7 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
-## [Unreleased]
+## [1.2.0] — 2026-10-25
 
 
 
@@ -38,6 +38,7 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 - Suppressed `httpx` and `httpcore` INFO request logs to prevent Supabase cache-query URLs—and therefore scraped target URLs—from appearing in Render logs.
 - Extraction logs now identify targets by `url_hash` rather than the raw URL.
+- `service_version` bumped from `"1.1.0"` to `"1.2.0"` in `bintu_api/settings.py`.
 
 
 

@@ -3,14 +3,18 @@ import os
 from dataclasses import dataclass
 from typing import ClassVar
 
+
 logger = logging.getLogger("bintu_api.settings")
+
 
 DEFAULT_CACHE_TTL_SECONDS = 300
 ROBOTS_MODES = ("enforce", "warn", "off")
 
 
+
 def _bool_env(name: str, default: bool = False) -> bool:
     """Read a boolean environment flag; only an explicit true enables it.
+
 
     Anything else (empty, typo, "1", "yes") stays disabled so a mis-set
     value cannot accidentally boot Chromium on free-tier infra.
@@ -18,8 +22,10 @@ def _bool_env(name: str, default: bool = False) -> bool:
     return os.getenv(name, "").strip().lower() == "true"
 
 
+
 def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
     """Read an integer environment override, falling back to the default.
+
 
     ``create_app()`` runs at import time, so an unparseable or nonsensical value
     would crash-loop the container instead of serving traffic; a bad override
@@ -46,6 +52,7 @@ def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int
     return value
 
 
+
 def _robots_mode_env() -> str:
     """ROBOTS_MODE: enforce (default) | warn | off. Unknown values fall back to enforce."""
     raw = os.getenv("ROBOTS_MODE", "").strip().lower()
@@ -55,6 +62,7 @@ def _robots_mode_env() -> str:
         logger.warning("invalid_env_value name=ROBOTS_MODE value=%r using_default=enforce", raw)
         return "enforce"
     return raw
+
 
 
 @dataclass(frozen=True)
@@ -93,7 +101,7 @@ class Settings:
     # render_js_enabled, keeping tests that patch os.environ deterministic.
     require_auth: bool = False
     service_title: str = "Bintu Data Extraction API"
-    service_version: str = "1.1.0"
+    service_version: str = "1.2.0"
     # BintuBot identity (RFC 9309 / honest User-Agent). Leave empty until a real
     # info page and contact exist; the User-Agent then simply omits them.
     # Set BOT_INFO_URL and CONTACT_EMAIL in the environment.
@@ -120,8 +128,10 @@ class Settings:
         "rate-limited, and outbound connections are validated against public IP addresses."
     )
 
+
     # Origins always permitted via CORS: the MCPize gateway that fronts /mcp.
     CORS_GATEWAY_ORIGINS: ClassVar[tuple[str, ...]] = ("https://bintu-web-reader.mcpize.run",)
+
 
     def cors_origin_allowlist(self) -> tuple[str, ...]:
         """Origins allowed to make credentialed cross-origin requests."""
@@ -129,6 +139,7 @@ class Settings:
             origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()
         )
         return self.CORS_GATEWAY_ORIGINS + extras
+
 
     def allowed_port_set(self) -> frozenset[int]:
         """TCP ports the fetcher may connect to: 80/443 plus ALLOWED_PORTS."""
@@ -147,6 +158,7 @@ class Settings:
             else:
                 logger.warning("out_of_range_allowed_port value=%r ignored", raw)
         return frozenset(ports)
+
 
     @classmethod
     def from_env(cls) -> "Settings":
