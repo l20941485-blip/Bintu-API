@@ -5,7 +5,9 @@
 
 
 
+
 Two surfaces exist on purpose:
+
 
 
 
@@ -26,6 +28,7 @@ Two surfaces exist on purpose:
 
 
 
+
 import asyncio
 import json
 import logging
@@ -36,8 +39,10 @@ from typing import Any
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
 
 
 
@@ -66,7 +71,9 @@ from bintu_api.settings import Settings
 
 
 
+
 router = APIRouter(prefix="/mcp", tags=["MCP"])
+
 
 
 
@@ -95,8 +102,9 @@ TOOL_DESCRIPTION = (
     "application has a smaller token budget, set max_tokens accordingly. "
     "JavaScript rendering is disabled unless enabled — render_js_disabled means "
     "retry with render_js=false. "
-    "Fails cleanly with invalid_or_unsafe_url, render_js_disabled, rate_limited — "
-    "all in-band so the model can self-correct."
+    "Fails cleanly with invalid_or_unsafe_url, render_js_disabled, rate_limited, "
+    "blocked_by_robots, and robots_unreachable — all in-band so the model can "
+    "self-correct."
 )
 TOOL_ANNOTATIONS = {
     "title": TOOL_TITLE,
@@ -124,7 +132,7 @@ TOOL_OUTPUT_SCHEMA = {
         },
         "isError": {
             "type": "boolean",
-            "description": "True when extraction failed; content[0].text holds a code-prefixed hint (e.g. invalid_or_unsafe_url, render_js_disabled).",
+            "description": "True when extraction failed; content[0].text holds a code-prefixed hint (e.g. invalid_or_unsafe_url, render_js_disabled, blocked_by_robots, robots_unreachable).",
         },
     },
     "required": ["content"],
@@ -177,9 +185,11 @@ TOOL_INPUT_SCHEMA = {
 
 
 
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any]
+
 
 
 
@@ -193,6 +203,7 @@ class ToolArguments(BaseModel):
 
 
 
+
     url: str
     render_js: bool = False
     mode: str = "scrape"
@@ -202,10 +213,12 @@ class ToolArguments(BaseModel):
 
 
 
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
         """Map pitch-name aliases to canonical values (case/whitespace tolerant).
+
 
 
 
@@ -220,13 +233,16 @@ class ToolArguments(BaseModel):
 
 
 
+
         normalized = dict(data)
+
 
 
 
 
         if "mode" in normalized:
             normalized["mode"] = normalize_mode(normalized["mode"])
+
 
 
 
@@ -243,6 +259,7 @@ class ToolArguments(BaseModel):
 
 
 
+
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
@@ -250,7 +267,29 @@ class ToolArguments(BaseModel):
 
 
 
+
         return normalized
+
+
+
+
+
+
+
+
+def _mcp_error_response(code: str, message: str, hint: str) -> dict[str, Any]:
+    """Return a stable, in-band MCP tool error without leaking the raw URL."""
+    logger.info("mcp_tool_error code=%s", code)
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"{code}: {message} {hint}".strip(),
+            }
+        ],
+        "isError": True,
+    }
+
 
 
 
@@ -283,6 +322,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
 
 
 
+
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -302,16 +342,13 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
-    if arguments.render_js and not settings.render_js_enabled:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "render_js_disabled",
-                "message": "JavaScript rendering is disabled on this service.",
-                "hint": "Retry with render_js=false for plain HTML extraction.",
-            },
-        )
 
+    if arguments.render_js and not settings.render_js_enabled:
+        return _mcp_error_response(
+            "render_js_disabled",
+            "JavaScript rendering is disabled on this service.",
+            "Retry with render_js=false for plain HTML extraction.",
+        )
 
 
 
@@ -331,14 +368,21 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
             skip_cache=False,
         )
     except TargetURLRejected as error:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "invalid_or_unsafe_url",
-                "message": str(error),
-                "hint": "URL must start with http:// or https:// and be publicly accessible",
-            },
-        ) from error
+        return _mcp_error_response(
+            "invalid_or_unsafe_url",
+            str(error),
+            "URL must start with http:// or https:// and be publicly accessible.",
+        )
+    except HTTPException as error:
+        detail = error.detail
+        if isinstance(detail, dict) and isinstance(detail.get("code"), str):
+            return _mcp_error_response(
+                detail["code"],
+                str(detail.get("message", "Extraction failed.")),
+                str(detail.get("hint", "")).strip(),
+            )
+        raise
+
 
 
 
@@ -357,6 +401,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
             truncated=cached.truncated,
             extracted_at=cached.extracted_at,
         )
+
 
 
 
@@ -390,6 +435,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
 
 
 
+
     log_extraction_completed(
         request_id=getattr(getattr(request, "state", None), "request_id", None),
         url=arguments.url,
@@ -402,6 +448,7 @@ async def call_tool(payload: ToolCallRequest, request: Request) -> dict[str, Any
         truncated=context.truncated,
         limiting_factor=context.limiting_factor,
     )
+
 
 
 
