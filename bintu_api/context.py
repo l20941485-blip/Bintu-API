@@ -3,11 +3,13 @@
 
 
 
+
 Modes:
   scrape    — plain readable text (existing behavior), with token count + provenance
   chunk     — text split into max_tokens-sized chunks, each with token count,
               ready to drop straight into a vector database
   summarize — condensed text truncated to max_tokens (sentence-aware)
+
 
 
 
@@ -20,7 +22,9 @@ agents and callers can budget LLM context precisely.
 
 
 
+
 from __future__ import annotations
+
 
 
 
@@ -29,9 +33,11 @@ import asyncio
 import hashlib
 import logging
 import re
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
+
 
 
 
@@ -41,10 +47,16 @@ from fastapi import Request
 
 
 
+
 from bintu_api.auth import rate_limit_identity
 from bintu_api.cache import TTLCache
+from bintu_api.observability import (
+    log_cache_lookup_completed,
+    record_cache_tokens_saved,
+)
 from bintu_api.scraper import FetchedHTML, extract_text_result
 from bintu_api.settings import Settings
+
 
 
 
@@ -54,12 +66,15 @@ from bintu_api.schemas import CacheInfo
 
 
 
+
 logger = logging.getLogger("bintu_api.context")
 
 
 
 
+
 ContextMode = Literal["scrape", "chunk", "summarize"]
+
 
 
 
@@ -73,8 +88,10 @@ MODE_ALIASES = {"chunked": "chunk"}
 
 
 
+
 def normalize_mode(value: Any) -> str:
     """Normalize a mode value to its canonical form (case/whitespace tolerant).
+
 
 
 
@@ -92,8 +109,10 @@ def normalize_mode(value: Any) -> str:
 
 
 
+
 # Approximate token method: ceil(characters/4) - dependency-free token counting
 TOKEN_METHOD = "ceil(characters/4)"
+
 
 
 
@@ -102,6 +121,7 @@ def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
     from bintu_api.scraper import _compute_approx_tokens
     return _compute_approx_tokens(text)
+
 
 
 
@@ -150,9 +170,11 @@ class ContextResult:
 
 
 
+
 @dataclass(frozen=True)
 class CacheEconomics:
     """Extraction economics preserved across persistent-cache hits."""
+
 
 
 
@@ -166,8 +188,10 @@ class CacheEconomics:
 
 
 
+
 def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
+
 
 
 
@@ -187,8 +211,10 @@ def _decode_source_text(document: FetchedHTML) -> str:
 
 
 
+
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     """Split ``text`` into chunks of at most ``max_tokens`` tokens.
+
 
 
 
@@ -205,7 +231,9 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
     separators = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
+
 
 
 
@@ -221,10 +249,12 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
         sep = separators[sep_index]
         parts = text.split(sep) if sep else list(text)
         chunks: list[str] = []
         current = ""
+
 
 
 
@@ -243,6 +273,7 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
         if current:
             chunks.append(current)
         return chunks
@@ -250,7 +281,9 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
 
 
 
+
     return _split(text, 0)
+
 
 
 
@@ -282,6 +315,7 @@ async def extract_context(
 
 
 
+
     Reuses the existing fetch → extract → cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
@@ -290,6 +324,7 @@ async def extract_context(
         settings = request.app.state.settings
     if identity is None:
         identity = rate_limit_identity(request, settings)
+
 
 
 
@@ -303,8 +338,10 @@ async def extract_context(
 
 
 
+
     raw_text = raw_text or ""
     html_source_text = html_source_text or ""
+
 
 
 
@@ -321,6 +358,35 @@ async def extract_context(
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
         resolved_extracted_at = extracted_at or datetime.now(timezone.utc).isoformat()
+
+
+
+
+
+    # Cache lookup observability (Phase 4): measure hit/miss distribution and
+    # persistent-cache freshness without logging the raw target URL.
+    cache_age_seconds: float | None = None
+    if cache_hit and resolved_extracted_at:
+        try:
+            extracted_time = datetime.fromisoformat(resolved_extracted_at.replace("Z", "+00:00"))
+            cache_age_seconds = max(
+                0.0,
+                (datetime.now(timezone.utc) - extracted_time).total_seconds(),
+            )
+        except (ValueError, TypeError):
+            cache_age_seconds = None
+
+
+
+
+
+    log_cache_lookup_completed(
+        request_id=getattr(getattr(request, "state", None), "request_id", None),
+        url=url,
+        cache_hit=cache_hit,
+        cache_layer=cache_layer,
+        age_seconds=cache_age_seconds,
+    )
 
 
 
@@ -408,8 +474,21 @@ async def extract_context(
 
 
 
+
     if tokens_saved_estimate is None:
         tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+
+
+
+
+
+    record_cache_tokens_saved(
+        mode=mode,
+        cache_hit=cache_hit,
+        cache_layer=cache_layer,
+        approx_tokens=approx_tokens,
+        tokens_saved_estimate=tokens_saved_estimate,
+    )
 
 
 
