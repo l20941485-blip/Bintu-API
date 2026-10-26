@@ -1,12 +1,15 @@
 """Post-deploy smoke check against a live Bintu API instance.
 
+
 Usage (PowerShell):
   $env:BINTU_BASE_URL = "https://your-service.onrender.com"
   $env:BINTU_API_KEY = "your-api-key"   # required when the service has API_KEY set
   python smoke_check.py
 """
 
+
 from __future__ import annotations
+
 
 import json
 import os
@@ -16,8 +19,11 @@ import urllib.parse
 import urllib.request
 
 
+
 DEFAULT_TARGET_URL = "https://example.com/"
+UNSAFE_TARGET_URL = "http://127.0.0.1/"
 TIMEOUT_SECONDS = 60
+
 
 
 def _request(url: str, headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], bytes]:
@@ -31,9 +37,20 @@ def _request(url: str, headers: dict[str, str] | None = None) -> tuple[int, dict
         return error.code, dict(error.headers.items()) if error.headers else {}, body
 
 
+
 def _fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+
+def _header(headers: dict[str, str], name: str) -> str | None:
+    name = name.lower()
+    for key, value in headers.items():
+        if key.lower() == name:
+            return value
+    return None
+
 
 
 def main() -> None:
@@ -41,8 +58,10 @@ def main() -> None:
     api_key = os.getenv("BINTU_API_KEY", "").strip()
     target_url = os.getenv("BINTU_SMOKE_TARGET_URL", DEFAULT_TARGET_URL).strip()
 
+
     if not base_url:
         _fail("Set BINTU_BASE_URL to your deployed service root (e.g. https://....onrender.com).")
+
 
     print(f"Checking health at {base_url}/healthz ...")
     status, headers, body = _request(f"{base_url}/healthz")
@@ -56,13 +75,17 @@ def main() -> None:
         _fail(f"/healthz unexpected payload: {health}")
     print("OK  /healthz")
 
+
+    scrape_headers = {"Accept": "application/json"}
+    if api_key:
+        scrape_headers["X-API-Key"] = api_key
+
+
     scrape_url = (
         f"{base_url}/api/v1/scrape/text?"
         f"{urllib.parse.urlencode({'url': target_url})}"
     )
-    scrape_headers = {"Accept": "application/json"}
-    if api_key:
-        scrape_headers["X-API-Key"] = api_key
+
 
     print(f"Checking scrape against {target_url} ...")
     status, headers, body = _request(scrape_url, headers=scrape_headers)
@@ -77,11 +100,49 @@ def main() -> None:
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
         _fail(f"Scrape returned empty or missing text: {payload}")
-    request_id = next((v for k, v in headers.items() if k.lower() == "x-request-id"), None)
+    request_id = _header(headers, "X-Request-ID")
     if not request_id:
         _fail("Scrape response missing X-Request-ID header")
     print(f"OK  /api/v1/scrape/text ({len(text)} characters)")
+
+
+    unsafe_url = (
+        f"{base_url}/api/v1/scrape/text?"
+        f"{urllib.parse.urlencode({'url': UNSAFE_TARGET_URL})}"
+    )
+
+
+    print(f"Checking unsafe URL rejection for {UNSAFE_TARGET_URL} ...")
+    status, headers, body = _request(unsafe_url, headers=scrape_headers)
+    if status != 400:
+        _fail(f"Unsafe URL returned HTTP {status}; expected 400: {body[:300]!r}")
+
+
+    try:
+        unsafe_payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        _fail(f"Unsafe URL response was not JSON: {error}")
+
+
+    detail = unsafe_payload.get("detail")
+    if not isinstance(detail, dict):
+        _fail(f"Unsafe URL response detail is not an object: {unsafe_payload}")
+
+
+    if detail.get("code") != "invalid_or_unsafe_url":
+        _fail(
+            "Unsafe URL response does not use invalid_or_unsafe_url: "
+            f"{unsafe_payload}"
+        )
+
+
+    if UNSAFE_TARGET_URL in body.decode("utf-8", errors="replace"):
+        _fail("Unsafe URL response leaked the requested URL.")
+
+
+    print("OK  unsafe URL rejected with invalid_or_unsafe_url")
     print("Smoke check passed.")
+
 
 
 if __name__ == "__main__":
