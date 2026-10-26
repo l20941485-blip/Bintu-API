@@ -433,6 +433,13 @@ def _embedded_ipv4(
 
     packed = address.packed
 
+    # IPv4-translated addresses (::ffff:0:0:0/96) also embed an IPv4
+    # destination in their final 32 bits.
+    if packed[:12] == bytes.fromhex(
+        "0000000000000000ffff0000"
+    ):
+        return ipaddress.IPv4Address(packed[12:16])
+
     if packed[:12] == bytes.fromhex(
         "0064ff9b0000000000000000"
     ):
