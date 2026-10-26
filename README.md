@@ -132,7 +132,6 @@ Use Python 3.12. Install the application and test dependencies, then start the s
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
-cd "Bintu API"
 uvicorn main:app --reload
 ```
 
@@ -165,7 +164,7 @@ Add `render_js=true` to opt in to headless Chromium rendering for JavaScript-dri
 
 `POST /mcp` is a standard MCP Streamable HTTP endpoint (stateless JSON-RPC 2.0) for Claude custom connectors and Claude Code: it answers `initialize`, `ping`, `tools/list`, and `tools/call` for the single `bintu_scrape_text` tool, and requires `Content-Type: application/json` plus the same API key as normal requests. Point a Claude custom connector at `https://<your-host>/mcp` with an `X-API-Key` request header. Notifications get `202`; `GET`/`DELETE` return `405` since the server keeps no sessions or streams.
 
-`GET /mcp/tools` advertises the `bintu_scrape_text` tool, and `POST /mcp/tools/call` invokes it with `{"name":"bintu_scrape_text","arguments":{"url":"https://example.com","render_js":false}}`. The response follows the MCP tool content shape: `{"content":[{"type":"text","text":"..."}]}`. Tool calls use the same API authentication and rate limits as normal scrape requests.
+`GET /mcp/tools` advertises the `bintu_scrape_text` tool, and `POST /mcp/tools/call` invokes it with `{"name":"bintu_scrape_text","arguments":{"url":"https://example.com","render_js":false}}`. Successful responses follow the MCP tool content shape and include the same extraction envelope as both structured content and serialized JSON: `structuredContent` contains the canonical extraction envelope, while `content[0].text` contains its JSON serialization. Tool calls use the same API authentication and rate limits as normal scrape requests.
 
 ### Query Parameters
 
@@ -224,7 +223,7 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 | Quota | 60 req / 60 s burst guard per IP | 60/60s per `X-RapidAPI-User` + plan quota | 60/60s global across MCPize subscribers (single upstream token) + plan quota |
 | Cache | 5-min in-memory + 24 h Supabase persistent | Same | Same upstream cache; cold fetch ~2–6 s, cache hit ~300 ms |
 
-**Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `{mode, tokens, chunk_count, cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks}` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
+**Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
 
 Limits everywhere: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (plain HTML only until `RENDER_JS_ENABLED=true` on paid infra). Error codes: see [Common errors](#common-errors).
 
