@@ -67,10 +67,18 @@ def _header(
 
 
 def _metric_value(metrics_text: str, name: str) -> float:
+    """Sum a Prometheus metric across labeled and unlabeled series."""
+    total = 0.0
+    labeled_prefix = f"{name}{{"
+
     for line in metrics_text.splitlines():
         if line.startswith(f"{name} "):
-            return float(line.split()[1])
-    return 0.0
+            total += float(line.split()[1])
+        elif line.startswith(labeled_prefix):
+            value_text = line.rsplit(" ", 1)[1]
+            total += float(value_text)
+
+    return total
 
 
 def _check_metrics(base_url: str, api_key: str) -> None:
@@ -105,7 +113,9 @@ def _check_metrics(base_url: str, api_key: str) -> None:
     )
 
     cache_lookups = cache_hits + cache_misses
-    cache_hit_rate = cache_hits / cache_lookups if cache_lookups else 0.0
+    cache_hit_rate = (
+        cache_hits / cache_lookups if cache_lookups else 0.0
+    )
 
     print("OK  /metrics")
     print(f"    cache hits: {cache_hits:.0f}")
