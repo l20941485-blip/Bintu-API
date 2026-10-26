@@ -1,9 +1,12 @@
-"""robots.txt support for BintuBot (RFC 9309).
+"""robots.txt support for BintuBot.
 
-Parsing, safe fetching, per-origin caching and the allow/deny decision live here, so
-scraper.py stays focused on SSRF-safe page fetching and text extraction. robots.txt
-is fetched through the same guards as pages: public addresses only, connections
-pinned to the validated address, allowed ports only, no https -> http downgrade.
+Parsing, safe fetching, per-origin caching and allow/deny decisions live
+here. Fetching uses public-address validation and pinned connections.
+
+A shared elapsed-time budget covers all redirect hops. Budget checks run
+around blocking stages, and socket timeouts use the remaining budget.
+This is not a hard execution deadline: synchronous DNS and individual
+blocking HTTP operations may finish after the budget has expired.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ ROBOTS_TIMEOUT_SECONDS = 8.0
 
 
 class RobotsUnreachable(Exception):
-    """robots.txt could not be retrieved (5xx, timeout, connection problem)."""
+    """robots.txt could not be retrieved."""
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,9 @@ class RobotsRules:
         for allow, pattern in self.rules:
             if _rule_matches(pattern, target):
                 length = len(pattern)
-                if length > best_length or (length == best_length and allow):
+                if length > best_length or (
+                    length == best_length and allow
+                ):
                     best_length, best_allow = length, allow
 
         return best_allow
@@ -82,8 +87,8 @@ def _glob_full_match(pattern: str, text: str) -> bool:
     while t < len(text):
         if p < len(pattern) and pattern[p] == "*":
             star = p
-            mark = t
             p += 1
+            mark = t
         elif p < len(pattern) and pattern[p] == text[t]:
             p += 1
             t += 1
@@ -162,7 +167,11 @@ def parse_robots_rules(
         chosen, label = [], "none"
 
     return RobotsRules(
-        rules=tuple(rule for group_rules in chosen for rule in group_rules),
+        rules=tuple(
+            rule
+            for group_rules in chosen
+            for rule in group_rules
+        ),
         matched_group=label,
     )
 
@@ -180,6 +189,27 @@ def robots_mode(settings) -> str:
     return mode if mode in VALID_MODES else "enforce"
 
 
+def _remaining_budget(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RobotsUnreachable(
+            "robots.txt retrieval budget exhausted (TimeoutError)"
+        )
+    return remaining
+
+
+def _apply_remaining_timeout(connection, deadline: float) -> float:
+    """Update both future connection and currently connected socket timeouts."""
+    remaining = _remaining_budget(deadline)
+    connection.timeout = remaining
+
+    connected_socket = getattr(connection, "sock", None)
+    if connected_socket is not None:
+        connected_socket.settimeout(remaining)
+
+    return remaining
+
+
 def _read_robots_body(response) -> str:
     encoding = (
         response.getheader("Content-Encoding") or "identity"
@@ -188,7 +218,9 @@ def _read_robots_body(response) -> str:
 
     if encoding in ("gzip", "x-gzip"):
         try:
-            raw = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(
+            raw = zlib.decompressobj(
+                16 + zlib.MAX_WBITS
+            ).decompress(
                 raw,
                 MAX_ROBOTS_BYTES + 1,
             )
@@ -197,16 +229,29 @@ def _read_robots_body(response) -> str:
     elif encoding not in ("", "identity"):
         raise RobotsUnreachable("unsupported content encoding")
 
-    return raw[:MAX_ROBOTS_BYTES].decode("utf-8", errors="replace")
+    return raw[:MAX_ROBOTS_BYTES].decode(
+        "utf-8",
+        errors="replace",
+    )
 
 
-def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
+def _fetch_robots_text(
+    origin: str,
+    settings: Settings,
+) -> str | None:
+    deadline = time.monotonic() + ROBOTS_TIMEOUT_SECONDS
     current = f"{origin}/robots.txt"
     current_scheme = urlsplit(current).scheme
 
     for hop in range(MAX_ROBOTS_REDIRECTS + 1):
+        _remaining_budget(deadline)
+
         try:
-            parsed, host, port, path = _parse_target(current, settings)
+            parsed, host, port, path = _parse_target(
+                current,
+                settings,
+            )
+            _remaining_budget(deadline)
             address = resolve_public_addresses(host, port)[0]
         except TargetURLRejected as error:
             if hop == 0:
@@ -215,19 +260,24 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
                 "a redirect led to a disallowed target"
             ) from error
 
+        remaining = _remaining_budget(deadline)
+
         if current_scheme == "https" and parsed.scheme == "http":
             raise RobotsUnreachable("redirect from https to http")
 
         current_scheme = parsed.scheme
-        connection = _make_connection(
-            parsed,
-            host,
-            address,
-            port,
-            ROBOTS_TIMEOUT_SECONDS,
-        )
+        connection = None
 
         try:
+            connection = _make_connection(
+                parsed,
+                host,
+                address,
+                port,
+                remaining,
+            )
+
+            _apply_remaining_timeout(connection, deadline)
             connection.request(
                 "GET",
                 path,
@@ -235,12 +285,18 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
                     "Accept": "text/plain, */*;q=0.1",
                     "Accept-Encoding": "identity",
                     "Connection": "close",
-                    "Host": _host_header(host, port, parsed.scheme),
+                    "Host": _host_header(
+                        host,
+                        port,
+                        parsed.scheme,
+                    ),
                     "User-Agent": get_user_agent(settings),
                 },
             )
 
+            _apply_remaining_timeout(connection, deadline)
             response = connection.getresponse()
+            _remaining_budget(deadline)
             status = response.status
 
             if status in REDIRECT_STATUSES:
@@ -248,6 +304,7 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
                 if not location:
                     return None
                 current = urljoin(current, location)
+                _remaining_budget(deadline)
                 continue
 
             if 400 <= status < 500:
@@ -256,7 +313,10 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
             if not 200 <= status < 300:
                 raise RobotsUnreachable(f"HTTP {status}")
 
-            return _read_robots_body(response)
+            _apply_remaining_timeout(connection, deadline)
+            text = _read_robots_body(response)
+            _remaining_budget(deadline)
+            return text
 
         except (
             OSError,
@@ -268,7 +328,8 @@ def _fetch_robots_text(origin: str, settings: Settings) -> str | None:
                 f"connection problem ({type(error).__name__})"
             ) from error
         finally:
-            connection.close()
+            if connection is not None:
+                connection.close()
 
     return None
 
@@ -284,7 +345,13 @@ def clear_robots_cache() -> None:
 
 def _cache_ttl(settings) -> int:
     try:
-        ttl = int(getattr(settings, "robots_cache_ttl_seconds", 3600))
+        ttl = int(
+            getattr(
+                settings,
+                "robots_cache_ttl_seconds",
+                3600,
+            )
+        )
     except (TypeError, ValueError):
         ttl = 3600
 
@@ -309,7 +376,11 @@ def _rules_for_origin(origin: str, settings: Settings):
         )
         entry = (now + _cache_ttl(settings), rules, None)
     except RobotsUnreachable as error:
-        entry = (now + UNREACHABLE_TTL_SECONDS, None, str(error))
+        entry = (
+            now + UNREACHABLE_TTL_SECONDS,
+            None,
+            str(error),
+        )
 
     with _cache_lock:
         if len(_cache) >= MAX_CACHE_ENTRIES:
@@ -319,12 +390,11 @@ def _rules_for_origin(origin: str, settings: Settings):
     return entry[1], entry[2]
 
 
-def robots_decision(url: str, settings: Settings) -> RobotsDecision:
-    """Return an allow/deny decision with a human-readable reason.
-
-    The route layer uses the unreachable flag to distinguish retrieval failures
-    from explicit robots disallows when selecting an API error code.
-    """
+def robots_decision(
+    url: str,
+    settings: Settings,
+) -> RobotsDecision:
+    """Distinguish explicit disallows from robots retrieval failures."""
     if robots_mode(settings) == "off":
         return RobotsDecision(
             allowed=True,
@@ -333,25 +403,37 @@ def robots_decision(url: str, settings: Settings) -> RobotsDecision:
         )
 
     parsed, host, port, _ = _parse_target(url, settings)
-    origin = f"{parsed.scheme}://{_host_header(host, port, parsed.scheme)}"
+    origin = (
+        f"{parsed.scheme}://"
+        f"{_host_header(host, port, parsed.scheme)}"
+    )
     rules, problem = _rules_for_origin(origin, settings)
 
     if rules is None:
         return RobotsDecision(
             allowed=False,
-            reason=f"robots.txt could not be retrieved ({problem})",
+            reason=(
+                "robots.txt could not be retrieved "
+                f"({problem})"
+            ),
             unreachable=True,
         )
 
     if rules.is_allowed(robots_target(url)):
         return RobotsDecision(
             allowed=True,
-            reason=f"allowed by robots.txt (group: {rules.matched_group})",
+            reason=(
+                "allowed by robots.txt "
+                f"(group: {rules.matched_group})"
+            ),
             matched_group=rules.matched_group,
         )
 
     return RobotsDecision(
         allowed=False,
-        reason=f"disallowed by robots.txt (group: {rules.matched_group})",
+        reason=(
+            "disallowed by robots.txt "
+            f"(group: {rules.matched_group})"
+        ),
         matched_group=rules.matched_group,
     )
