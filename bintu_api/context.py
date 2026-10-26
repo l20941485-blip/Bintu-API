@@ -256,14 +256,44 @@ def _split_prose_block(block: str, max_tokens: int) -> list[str]:
 
 
 def _split_block(block: str, max_tokens: int) -> list[str]:
-    """Split a block while preserving table rows and non-whitespace units."""
+    """Separate table runs from prose before applying budget splitting."""
     if count_tokens(block) <= max_tokens:
         return [block]
 
     if _is_table_block(block):
         return _split_oversized_table(block, max_tokens)
 
-    return _split_prose_block(block, max_tokens)
+    sections: list[tuple[bool, str]] = []
+    current_lines: list[str] = []
+    current_has_pipe: bool | None = None
+
+    for line in block.splitlines():
+        has_pipe = "|" in line
+
+        if current_lines and has_pipe != current_has_pipe:
+            sections.append((
+                bool(current_has_pipe),
+                "\n".join(current_lines),
+            ))
+            current_lines = []
+
+        current_lines.append(line)
+        current_has_pipe = has_pipe
+
+    if current_lines:
+        sections.append((
+            bool(current_has_pipe),
+            "\n".join(current_lines),
+        ))
+
+    pieces: list[str] = []
+    for has_pipe, section in sections:
+        if has_pipe and _is_table_block(section):
+            pieces.extend(_split_oversized_table(section, max_tokens))
+        else:
+            pieces.extend(_split_prose_block(section, max_tokens))
+
+    return _pack_chunk_pieces(pieces, max_tokens, "\n")
 
 
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
