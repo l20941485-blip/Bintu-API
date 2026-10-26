@@ -132,3 +132,85 @@ def test_actual_chunker_preserves_oversized_table_row():
         for chunk in chunks
         for line in chunk.splitlines()
     ] == text.splitlines()
+
+
+def test_actual_chunker_preserves_table_embedded_in_prose():
+    from bintu_api.context import count_tokens, split_into_chunks
+
+    rows = [
+        "Domain | Domain (A-label) | Language | Script",
+        "--- | --- | --- | ---",
+        "alpha | xn--alpha | Example language | Latin",
+        "beta | xn--beta | Another language | Greek",
+        "gamma | xn--gamma | Third language | Cyrillic",
+    ]
+    text = (
+        "# Reserved domains\n"
+        "The following table lists example entries.\n"
+        + "\n".join(rows)
+        + "\n## Policy\n"
+        "These entries are reserved for documentation."
+    )
+    budget = 30
+
+    chunks = split_into_chunks(text, budget)
+
+    assert len(chunks) > 1
+    output_lines = [
+        line.strip()
+        for chunk in chunks
+        for line in chunk.splitlines()
+        if line.strip()
+    ]
+
+    for row in rows:
+        assert output_lines.count(row) == 1, (
+            f"Table row was split, flattened, or duplicated: {row!r}"
+        )
+
+    assert all(count_tokens(chunk) <= budget for chunk in chunks)
+
+
+def test_actual_chunker_keeps_wide_table_row_intact():
+    from bintu_api.context import count_tokens, split_into_chunks
+
+    target_row = (
+        "\u03b4\u03bf\u03ba\u03b9\u03bc\u03ae | xn--jxalpdlp"
+        " | Greek, Modern (1453-) | Greek"
+    )
+    rows = [
+        "Domain | Domain (A-label) | Language | Script",
+        "--- | --- | --- | ---",
+        *[
+            f"domain-{index} | xn--example-{index} | Example language | Latin"
+            for index in range(8)
+        ],
+        target_row,
+        "final-domain | xn--final | Another language | Latin",
+    ]
+    text = (
+        "# IANA-managed Reserved Domains\n"
+        "The following table lists test domains.\n"
+        + "\n".join(rows)
+        + "\n## Policy-reserved domains\n"
+        "These entries are not available for registration."
+    )
+    budget = 100
+
+    assert count_tokens(text) > budget
+    assert all(count_tokens(row) <= budget for row in rows)
+
+    chunks = split_into_chunks(text, budget)
+
+    assert len(chunks) > 1
+    output_lines = [
+        line.strip()
+        for chunk in chunks
+        for line in chunk.splitlines()
+        if line.strip()
+    ]
+    table_lines = [line for line in output_lines if "|" in line]
+
+    assert table_lines == rows
+    assert sum(chunk.count(target_row) for chunk in chunks) == 1
+    assert all(count_tokens(chunk) <= budget for chunk in chunks)
