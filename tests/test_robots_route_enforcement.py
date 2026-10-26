@@ -20,6 +20,7 @@ from bintu_api.robots import (
     clear_robots_cache,
     robots_decision,
 )
+from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -208,6 +209,58 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
             unreachable=False,
         )
 
+    def test_persistent_cache_hit_does_not_check_robots(self) -> None:
+        settings = Settings(
+            api_key="robots-route-test-key",
+            rapidapi_proxy_secret="",
+        )
+        app = create_app(settings)
+        client = TestClient(app)
+        self.addCleanup(client.close)
+
+        app.state.supabase_client = object()
+        app.state.cache = Mock()
+
+        cached = CachedMarkdown(
+            markdown="Cached body text.",
+            truncated=False,
+        )
+
+        with (
+            patch(
+                "bintu_api.routes.robots_decision",
+            ) as decision_call,
+            patch(
+                "bintu_api.routes.get_cached_markdown",
+                new=AsyncMock(return_value=cached),
+            ),
+            patch(
+                "bintu_api.routes.fetch_html_document",
+            ) as plain_fetch,
+            patch(
+                "bintu_api.routes.fetch_rendered_html_document",
+            ) as rendered_fetch,
+        ):
+            response = client.get(
+                "/api/v1/scrape/text",
+                params={
+                    "url": "https://example.com/cached",
+                    "skip_cache": "false",
+                },
+                headers={
+                    "X-API-Key": "robots-route-test-key",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            response.json()["cache_layer"],
+            "persistent",
+        )
+        decision_call.assert_not_called()
+        plain_fetch.assert_not_called()
+        rendered_fetch.assert_not_called()
+        rendered_fetch.assert_not_awaited()
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
