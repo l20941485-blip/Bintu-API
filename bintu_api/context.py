@@ -161,147 +161,136 @@ def _sentences(text: str) -> list[str]:
 
 
 def _is_table_block(block: str) -> bool:
-    """True when a Markdown block looks like a table."""
+    """Recognize pipe-delimited tables, with or without outer pipes."""
     lines = [line.strip() for line in block.splitlines() if line.strip()]
-    return len(lines) >= 2 and all(line.startswith("|") for line in lines)
+    return len(lines) >= 2 and all("|" in line for line in lines)
+
+
+def _pack_chunk_pieces(
+    pieces: list[str], max_tokens: int, separator: str
+) -> list[str]:
+    """Pack intact pieces using the token count of the assembled text."""
+    chunks: list[str] = []
+    current = ""
+
+    for piece in pieces:
+        if not piece:
+            continue
+
+        candidate = current + separator + piece if current else piece
+        if current and count_tokens(candidate) > max_tokens:
+            chunks.append(current)
+            current = piece
+        else:
+            current = candidate
+
+    if current:
+        chunks.append(current)
+
+    return chunks
 
 
 def _split_oversized_table(block: str, max_tokens: int) -> list[str]:
-    """Split a Markdown table without breaking an individual row."""
+    """Keep rows intact, even when an individual row exceeds the budget."""
     lines = [line for line in block.splitlines() if line.strip()]
-    if not lines:
-        return []
+    return _pack_chunk_pieces(lines, max_tokens, "\n")
 
+
+def _split_at_whitespace(block: str, max_tokens: int) -> list[str]:
+    """Split oversized prose without cutting words or URLs."""
     chunks: list[str] = []
-    current: list[str] = []
-    current_tokens = 0
+    start: int | None = None
+    end = 0
 
-    for line in lines:
-        line_tokens = count_tokens(line)
-        candidate_tokens = current_tokens + line_tokens + (1 if current else 0)
+    for match in re.finditer(r"\S+", block):
+        if start is None:
+            start = match.start()
+            end = match.end()
+            continue
 
-        if current and candidate_tokens > max_tokens:
-            chunks.append("\n".join(current))
-            current = [line]
-            current_tokens = line_tokens
-        else:
-            current.append(line)
-            current_tokens = candidate_tokens
+        candidate = block[start:match.end()]
+        if count_tokens(candidate) > max_tokens:
+            chunks.append(block[start:end])
+            start = match.start()
 
-    if current:
-        chunks.append("\n".join(current))
+        end = match.end()
+
+    if start is not None:
+        chunks.append(block[start:end])
 
     return chunks
 
 
 def _split_prose_block(block: str, max_tokens: int) -> list[str]:
-    """Split a prose block by sentence, preserving punctuation."""
+    """Prefer complete sentences; split oversized sentences at whitespace.
+
+    Sentence boundaries require punctuation followed by whitespace, so
+    internal periods in domains and URLs do not create boundaries.
+    Original whitespace is retained within each returned piece.
+    """
     if count_tokens(block) <= max_tokens:
         return [block]
 
-    chunks: list[str] = []
-    current: list[str] = []
-    current_tokens = 0
+    sentences: list[str] = []
+    position = 0
+    boundary_pattern = re.compile(r"""[.!?]+["')\]]*\s+""")
 
-    for sentence in _sentences(block):
-        sentence_tokens = count_tokens(sentence)
+    for match in boundary_pattern.finditer(block):
+        sentence = block[position:match.end()].strip()
+        if sentence:
+            sentences.append(sentence)
+        position = match.end()
 
-        if current and current_tokens + sentence_tokens + 1 > max_tokens:
-            chunks.append(" ".join(current))
-            current = [sentence]
-            current_tokens = sentence_tokens
+    remainder = block[position:].strip()
+    if remainder:
+        sentences.append(remainder)
+
+    pieces: list[str] = []
+    for sentence in sentences:
+        if count_tokens(sentence) <= max_tokens:
+            pieces.append(sentence)
         else:
-            current.append(sentence)
-            current_tokens += sentence_tokens + (1 if len(current) > 1 else 0)
+            pieces.extend(_split_at_whitespace(sentence, max_tokens))
 
-    if current:
-        chunks.append(" ".join(current))
-
-    return chunks
+    return _pack_chunk_pieces(pieces, max_tokens, " ")
 
 
 def _split_block(block: str, max_tokens: int) -> list[str]:
-    """Split one paragraph/table block without losing its internal structure."""
+    """Split a block while preserving table rows and non-whitespace units."""
     if count_tokens(block) <= max_tokens:
         return [block]
 
     if _is_table_block(block):
         return _split_oversized_table(block, max_tokens)
 
-    chunks = _split_prose_block(block, max_tokens)
-
-    # A single very long sentence may still exceed the budget. Split it by
-    # words, but retain spaces so downstream consumers receive readable text.
-    result: list[str] = []
-    for chunk in chunks:
-        if count_tokens(chunk) <= max_tokens:
-            result.append(chunk)
-            continue
-
-        words = chunk.split()
-        current: list[str] = []
-        current_tokens = 0
-
-        for word in words:
-            word_tokens = count_tokens(word)
-            candidate_tokens = current_tokens + word_tokens + (
-                1 if current else 0
-            )
-
-            if current and candidate_tokens > max_tokens:
-                result.append(" ".join(current))
-                current = [word]
-                current_tokens = word_tokens
-            else:
-                current.append(word)
-                current_tokens = candidate_tokens
-
-        if current:
-            result.append(" ".join(current))
-
-    return result
+    return _split_prose_block(block, max_tokens)
 
 
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
-    """Split ``text`` into chunks of at most ``max_tokens`` tokens.
+    """Split text into approximately token-budgeted chunks.
 
-    Preserves paragraph, sentence, and Markdown-table boundaries where
-    possible. No LangChain or other heavy dependency is required.
+    Preserve paragraph boundaries where possible and never split inside
+    a word, URL, or recognized table row. An atomic unit larger than
+    max_tokens is returned intact as an oversized chunk.
+
+    Counts use the configured approximate token method, not a tokenizer.
     """
     if not text:
         return []
     if max_tokens <= 0:
         return [text]
 
-    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
-    if not blocks:
-        return []
-
-    chunks: list[str] = []
-    current: list[str] = []
-    current_tokens = 0
-
-    for block in blocks:
-        block_pieces = _split_block(block, max_tokens)
-
-        for piece in block_pieces:
-            piece_tokens = count_tokens(piece)
-            candidate_tokens = current_tokens + piece_tokens + (
-                2 if current else 0
-            )
-
-            if current and candidate_tokens > max_tokens:
-                chunks.append("\n\n".join(current))
-                current = [piece]
-                current_tokens = piece_tokens
-            else:
-                current.append(piece)
-                current_tokens = candidate_tokens
-
-    if current:
-        chunks.append("\n\n".join(current))
-
-    return chunks
+    blocks = [
+        block.strip()
+        for block in re.split(r"\n\s*\n", text)
+        if block.strip()
+    ]
+    pieces = [
+        piece
+        for block in blocks
+        for piece in _split_block(block, max_tokens)
+    ]
+    return _pack_chunk_pieces(pieces, max_tokens, "\n\n")
 
 
 async def extract_context(
