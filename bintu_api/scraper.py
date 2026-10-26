@@ -354,8 +354,8 @@ def _parse_target(
         # Reject NAT64 or 6to4 embedding private/metadata IPv4.
         if _is_nat64_or_6to4_address(host):
             raise TargetURLRejected(
-                "URL host uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
-                "with private/metadata IPv4, which is not allowed"
+                "URL host uses an IPv4-mapped, NAT64, or 6to4 address embedding "
+                    "a non-public IPv4 destination, which is not allowed"
             )
 
     except (UnicodeError, ValueError) as error:
@@ -492,8 +492,8 @@ def fetch_html_document(
 
         if _is_nat64_or_6to4_address(host):
             raise TargetURLRejected(
-                "URL host uses NAT64 (64:ff9b::/96) or 6to4 (2002::/16) "
-                "with private/metadata IPv4, which is not allowed"
+                "URL host uses an IPv4-mapped, NAT64, or 6to4 address embedding "
+                    "a non-public IPv4 destination, which is not allowed"
             )
 
         if parsed.scheme != current_scheme:
