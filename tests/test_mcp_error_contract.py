@@ -1,15 +1,20 @@
 ﻿"""MCP tool errors must be stable, in-band, and privacy-safe."""
 
+
 from __future__ import annotations
 
+
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
+
 
 from fastapi import HTTPException
+
 
 from bintu_api.mcp import TOOL_NAME, call_tool
 from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
+
 
 
 class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
@@ -24,7 +29,19 @@ class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
         request.app.state.supabase_client = MagicMock()
         request.app.state.cache = MagicMock()
         request.app.state.cache.get.return_value = None
+        request.app.state.rate_limiter = MagicMock()
+
+        # Emulate Starlette's case-insensitive header mapping: absent headers
+        # return the caller-supplied default (normally an empty string).
+        request.headers.get.side_effect = (
+            lambda name, default=None: default if default is not None else ""
+        )
+
+        # No direct client connection in this unit-test fake; identity falls
+        # back to the same "unknown" bucket used for a real disconnected request.
+        request.client = None
         return request
+
 
     def _payload(
         self,
@@ -37,8 +54,10 @@ class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
         payload.arguments = {"url": url, "render_js": render_js}
         return payload
 
+
     async def test_unsafe_url_is_in_band(self) -> None:
         request = self._request()
+
 
         with patch(
             "bintu_api.routes._fetch_and_extract",
@@ -49,12 +68,15 @@ class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
                 request,
             )
 
+
         self.assertTrue(response["isError"])
         self.assertIn("invalid_or_unsafe_url", response["content"][0]["text"])
         self.assertNotIn("http://127.0.0.1/", response["content"][0]["text"])
 
+
     async def test_robots_block_is_in_band(self) -> None:
         request = self._request()
+
 
         with patch(
             "bintu_api.routes._fetch_and_extract",
@@ -69,11 +91,14 @@ class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
         ):
             response = await call_tool(self._payload(), request)
 
+
         self.assertTrue(response["isError"])
         self.assertIn("blocked_by_robots", response["content"][0]["text"])
 
+
     async def test_robots_unreachable_is_in_band(self) -> None:
         request = self._request()
+
 
         with patch(
             "bintu_api.routes._fetch_and_extract",
@@ -88,11 +113,14 @@ class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
         ):
             response = await call_tool(self._payload(), request)
 
+
         self.assertTrue(response["isError"])
         self.assertIn("robots_unreachable", response["content"][0]["text"])
 
+
     async def test_render_disabled_is_in_band(self) -> None:
         request = self._request(render_js_enabled=False)
+
 
         with patch(
             "bintu_api.routes._fetch_and_extract",
@@ -105,8 +133,10 @@ class McpErrorContractTests(unittest.IsolatedAsyncioTestCase):
                 request,
             )
 
+
         self.assertTrue(response["isError"])
         self.assertIn("render_js_disabled", response["content"][0]["text"])
+
 
 
 if __name__ == "__main__":
