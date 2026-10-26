@@ -3,78 +3,77 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-
-
 from fastapi.testclient import TestClient
 
-
-
 from bintu_api.database import CachedMarkdown
-from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA
+from bintu_api.mcp import (
+    TOOL_ANNOTATIONS,
+    TOOL_INPUT_SCHEMA,
+    TOOL_NAME,
+    TOOL_OUTPUT_SCHEMA,
+)
 from bintu_api.scraper import FetchedHTML, UpstreamHTTPError
 from bintu_api.settings import Settings
 from main import create_app
 
-
-
 from unittest import mock
-
-
 
 from bintu_api.robots import RobotsDecision
 
-
-
 _robots_patch = mock.patch(
     "bintu_api.routes.robots_decision",
-    return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
+    return_value=RobotsDecision(
+        allowed=True,
+        reason="disabled in tests",
+        checked=False,
+    ),
 )
-
-
 
 
 def setUpModule():
     _robots_patch.start()
 
 
-
-
 def tearDownModule():
     _robots_patch.stop()
 
 
-
-
 class ScraperApiTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.app = create_app(Settings(api_key="", rapidapi_proxy_secret=""))
+        self.settings = Settings(
+            api_key="",
+            rapidapi_proxy_secret="",
+        )
+        self.app = create_app(self.settings)
         self.client = TestClient(self.app)
-
-
 
     def test_read_root_and_health(self) -> None:
         gateway = self.client.get("/")
         health = self.client.get("/healthz")
 
-
-
         self.assertEqual(gateway.status_code, 200)
         self.assertEqual(gateway.json()["docs"], "/docs")
-        self.assertEqual(health.json(), {"status": "ok"})
 
-
+        health_payload = health.json()
+        self.assertEqual(health_payload["status"], "ok")
+        self.assertEqual(
+            health_payload["version"],
+            self.settings.service_version,
+        )
+        self.assertIsNone(health_payload["commit"])
+        self.assertIsNone(health_payload["environment"])
 
     def test_root_options_absorbs_gateway_preflight(self) -> None:
         response = self.client.options("/")
 
-
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(), {"status": "ok", "supported_methods": ["GET", "POST", "OPTIONS"]}
+            response.json(),
+            {
+                "status": "ok",
+                "supported_methods": ["GET", "POST", "OPTIONS"],
+            },
         )
-
-
 
     def test_cors_preflight_returns_allow_origin(self) -> None:
         response = self.client.options(
@@ -86,16 +85,15 @@ class ScraperApiTests(unittest.TestCase):
             },
         )
 
-
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.headers["access-control-allow-origin"],
             "https://bintu-web-reader.mcpize.run",
         )
-        self.assertEqual(response.headers["access-control-allow-credentials"], "true")
-
-
+        self.assertEqual(
+            response.headers["access-control-allow-credentials"],
+            "true",
+        )
 
     def test_cors_rejects_unlisted_origin(self) -> None:
         """C3: a wildcard-plus-credentials CORS policy lets any page act for a user."""
@@ -108,21 +106,23 @@ class ScraperApiTests(unittest.TestCase):
             },
         )
 
-
-
-        self.assertNotIn("access-control-allow-origin", response.headers)
-
-
+        self.assertNotIn(
+            "access-control-allow-origin",
+            response.headers,
+        )
 
     def test_cors_allows_configured_extra_origins(self) -> None:
         app = create_app(
             Settings(
                 api_key="",
                 rapidapi_proxy_secret="",
-                cors_allowed_origins="https://app.example, https://dev.example",
+                cors_allowed_origins=(
+                    "https://app.example, https://dev.example"
+                ),
             )
         )
         client = TestClient(app)
+
         for origin in ("https://app.example", "https://dev.example"):
             with self.subTest(origin=origin):
                 response = client.options(
@@ -132,47 +132,64 @@ class ScraperApiTests(unittest.TestCase):
                         "Access-Control-Request-Method": "GET",
                     },
                 )
-                self.assertEqual(response.headers["access-control-allow-origin"], origin)
-
-
+                self.assertEqual(
+                    response.headers["access-control-allow-origin"],
+                    origin,
+                )
 
         rejected = client.options(
             "/",
-            headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"},
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "GET",
+            },
         )
-        self.assertNotIn("access-control-allow-origin", rejected.headers)
-
-
+        self.assertNotIn(
+            "access-control-allow-origin",
+            rejected.headers,
+        )
 
     def test_settings_read_cors_allowlist_from_env(self) -> None:
         with patch.dict(
-            "os.environ", {"CORS_ALLOWED_ORIGINS": "https://a.example, https://b.example"}
+            "os.environ",
+            {
+                "CORS_ALLOWED_ORIGINS": (
+                    "https://a.example, https://b.example"
+                )
+            },
         ):
             settings = Settings.from_env()
+
         # The MCPize gateway stays allowed; env adds to it, never replaces it.
         self.assertEqual(
             settings.cors_origin_allowlist(),
-            ("https://bintu-web-reader.mcpize.run", "https://a.example", "https://b.example"),
+            (
+                "https://bintu-web-reader.mcpize.run",
+                "https://a.example",
+                "https://b.example",
+            ),
         )
 
-
-
     def test_invalid_url_format(self) -> None:
-        response = self.client.get("/api/v1/scrape/text", params={"url": "://example.com"})
-
-
+        response = self.client.get(
+            "/api/v1/scrape/text",
+            params={"url": "://example.com"},
+        )
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"]["code"], "invalid_or_unsafe_url")
-
-
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "invalid_or_unsafe_url",
+        )
 
     def test_scrape_text_extracts_content_without_live_network(self) -> None:
         html = (
             b"<html><body><header>Header noise</header>"
             b"<main>Useful <b>visible</b> text</main>"
-            b"<script>script noise</script><style>.hidden { display: none; }</style>"
-            b"<footer>Footer noise</footer><nav>Navigation noise</nav></body></html>"
+            b"<script>script noise</script>"
+            b"<style>.hidden { display: none; }</style>"
+            b"<footer>Footer noise</footer>"
+            b"<nav>Navigation noise</nav></body></html>"
         )
         with patch(
             "bintu_api.routes.fetch_html_document",
@@ -184,17 +201,25 @@ class ScraperApiTests(unittest.TestCase):
                 headers={"X-Request-ID": "test-trace-42"},
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["text"], "Useful visible text")
-        self.assertEqual(response.headers["X-Request-ID"], "test-trace-42")
-
-
+        self.assertEqual(
+            response.json()["text"],
+            "Useful visible text",
+        )
+        self.assertEqual(
+            response.headers["X-Request-ID"],
+            "test-trace-42",
+        )
 
     def test_http_charset_is_used_and_retained_in_cache(self) -> None:
-        fetched = FetchedHTML(body=b"<p>caf\xe9</p>", charset="iso-8859-1")
-        with patch("bintu_api.routes.fetch_html_document", return_value=fetched) as fetch:
+        fetched = FetchedHTML(
+            body=b"<p>caf\xe9</p>",
+            charset="iso-8859-1",
+        )
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=fetched,
+        ) as fetch:
             first = self.client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com/charset"},
@@ -204,94 +229,85 @@ class ScraperApiTests(unittest.TestCase):
                 params={"url": "https://example.com/charset"},
             )
 
-
-
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.json()["text"], "café")
         self.assertEqual(second.json()["text"], "café")
         fetch.assert_called_once()
 
-
-
-    def test_response_includes_truncation_and_resolves_relative_links(self) -> None:
+    def test_response_includes_truncation_and_resolves_relative_links(
+        self,
+    ) -> None:
         fetched = FetchedHTML(
             body=b"<main><p>Read <a href='/guide'>the guide</a>.</p></main>",
             charset=None,
             final_url="https://example.com/final/page",
         )
-        with patch("bintu_api.routes.fetch_html_document", return_value=fetched):
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=fetched,
+        ):
             response = self.client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com/original"},
             )
 
-
-
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
         self.assertEqual(
-            response.json(),
-            {
-                "url": "https://example.com/original",
-                "text": "Read the guide (https://example.com/guide).",
-                "truncated": False,
-                "cache_layer": "none",
-            },
+            payload["url"],
+            "https://example.com/original",
         )
-
-
-
-    def test_response_includes_truncation_and_resolves_relative_links(self) -> None:
-        fetched = FetchedHTML(
-            body=b"<main><p>Read <a href='/guide'>the guide</a>.</p></main>",
-            charset=None,
-            final_url="https://example.com",
+        self.assertEqual(
+            payload["text"],
+            "Read the guide (https://example.com/guide).",
         )
-        with patch("bintu_api.routes.fetch_html_document", return_value=fetched):
-            response = self.client.get(
-                "/api/v1/scrape/text",
-                params={"url": "https://example.com/original"},
-            )
-
-
-
-        self.assertEqual(response.status_code, 200)
-
-
-
-        # Pull actual response mapping parameters
-        res_json = response.json()
-        self.assertEqual(res_json["url"], "https://example.com/original")
-        self.assertEqual(res_json["text"], "Read the guide (https://example.com/guide).")
-        self.assertEqual(res_json["truncated"], False)
-        self.assertEqual(res_json["cache_layer"], "none")
-        self.assertEqual(res_json["token_method"], "ceil(characters/4)")
-        self.assertIn("approx_tokens", res_json)
-
-
+        self.assertFalse(payload["truncated"])
+        self.assertEqual(payload["cache_layer"], "none")
+        self.assertEqual(
+            payload["token_method"],
+            "ceil(characters/4)",
+        )
+        self.assertIn("approx_tokens", payload)
+        self.assertIn("tokens_saved_estimate", payload)
+        self.assertIn("provenance", payload)
 
     def test_javascript_rendering_uses_the_shared_extractor(self) -> None:
-        settings = Settings(api_key="", rapidapi_proxy_secret="", render_js_enabled=True)
+        settings = Settings(
+            api_key="",
+            rapidapi_proxy_secret="",
+            render_js_enabled=True,
+        )
         client = TestClient(create_app(settings))
-        rendered = FetchedHTML(body=b"<main>Rendered content</main>", charset="utf-8")
+        rendered = FetchedHTML(
+            body=b"<main>Rendered content</main>",
+            charset="utf-8",
+        )
         with patch(
             "bintu_api.routes.fetch_rendered_html_document",
             new=AsyncMock(return_value=rendered),
         ) as fetch:
             response = client.get(
                 "/api/v1/scrape/text",
-                params={"url": "https://example.com/app", "render_js": "true"},
+                params={
+                    "url": "https://example.com/app",
+                    "render_js": "true",
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["text"], "Rendered content")
+        self.assertEqual(
+            response.json()["text"],
+            "Rendered content",
+        )
         fetch.assert_awaited_once()
 
-
-
     def test_javascript_timeout_maps_to_504(self) -> None:
-        settings = Settings(api_key="", rapidapi_proxy_secret="", render_js_enabled=True)
+        settings = Settings(
+            api_key="",
+            rapidapi_proxy_secret="",
+            render_js_enabled=True,
+        )
         client = TestClient(create_app(settings))
         with patch(
             "bintu_api.routes.fetch_rendered_html_document",
@@ -299,33 +315,40 @@ class ScraperApiTests(unittest.TestCase):
         ):
             response = client.get(
                 "/api/v1/scrape/text",
-                params={"url": "https://example.com/slow", "render_js": "true"},
+                params={
+                    "url": "https://example.com/slow",
+                    "render_js": "true",
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 504)
-        self.assertEqual(response.json()["detail"]["code"], "upstream_timeout")
-
-
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "upstream_timeout",
+        )
 
     def test_mcp_lists_the_scrape_tool_schema(self) -> None:
         response = self.client.get("/mcp/tools")
 
-
-
         self.assertEqual(response.status_code, 200)
         tool = response.json()["tools"][0]
         self.assertEqual(tool["name"], TOOL_NAME)
-        self.assertEqual(tool["inputSchema"]["required"], ["url"])
-        self.assertEqual(tool["inputSchema"]["properties"]["render_js"]["type"], "boolean")
-
-
+        self.assertEqual(
+            tool["inputSchema"]["required"],
+            ["url"],
+        )
+        self.assertEqual(
+            tool["inputSchema"]["properties"]["render_js"]["type"],
+            "boolean",
+        )
 
     def test_mcp_tool_call_returns_the_mcp_text_content_shape(self) -> None:
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=b"<main>MCP output</main>", charset=None),
+            return_value=FetchedHTML(
+                body=b"<main>MCP output</main>",
+                charset=None,
+            ),
         ):
             response = self.client.post(
                 "/mcp/tools/call",
@@ -335,29 +358,28 @@ class ScraperApiTests(unittest.TestCase):
                 },
             )
 
-
-
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertFalse(payload.get("isError", False))
+
         envelope = json.loads(payload["content"][0]["text"])
         self.assertEqual(envelope["mode"], "scrape")
-        self.assertEqual(envelope["chunks"][0]["text"], "MCP output")
+        self.assertEqual(
+            envelope["chunks"][0]["text"],
+            "MCP output",
+        )
         self.assertIn("tokens", envelope)
-
-
 
     def test_mcp_rejects_unknown_tool_names(self) -> None:
         response = self.client.post(
             "/mcp/tools/call",
-            json={"name": "other_tool", "arguments": {"url": "https://example.com"}},
+            json={
+                "name": "other_tool",
+                "arguments": {"url": "https://example.com"},
+            },
         )
 
-
-
         self.assertEqual(response.status_code, 400)
-
-
 
     def test_render_js_true_is_rejected_when_disabled(self) -> None:
         with patch(
@@ -366,37 +388,48 @@ class ScraperApiTests(unittest.TestCase):
         ) as fetch:
             response = self.client.get(
                 "/api/v1/scrape/text",
-                params={"url": "https://example.com/app", "render_js": "true"},
+                params={
+                    "url": "https://example.com/app",
+                    "render_js": "true",
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"]["code"], "render_js_disabled")
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "render_js_disabled",
+        )
         fetch.assert_not_awaited()
 
-
-
     def test_render_js_true_passes_through_when_enabled(self) -> None:
-        settings = Settings(api_key="", rapidapi_proxy_secret="", render_js_enabled=True)
+        settings = Settings(
+            api_key="",
+            rapidapi_proxy_secret="",
+            render_js_enabled=True,
+        )
         client = TestClient(create_app(settings))
-        rendered = FetchedHTML(body=b"<main>Rendered content</main>", charset="utf-8")
+        rendered = FetchedHTML(
+            body=b"<main>Rendered content</main>",
+            charset="utf-8",
+        )
         with patch(
             "bintu_api.routes.fetch_rendered_html_document",
             new=AsyncMock(return_value=rendered),
         ) as fetch:
             response = client.get(
                 "/api/v1/scrape/text",
-                params={"url": "https://example.com/app", "render_js": "true"},
+                params={
+                    "url": "https://example.com/app",
+                    "render_js": "true",
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["text"], "Rendered content")
+        self.assertEqual(
+            response.json()["text"],
+            "Rendered content",
+        )
         fetch.assert_awaited_once()
-
-
 
     def test_mcp_render_js_is_rejected_when_disabled(self) -> None:
         with patch(
@@ -407,21 +440,25 @@ class ScraperApiTests(unittest.TestCase):
                 "/mcp/tools/call",
                 json={
                     "name": TOOL_NAME,
-                    "arguments": {"url": "https://example.com", "render_js": True},
+                    "arguments": {
+                        "url": "https://example.com",
+                        "render_js": True,
+                    },
                 },
             )
-
-
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["isError"])
-        self.assertIn("render_js_disabled", payload["content"][0]["text"])
+        self.assertIn(
+            "render_js_disabled",
+            payload["content"][0]["text"],
+        )
         fetch.assert_not_awaited()
 
-
-
-    def test_mobile_render_js_is_rejected_after_auth_when_disabled(self) -> None:
+    def test_mobile_render_js_is_rejected_after_auth_when_disabled(
+        self,
+    ) -> None:
         settings = Settings(
             api_key="owner-key",
             rapidapi_proxy_secret="",
@@ -431,11 +468,17 @@ class ScraperApiTests(unittest.TestCase):
         client = TestClient(create_app(settings))
         auth_response = io.BytesIO(
             json.dumps(
-                {"id": "user-123", "email_confirmed_at": "2026-10-04T09:00:00Z"}
+                {
+                    "id": "user-123",
+                    "email_confirmed_at": "2026-10-04T09:00:00Z",
+                }
             ).encode()
         )
         with (
-            patch("bintu_api.auth.urlopen", return_value=auth_response) as verify,
+            patch(
+                "bintu_api.auth.urlopen",
+                return_value=auth_response,
+            ) as verify,
             patch(
                 "bintu_api.routes.fetch_rendered_html_document",
                 new=AsyncMock(),
@@ -443,29 +486,40 @@ class ScraperApiTests(unittest.TestCase):
         ):
             response = client.post(
                 "/api/v1/mobile/scrape/text",
-                json={"url": "https://example.com/app", "render_js": True},
-                headers={"Authorization": "Bearer user-access-token"},
+                json={
+                    "url": "https://example.com/app",
+                    "render_js": True,
+                },
+                headers={
+                    "Authorization": "Bearer user-access-token"
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"]["code"], "render_js_disabled")
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "render_js_disabled",
+        )
         verify.assert_called_once()
         fetch.assert_not_awaited()
 
-
-
-    def test_supabase_cache_failure_falls_back_to_live_scraping(self) -> None:
+    def test_supabase_cache_failure_falls_back_to_live_scraping(
+        self,
+    ) -> None:
         self.app.state.supabase_client = object()
         with (
             patch(
                 "bintu_api.routes.get_cached_markdown",
-                new=AsyncMock(side_effect=RuntimeError("database unavailable")),
+                new=AsyncMock(
+                    side_effect=RuntimeError("database unavailable")
+                ),
             ),
             patch(
                 "bintu_api.routes.fetch_html_document",
-                return_value=FetchedHTML(body=b"<main>Live fallback</main>", charset=None),
+                return_value=FetchedHTML(
+                    body=b"<main>Live fallback</main>",
+                    charset=None,
+                ),
             ) as fetch,
         ):
             response = self.client.get(
@@ -473,13 +527,12 @@ class ScraperApiTests(unittest.TestCase):
                 params={"url": "https://example.com/fallback"},
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["text"], "Live fallback")
+        self.assertEqual(
+            response.json()["text"],
+            "Live fallback",
+        )
         fetch.assert_called_once()
-
-
 
     def test_supabase_cache_hit_skips_live_scraping(self) -> None:
         self.app.state.supabase_client = object()
@@ -487,33 +540,45 @@ class ScraperApiTests(unittest.TestCase):
             patch(
                 "bintu_api.routes.get_cached_markdown",
                 new=AsyncMock(
-                    return_value=CachedMarkdown(markdown="Persistent result", truncated=False)
+                    return_value=CachedMarkdown(
+                        markdown="Persistent result",
+                        truncated=False,
+                    )
                 ),
             ),
-            patch("bintu_api.routes.fetch_html_document") as fetch,
+            patch(
+                "bintu_api.routes.fetch_html_document"
+            ) as fetch,
         ):
             response = self.client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com/cached"},
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["text"], "Persistent result")
+        self.assertEqual(
+            response.json()["text"],
+            "Persistent result",
+        )
         fetch.assert_not_called()
 
-
-
     def test_rapidapi_user_usage_is_incremented_on_success(self) -> None:
-        app = create_app(Settings(api_key="", rapidapi_proxy_secret="proxy-secret"))
+        app = create_app(
+            Settings(
+                api_key="",
+                rapidapi_proxy_secret="proxy-secret",
+            )
+        )
         app.state.supabase_client = object()
         client = TestClient(app)
         with (
             patch(
                 "bintu_api.routes.get_cached_markdown",
                 new=AsyncMock(
-                    return_value=CachedMarkdown(markdown="Cached success", truncated=False)
+                    return_value=CachedMarkdown(
+                        markdown="Cached success",
+                        truncated=False,
+                    )
                 ),
             ),
             patch(
@@ -530,61 +595,91 @@ class ScraperApiTests(unittest.TestCase):
                 },
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        increment.assert_awaited_once_with(app.state.supabase_client, "subscriber-7")
-
-
+        increment.assert_awaited_once_with(
+            app.state.supabase_client,
+            "subscriber-7",
+        )
 
     def test_openapi_documents_scrape_response_contract(self) -> None:
         response = self.client.get("/openapi.json")
 
-
-
         self.assertEqual(response.status_code, 200)
-        operation = response.json()["paths"]["/api/v1/scrape/text"]["get"]
-        self.assertEqual(operation["summary"], "Extract readable text from a public web page")
-        response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+        operation = response.json()["paths"][
+            "/api/v1/scrape/text"
+        ]["get"]
+        self.assertEqual(
+            operation["summary"],
+            "Extract readable text from a public web page",
+        )
+        response_schema = operation["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
         schema_name = response_schema["$ref"].rsplit("/", 1)[-1]
         schema = response.json()["components"]["schemas"][schema_name]
-        self.assertEqual(set(schema["required"]), {"url", "text", "truncated"})
+        self.assertEqual(
+            set(schema["required"]),
+            {"url", "text", "truncated"},
+        )
         properties = schema["properties"]
-        self.assertIn("True when", properties["truncated"]["description"])
-        self.assertIn("character cap", properties["text"]["description"])
+        self.assertIn(
+            "True when",
+            properties["truncated"]["description"],
+        )
+        self.assertIn(
+            "character cap",
+            properties["text"]["description"],
+        )
 
-
-
-    def test_openapi_advertises_auth_schemes_for_docs_authorize(self) -> None:
+    def test_openapi_advertises_auth_schemes_for_docs_authorize(
+        self,
+    ) -> None:
         schema = self.client.get("/openapi.json").json()
-
-
 
         schemes = schema["components"]["securitySchemes"]
         self.assertEqual(
             schemes["ApiKeyAuth"],
-            {"type": "apiKey", "in": "header", "name": "X-API-Key", "description": "Service API key."},
+            {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-API-Key",
+                "description": "Service API key.",
+            },
         )
         self.assertEqual(schemes["BearerAuth"]["type"], "http")
-        self.assertEqual(schemes["BearerAuth"]["scheme"], "bearer")
-
-
+        self.assertEqual(
+            schemes["BearerAuth"]["scheme"],
+            "bearer",
+        )
 
         paths = schema["paths"]
-        self.assertEqual(paths["/api/v1/scrape/text"]["get"]["security"], [{"ApiKeyAuth": []}])
-        self.assertEqual(paths["/mcp/tools"]["get"]["security"], [{"ApiKeyAuth": []}])
-        self.assertEqual(paths["/mcp/tools/call"]["post"]["security"], [{"ApiKeyAuth": []}])
         self.assertEqual(
-            paths["/api/v1/mobile/scrape/text"]["post"]["security"], [{"BearerAuth": []}]
+            paths["/api/v1/scrape/text"]["get"]["security"],
+            [{"ApiKeyAuth": []}],
         )
+        self.assertEqual(
+            paths["/mcp/tools"]["get"]["security"],
+            [{"ApiKeyAuth": []}],
+        )
+        self.assertEqual(
+            paths["/mcp/tools/call"]["post"]["security"],
+            [{"ApiKeyAuth": []}],
+        )
+        self.assertEqual(
+            paths["/api/v1/mobile/scrape/text"]["post"]["security"],
+            [{"BearerAuth": []}],
+        )
+
         # Public endpoints stay unlocked in /docs.
         for path, method in (("/", "get"), ("/version", "get")):
             self.assertNotIn("security", paths[path][method])
 
-
-
-    def test_application_logs_and_metrics_exclude_scraped_content_and_target_url(self) -> None:
-        target_url = "https://example.com/article?token=unique-target-secret"
+    def test_application_logs_and_metrics_exclude_scraped_content_and_target_url(
+        self,
+    ) -> None:
+        target_url = (
+            "https://example.com/article?token=unique-target-secret"
+        )
         scraped_marker = "unique-scraped-content-marker"
         html = f"<main><p>{scraped_marker}</p></main>".encode()
         with patch(
@@ -595,22 +690,25 @@ class ScraperApiTests(unittest.TestCase):
                 final_url="https://example/article",
             ),
         ):
-            with self.assertLogs("bintu_api.request", level="INFO") as captured:
+            with self.assertLogs(
+                "bintu_api.request",
+                level="INFO",
+            ) as captured:
                 response = self.client.get(
                     "/api/v1/scrape/text",
                     params={"url": target_url},
                 )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertIn(scraped_marker, response.json()["text"])
+        self.assertIn(
+            scraped_marker,
+            response.json()["text"],
+        )
+
         request_logs = "\n".join(captured.output)
         self.assertNotIn("example.com", request_logs)
         self.assertNotIn("unique-target-secret", request_logs)
         self.assertNotIn(scraped_marker, request_logs)
-
-
 
         metrics = self.client.get("/metrics")
         self.assertEqual(metrics.status_code, 200)
@@ -618,51 +716,78 @@ class ScraperApiTests(unittest.TestCase):
         self.assertNotIn("unique-target-secret", metrics.text)
         self.assertNotIn(scraped_marker, metrics.text)
 
-
-
     def test_api_key_required_when_configured(self) -> None:
-        app = create_app(Settings(api_key="local-test-secret", rapidapi_proxy_secret=""))
+        app = create_app(
+            Settings(
+                api_key="local-test-secret",
+                rapidapi_proxy_secret="",
+            )
+        )
         client = TestClient(app)
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=b"<p>ok</p>", charset=None),
+            return_value=FetchedHTML(
+                body=b"<p>ok</p>",
+                charset=None,
+            ),
         ):
-            denied = client.get("/api/v1/scrape/text", params={"url": "https://example.com"})
+            denied = client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com"},
+            )
             accepted = client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com"},
                 headers={"X-API-Key": "local-test-secret"},
             )
-
-
 
         self.assertEqual(denied.status_code, 401)
         self.assertEqual(accepted.status_code, 200)
 
-
-
-    def test_require_auth_fails_closed_when_secrets_are_missing(self) -> None:
-        app = create_app(Settings(api_key="", rapidapi_proxy_secret="", require_auth=True))
+    def test_require_auth_fails_closed_when_secrets_are_missing(
+        self,
+    ) -> None:
+        app = create_app(
+            Settings(
+                api_key="",
+                rapidapi_proxy_secret="",
+                require_auth=True,
+            )
+        )
         client = TestClient(app)
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=b"<p>ok</p>", charset=None),
+            return_value=FetchedHTML(
+                body=b"<p>ok</p>",
+                charset=None,
+            ),
         ):
-            response = client.get("/api/v1/scrape/text", params={"url": "https://example.com"})
-
-
+            response = client.get(
+                "/api/v1/scrape/text",
+                params={"url": "https://example.com"},
+            )
 
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json()["detail"]["code"], "auth_misconfiguration")
-
-
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "auth_misconfiguration",
+        )
 
     def test_require_auth_allows_configured_keys(self) -> None:
-        app = create_app(Settings(api_key="local-test-secret", rapidapi_proxy_secret="", require_auth=True))
+        app = create_app(
+            Settings(
+                api_key="local-test-secret",
+                rapidapi_proxy_secret="",
+                require_auth=True,
+            )
+        )
         client = TestClient(app)
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=b"<p>ok</p>", charset=None),
+            return_value=FetchedHTML(
+                body=b"<p>ok</p>",
+                charset=None,
+            ),
         ):
             accepted = client.get(
                 "/api/v1/scrape/text",
@@ -670,18 +795,22 @@ class ScraperApiTests(unittest.TestCase):
                 headers={"X-API-Key": "local-test-secret"},
             )
 
-
-
         self.assertEqual(accepted.status_code, 200)
 
-
-
     def test_rapidapi_proxy_secret_authentication(self) -> None:
-        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret="proxy-secret"))
+        app = create_app(
+            Settings(
+                api_key="owner-key",
+                rapidapi_proxy_secret="proxy-secret",
+            )
+        )
         client = TestClient(app)
         with patch(
             "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(body=b"<p>ok</p>", charset=None),
+            return_value=FetchedHTML(
+                body=b"<p>ok</p>",
+                charset=None,
+            ),
         ):
             response = client.get(
                 "/api/v1/scrape/text",
@@ -692,15 +821,16 @@ class ScraperApiTests(unittest.TestCase):
                 },
             )
 
-
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["text"], "ok")
-        self.assertIn("rapidapi:subscriber-7", app.state.rate_limiter._buckets)
+        self.assertIn(
+            "rapidapi:subscriber-7",
+            app.state.rate_limiter._buckets,
+        )
 
-
-
-    def test_mobile_scrape_requires_a_valid_supabase_session(self) -> None:
+    def test_mobile_scrape_requires_a_valid_supabase_session(
+        self,
+    ) -> None:
         settings = Settings(
             api_key="owner-key",
             rapidapi_proxy_secret="",
@@ -713,14 +843,15 @@ class ScraperApiTests(unittest.TestCase):
             json={"url": "https://example.com"},
         )
 
-
-
         self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json()["detail"]["code"], "invalid_session")
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "invalid_session",
+        )
 
-
-
-    def test_mobile_scrape_verifies_email_and_applies_user_rate_limit(self) -> None:
+    def test_mobile_scrape_verifies_email_and_applies_user_rate_limit(
+        self,
+    ) -> None:
         settings = Settings(
             api_key="owner-key",
             rapidapi_proxy_secret="",
@@ -731,26 +862,38 @@ class ScraperApiTests(unittest.TestCase):
         client = TestClient(app)
         auth_response = io.BytesIO(
             json.dumps(
-                {"id": "user-123", "email_confirmed_at": "2026-10-04T09:00:00Z"}
+                {
+                    "id": "user-123",
+                    "email_confirmed_at": "2026-10-04T09:00:00Z",
+                }
             ).encode()
         )
         with (
-            patch("bintu_api.auth.urlopen", return_value=auth_response) as verify,
+            patch(
+                "bintu_api.auth.urlopen",
+                return_value=auth_response,
+            ) as verify,
             patch(
                 "bintu_api.routes.fetch_html_document",
-                return_value=FetchedHTML(body=b"<main>mobile text</main>", charset=None),
+                return_value=FetchedHTML(
+                    body=b"<main>mobile text</main>",
+                    charset=None,
+                ),
             ) as fetch,
         ):
             response = client.post(
                 "/api/v1/mobile/scrape/text",
                 json={"url": "https://example.com"},
-                headers={"Authorization": "Bearer user-access-token"},
+                headers={
+                    "Authorization": "Bearer user-access-token"
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["text"], "mobile text")
+        self.assertEqual(
+            response.json()["text"],
+            "mobile text",
+        )
         self.assertEqual(
             verify.call_args.args[0].get_header("Authorization"),
             "Bearer user-access-token",
@@ -759,10 +902,11 @@ class ScraperApiTests(unittest.TestCase):
             verify.call_args.args[0].get_header("Apikey"),
             "public-anon-key",
         )
-        self.assertIn("supabase:user-123", app.state.rate_limiter._buckets)
+        self.assertIn(
+            "supabase:user-123",
+            app.state.rate_limiter._buckets,
+        )
         fetch.assert_called_once()
-
-
 
     def test_mobile_scrape_rejects_unverified_email(self) -> None:
         settings = Settings(
@@ -772,39 +916,47 @@ class ScraperApiTests(unittest.TestCase):
             supabase_anon_key="public-anon-key",
         )
         client = TestClient(create_app(settings))
-        with patch("bintu_api.auth.urlopen", return_value=io.BytesIO(b'{"id":"user-123"}')):
+        with patch(
+            "bintu_api.auth.urlopen",
+            return_value=io.BytesIO(b'{"id":"user-123"}'),
+        ):
             response = client.post(
                 "/api/v1/mobile/scrape/text",
                 json={"url": "https://example.com"},
-                headers={"Authorization": "Bearer user-access-token"},
+                headers={
+                    "Authorization": "Bearer user-access-token"
+                },
             )
 
-
-
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"]["code"], "email_not_verified")
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "email_not_verified",
+        )
 
-
-
-    def test_mobile_scrape_returns_service_unavailable_when_auth_is_unconfigured(self) -> None:
+    def test_mobile_scrape_returns_service_unavailable_when_auth_is_unconfigured(
+        self,
+    ) -> None:
         client = TestClient(self.app)
         response = client.post(
             "/api/v1/mobile/scrape/text",
             json={"url": "https://example.com"},
-            headers={"Authorization": "Bearer user-access-token"},
+            headers={
+                "Authorization": "Bearer user-access-token"
+            },
         )
 
-
-
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"]["code"], "mobile_auth_not_configured")
-
-
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "mobile_auth_not_configured",
+        )
 
     def test_paid_quotas_are_not_enforced_by_local_limiter(self) -> None:
-        self.assertIn("RapidAPI owns paid-plan quota enforcement", self.app.state.rate_limiter.__class__.__doc__)
-
-
+        self.assertIn(
+            "RapidAPI owns paid-plan quota enforcement",
+            self.app.state.rate_limiter.__class__.__doc__,
+        )
 
     def test_upstream_http_error_maps_to_502(self) -> None:
         with patch(
@@ -816,25 +968,26 @@ class ScraperApiTests(unittest.TestCase):
                 params={"url": "https://example.com/missing"},
             )
 
-
-
         self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.json()["detail"]["code"], "upstream_http_error")
-
-
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "upstream_http_error",
+        )
 
     def test_metrics_are_exposed_without_url_labels(self) -> None:
         self.client.get("/")
-        response = self.client.get("/metrics", follow_redirects=False)
-
-
+        response = self.client.get(
+            "/metrics",
+            follow_redirects=False,
+        )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("bintu_http_requests_total", response.text)
+        self.assertIn(
+            "bintu_http_requests_total",
+            response.text,
+        )
         self.assertNotIn("example.com", response.text)
         self.assertNotIn("location", response.headers)
-
-
 
 
 if __name__ == "__main__":
