@@ -5,7 +5,7 @@ FROM python:3.12-slim-bookworm
 # Keep Python output unbuffered and avoid interactive apt prompts in production builds.
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    PORT=8000
+    PORT=10000
 
 WORKDIR /app
 
@@ -48,8 +48,8 @@ RUN python -m playwright install chromium
 # Copy the application source after the dependency and browser steps are complete.
 COPY . .
 
-# Expose the FastAPI app on Render's expected HTTP port.
-EXPOSE 8000
+# Document the default HTTP port; runtime PORT controls the listener.
+EXPOSE 10000
 
 # Start the API with Uvicorn in production mode.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port \"${PORT:-10000}\" --no-access-log"]
