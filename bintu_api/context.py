@@ -1,52 +1,27 @@
 """Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
-
-
-
-
 Modes:
-  scrape    — plain readable text (existing behavior), with token count + provenance
-  chunk     — text split into max_tokens-sized chunks, each with token count,
-              ready to drop straight into a vector database
-  summarize — condensed text truncated to max_tokens (sentence-aware)
-
-
-
-
+    scrape    — plain readable text (existing behavior), with token count + provenance
+    chunk     — text split into max_tokens-sized chunks, each with token count,
+                ready to drop straight into a vector database
+    summarize — condensed text truncated to max_tokens (sentence-aware)
 
 Designed for AI-agent context engineering: instead of returning a raw blob of
 Markdown, the server reports token counts, chunk boundaries, and cache hits so
 agents and callers can budget LLM context precisely.
 """
 
-
-
-
-
 from __future__ import annotations
 
-
-
-
-
 import asyncio
-import hashlib
 import logging
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-
-
-
-
 from fastapi import Request
-
-
-
-
 
 from bintu_api.auth import rate_limit_identity
 from bintu_api.cache import TTLCache
@@ -56,28 +31,11 @@ from bintu_api.observability import (
 )
 from bintu_api.scraper import FetchedHTML, extract_text_result
 from bintu_api.settings import Settings
-
-
-
-
-
 from bintu_api.schemas import CacheInfo
-
-
-
-
 
 logger = logging.getLogger("bintu_api.context")
 
-
-
-
-
 ContextMode = Literal["scrape", "chunk", "summarize"]
-
-
-
-
 
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
 # while the canonical protocol stays "chunk" / "max_tokens" so existing
@@ -85,15 +43,8 @@ ContextMode = Literal["scrape", "chunk", "summarize"]
 MODE_ALIASES = {"chunked": "chunk"}
 
 
-
-
-
-
 def normalize_mode(value: Any) -> str:
     """Normalize a mode value to its canonical form (case/whitespace tolerant).
-
-
-
 
     Raises ValueError for unknown modes so callers can reject them with
     HTTP 400 (REST) or JSON-RPC -32602 (MCP) instead of a 500.
@@ -107,23 +58,15 @@ def normalize_mode(value: Any) -> str:
     return canonical
 
 
-
-
-
 # Approximate token method: ceil(characters/4) - dependency-free token counting
 TOKEN_METHOD = "ceil(characters/4)"
-
-
-
 
 
 def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
     from bintu_api.scraper import _compute_approx_tokens
+
     return _compute_approx_tokens(text)
-
-
-
 
 
 @dataclass(frozen=True)
@@ -147,15 +90,6 @@ class ContextResult:
     truncated: bool = False
     split: bool = False
     # Provenance (added in Phase D): additive for both REST and MCP surfaces.
-    # request_id: identifier from the requesting middleware; may be synthetic
-    # if none was supplied. fetched_at: UTC ISO when the fetch occurred.
-    # requested_url: the URL as-sent, sanitized of sensitive query params.
-    # final_url: URL after redirects; absent for cache hits.
-    # content_type: fetched response content-type when a fetch happened.
-    # bytes_fetched: len(document.body) when a fetch happened.
-    # content_sha256: SHA-256 of the returned text when a fetch happened.
-    # cache: CacheInfo when known; otherwise None.
-    # extractor_version: from settings.service_version.
     request_id: str | None = None
     fetched_at: str | None = None
     requested_url: str | None = None
@@ -167,16 +101,9 @@ class ContextResult:
     extractor_version: str | None = None
 
 
-
-
-
-
 @dataclass(frozen=True)
 class CacheEconomics:
     """Extraction economics preserved across persistent-cache hits."""
-
-
-
 
     html_tokens: int
     tokens_saved_estimate: int
@@ -185,19 +112,11 @@ class CacheEconomics:
     extracted_at: str
 
 
-
-
-
-
 def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
 
-
-
-
-
     The baseline deliberately counts the raw document — markup included — so
-    `tokens_saved_estimate` is approximately " fetched HTML tokens minus
+    `tokens_saved_estimate` is approximately "fetched HTML tokens minus
     delivered text tokens", the all-in number the cost-reduction story needs.
     """
     try:
@@ -208,85 +127,181 @@ def _decode_source_text(document: FetchedHTML) -> str:
         return ""
 
 
+def _sentences(text: str) -> list[str]:
+    """Split prose into sentences while preserving terminal punctuation."""
+    sentence_pattern = re.compile(
+        r"""
+        (?P<sentence>
+            [^.!?]+            # sentence body
+            [.!?]+             # terminal punctuation
+            ["')\]]*           # optional closing quotes/brackets
+        )
+        (?P<space>\s+|$)
+        """,
+        re.VERBOSE,
+    )
+
+    sentences: list[str] = []
+    position = 0
+
+    for match in sentence_pattern.finditer(text):
+        if match.start() > position:
+            remainder = text[position : match.start()].strip()
+            if remainder:
+                sentences.append(remainder)
+        sentences.append(match.group("sentence").strip())
+        position = match.end()
+
+    if position < len(text):
+        remainder = text[position:].strip()
+        if remainder:
+            sentences.append(remainder)
+
+    return [sentence for sentence in sentences if sentence]
 
 
+def _is_table_block(block: str) -> bool:
+    """True when a Markdown block looks like a table."""
+    lines = [line.strip() for line in block.splitlines() if line.strip()]
+    return len(lines) >= 2 and all(line.startswith("|") for line in lines)
+
+
+def _split_oversized_table(block: str, max_tokens: int) -> list[str]:
+    """Split a Markdown table without breaking an individual row."""
+    lines = [line for line in block.splitlines() if line.strip()]
+    if not lines:
+        return []
+
+    chunks: list[str] = []
+    current: list[str] = []
+    current_tokens = 0
+
+    for line in lines:
+        line_tokens = count_tokens(line)
+        candidate_tokens = current_tokens + line_tokens + (1 if current else 0)
+
+        if current and candidate_tokens > max_tokens:
+            chunks.append("\n".join(current))
+            current = [line]
+            current_tokens = line_tokens
+        else:
+            current.append(line)
+            current_tokens = candidate_tokens
+
+    if current:
+        chunks.append("\n".join(current))
+
+    return chunks
+
+
+def _split_prose_block(block: str, max_tokens: int) -> list[str]:
+    """Split a prose block by sentence, preserving punctuation."""
+    if count_tokens(block) <= max_tokens:
+        return [block]
+
+    chunks: list[str] = []
+    current: list[str] = []
+    current_tokens = 0
+
+    for sentence in _sentences(block):
+        sentence_tokens = count_tokens(sentence)
+
+        if current and current_tokens + sentence_tokens + 1 > max_tokens:
+            chunks.append(" ".join(current))
+            current = [sentence]
+            current_tokens = sentence_tokens
+        else:
+            current.append(sentence)
+            current_tokens += sentence_tokens + (1 if len(current) > 1 else 0)
+
+    if current:
+        chunks.append(" ".join(current))
+
+    return chunks
+
+
+def _split_block(block: str, max_tokens: int) -> list[str]:
+    """Split one paragraph/table block without losing its internal structure."""
+    if count_tokens(block) <= max_tokens:
+        return [block]
+
+    if _is_table_block(block):
+        return _split_oversized_table(block, max_tokens)
+
+    chunks = _split_prose_block(block, max_tokens)
+
+    # A single very long sentence may still exceed the budget. Split it by
+    # words, but retain spaces so downstream consumers receive readable text.
+    result: list[str] = []
+    for chunk in chunks:
+        if count_tokens(chunk) <= max_tokens:
+            result.append(chunk)
+            continue
+
+        words = chunk.split()
+        current: list[str] = []
+        current_tokens = 0
+
+        for word in words:
+            word_tokens = count_tokens(word)
+            candidate_tokens = current_tokens + word_tokens + (
+                1 if current else 0
+            )
+
+            if current and candidate_tokens > max_tokens:
+                result.append(" ".join(current))
+                current = [word]
+                current_tokens = word_tokens
+            else:
+                current.append(word)
+                current_tokens = candidate_tokens
+
+        if current:
+            result.append(" ".join(current))
+
+    return result
 
 
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     """Split ``text`` into chunks of at most ``max_tokens`` tokens.
 
-
-
-
-
-    Preserves paragraph and sentence boundaries where possible using a
-    recursive separator strategy. No LangChain or other heavy dependency
-    required.
+    Preserves paragraph, sentence, and Markdown-table boundaries where
+    possible. No LangChain or other heavy dependency is required.
     """
     if not text:
         return []
     if max_tokens <= 0:
         return [text]
 
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+    if not blocks:
+        return []
 
+    chunks: list[str] = []
+    current: list[str] = []
+    current_tokens = 0
 
+    for block in blocks:
+        block_pieces = _split_block(block, max_tokens)
 
+        for piece in block_pieces:
+            piece_tokens = count_tokens(piece)
+            candidate_tokens = current_tokens + piece_tokens + (
+                2 if current else 0
+            )
 
-    separators = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
-
-
-
-
-
-    def _split(text: str, sep_index: int) -> list[str]:
-        if sep_index >= len(separators):
-            # Last resort: hard split by characters. A chunk of N tokens is at
-            # most 4*N characters (ceil(characters/4) is the token counter),
-            # so the budget in tokens maps to a character limit this way.
-            limit = max_tokens * 4
-            return [text[i : i + limit] for i in range(0, len(text), limit)]
-
-
-
-
-
-        sep = separators[sep_index]
-        parts = text.split(sep) if sep else list(text)
-        chunks: list[str] = []
-        current = ""
-
-
-
-
-
-        for part in parts:
-            candidate = (current + sep + part) if current else part
-            if count_tokens(candidate) <= max_tokens:
-                current = candidate
+            if current and candidate_tokens > max_tokens:
+                chunks.append("\n\n".join(current))
+                current = [piece]
+                current_tokens = piece_tokens
             else:
-                if current:
-                    chunks.append(current)
-                sub_chunks = _split(part, sep_index + 1)
-                chunks.extend(sub_chunks)
-                current = ""
+                current.append(piece)
+                current_tokens = candidate_tokens
 
+    if current:
+        chunks.append("\n\n".join(current))
 
-
-
-
-        if current:
-            chunks.append(current)
-        return chunks
-
-
-
-
-
-    return _split(text, 0)
-
-
-
-
+    return chunks
 
 
 async def extract_context(
@@ -312,10 +327,6 @@ async def extract_context(
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
 
-
-
-
-
     Reuses the existing fetch → extract → cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
@@ -325,10 +336,6 @@ async def extract_context(
     if identity is None:
         identity = rate_limit_identity(request, settings)
 
-
-
-
-
     # Canonicalize pitch-name aliases up front so downstream logic always
     # operates on canonical values. The caller supplies the extraction inputs;
     # this function must not overwrite them.
@@ -336,15 +343,8 @@ async def extract_context(
     if mode not in ("scrape", "chunk", "summarize"):
         raise ValueError(f"Unknown context mode: {mode}")
 
-
-
-
     raw_text = raw_text or ""
     html_source_text = html_source_text or ""
-
-
-
-
 
     # Preserve the original extraction economics when serving from a
     # persistent cache. Without this, a cache hit would incorrectly report
@@ -352,60 +352,49 @@ async def extract_context(
     # is no longer available.
     if cache_hit and cache_economics is not None:
         html_tokens = cache_economics.html_tokens
-        tokens_saved_estimate: int | None = cache_economics.tokens_saved_estimate
+        tokens_saved_estimate: int | None = (
+            cache_economics.tokens_saved_estimate
+        )
         resolved_extracted_at = cache_economics.extracted_at
     else:
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
-        resolved_extracted_at = extracted_at or datetime.now(timezone.utc).isoformat()
-
-
-
-
+        resolved_extracted_at = (
+            extracted_at or datetime.now(timezone.utc).isoformat()
+        )
 
     # Cache lookup observability (Phase 4): measure hit/miss distribution and
     # persistent-cache freshness without logging the raw target URL.
     cache_age_seconds: float | None = None
     if cache_hit and resolved_extracted_at:
         try:
-            extracted_time = datetime.fromisoformat(resolved_extracted_at.replace("Z", "+00:00"))
+            extracted_time = datetime.fromisoformat(
+                resolved_extracted_at.replace("Z", "+00:00")
+            )
             cache_age_seconds = max(
                 0.0,
-                (datetime.now(timezone.utc) - extracted_time).total_seconds(),
+                (
+                    datetime.now(timezone.utc) - extracted_time
+                ).total_seconds(),
             )
         except (ValueError, TypeError):
             cache_age_seconds = None
 
-
-
-
-
     log_cache_lookup_completed(
-        request_id=getattr(getattr(request, "state", None), "request_id", None),
+        request_id=getattr(
+            getattr(request, "state", None), "request_id", None
+        ),
         url=url,
         cache_hit=cache_hit,
         cache_layer=cache_layer,
         age_seconds=cache_age_seconds,
     )
 
-
-
-
     # --- Mode transformation -----------------------------------------------
-    # tokens_saved_estimate: the whole strip, honestly measured. `html_tokens`
-    # counts the approximate tokens of the fetched HTML document;
-    # `approx_tokens` counts what we actually deliver. The estimate is their
-    # difference, so it includes nav/ads/footer stripping, the character cap,
-    # and any mode-level trimming (never negative). Both figures use the same
-    # dependency-free counter, named in `token_method`.
     raw_tokens = count_tokens(raw_text)
-    # Which cap bound the result? The character cap binds when the upstream
-    # extractor cut the document; otherwise the caller's token budget binds
-    # only when a mode trimmed below it (summarize dropping sentences).
-    # `split` only says the text was divided across several chunks. Chunking
-    # delivers every token, so it is never content loss (P2).
     split = False
     limiting_factor = "char_cap" if content_truncated else "none"
+
     if mode == "scrape":
         final_text = raw_text
         chunks = [
@@ -418,21 +407,23 @@ async def extract_context(
         ]
         approx_tokens = count_tokens(final_text)
         truncated = content_truncated
+
     elif mode == "chunk":
         chunk_strings = split_into_chunks(raw_text, max_tokens)
         chunks = [
             {
-                "index": i,
-                "text": c,
-                "approx_tokens": count_tokens(c),
-                "tokens": count_tokens(c),
+                "index": index,
+                "text": chunk,
+                "approx_tokens": count_tokens(chunk),
+                "tokens": count_tokens(chunk),
             }
-            for i, c in enumerate(chunk_strings)
+            for index, chunk in enumerate(chunk_strings)
         ]
         final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
         approx_tokens = count_tokens(final_text)
         split = len(chunk_strings) > 1
         truncated = content_truncated
+
     elif mode == "summarize":
         if count_tokens(raw_text) <= max_tokens:
             final_text = raw_text
@@ -447,15 +438,16 @@ async def extract_context(
             approx_tokens = count_tokens(final_text)
             truncated = content_truncated
         else:
-            sentences = re.split(r"(?<=[.!?])\s+", raw_text)
             selected: list[str] = []
             used = 0
-            for sentence in sentences:
+
+            for sentence in _sentences(raw_text):
                 sentence_tokens = count_tokens(sentence)
                 if used + sentence_tokens > max_tokens and selected:
                     break
                 selected.append(sentence)
                 used += sentence_tokens
+
             final_text = " ".join(selected)
             chunks = [
                 {
@@ -471,16 +463,8 @@ async def extract_context(
     else:
         raise ValueError(f"Unknown context mode: {mode}")
 
-
-
-
-
     if tokens_saved_estimate is None:
         tokens_saved_estimate = max(0, html_tokens - approx_tokens)
-
-
-
-
 
     record_cache_tokens_saved(
         mode=mode,
@@ -489,9 +473,6 @@ async def extract_context(
         approx_tokens=approx_tokens,
         tokens_saved_estimate=tokens_saved_estimate,
     )
-
-
-
 
     return ContextResult(
         mode=mode,
@@ -518,8 +499,6 @@ async def extract_context(
             else truncated
         ),
         split=split,
-        # Provenance fields - callers should populate these from the actual
-        # request context and fetch results
         request_id=None,
         fetched_at=None,
         requested_url=None,
