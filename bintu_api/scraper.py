@@ -231,11 +231,12 @@ def resolve_public_addresses(
                 "The target hostname resolved to an invalid address"
             ) from error
 
-        # `is_global` alone is not enough: 224.0.0.0/4 and ff00::/8 are
-        # "global" per the stdlib but are multicast, never web destinations.
+        # Reject non-public and multicast destinations, including IPv6
+        # wrappers whose embedded IPv4 destination is non-public.
         if (
             not parsed_address.is_global
             or parsed_address.is_multicast
+            or _is_nat64_or_6to4_address(str(parsed_address))
         ):
             raise TargetURLRejected(
                 "The target hostname resolves to a non-public address"
