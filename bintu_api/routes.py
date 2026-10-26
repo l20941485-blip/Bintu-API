@@ -6,19 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
-
-
-
-
-
-
 from fastapi import APIRouter, HTTPException, Request, Security, status
-
-
-
-
-
-
 
 from bintu_api.auth import (
     api_key_scheme,
@@ -69,31 +57,11 @@ from bintu_api.scraper import (
 )
 from bintu_api.settings import Settings
 
-
-
-
-
-
-
-
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
-
-
-
-
-
-
 TOKEN_METHOD = "ceil(characters/4)"
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
-
-
-
-
-
-
-
 
 SENSITIVE_QUERY_PARAMETER_NAMES = frozenset(
     {
@@ -108,12 +76,6 @@ SENSITIVE_QUERY_PARAMETER_NAMES = frozenset(
         "client_secret",
     }
 )
-
-
-
-
-
-
 
 
 def sanitize_url(url: str) -> str:
@@ -131,14 +93,15 @@ def sanitize_url(url: str) -> str:
         and not _is_sensitive_query_parameter(part.split("=", 1)[0])
     )
     return urlunparse(
-        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, safe_query, parsed.fragment)
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            safe_query,
+            parsed.fragment,
+        )
     )
-
-
-
-
-
-
 
 
 def _is_sensitive_query_parameter(name: str) -> bool:
@@ -147,12 +110,6 @@ def _is_sensitive_query_parameter(name: str) -> bool:
         normalized in SENSITIVE_QUERY_PARAMETER_NAMES
         or normalized.startswith("utm_")
     )
-
-
-
-
-
-
 
 
 def _build_provenance(
@@ -171,16 +128,16 @@ def _build_provenance(
         requested_url=sanitize_url(url),
         final_url=document.final_url if fetched else None,
         bytes_fetched=len(document.body) if fetched else None,
-        content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None,
-        cache=CacheInfo(hit=cache_layer != "none", layer=cache_layer, age_seconds=None),
+        content_sha256=(
+            hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None
+        ),
+        cache=CacheInfo(
+            hit=cache_layer != "none",
+            layer=cache_layer,
+            age_seconds=None,
+        ),
         extractor_version=getattr(settings, "service_version", "unknown"),
     )
-
-
-
-
-
-
 
 
 def _build_response(
@@ -193,10 +150,6 @@ def _build_response(
 ) -> ScrapeTextResponse:
     approx_tokens = _compute_approx_tokens(result.markdown)
 
-
-
-
-
     # Preserve the economics of the original extraction on cache hits. A
     # persistent-cache row no longer has the source HTML, so recomputing savings
     # would incorrectly report zero.
@@ -207,10 +160,6 @@ def _build_response(
     else:
         saved = 0
 
-
-
-
-
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -220,23 +169,21 @@ def _build_response(
         token_method=TOKEN_METHOD,
         tokens=approx_tokens,
         tokens_saved_estimate=saved,
-        provenance=_build_provenance(url, result.markdown, document, cache_layer, request_id, settings),
+        provenance=_build_provenance(
+            url,
+            result.markdown,
+            document,
+            cache_layer,
+            request_id,
+            settings,
+        ),
     )
 
 
-
-
-
-
-
-
-async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
+async def _enforce_robots(
+    url: str, settings: Settings, url_hash: str
+) -> None:
     """Check robots.txt before any network fetch of the page.
-
-
-
-
-
 
     enforce: an explicit robots disallow blocks with 403. A robots.txt retrieval
     failure also blocks with 403, but is reported as ``robots_unreachable``.
@@ -246,9 +193,11 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     mode = robots_mode(settings)
     if mode == "off":
         return
+
     decision = await asyncio.to_thread(robots_decision, url, settings)
     if decision.allowed:
         return
+
     logger.info(
         "robots_not_allowed url_hash=%s mode=%s unreachable=%s reason=%s",
         url_hash,
@@ -256,56 +205,56 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
         decision.unreachable,
         decision.reason,
     )
+
     if mode == "enforce":
         if decision.unreachable:
             raise HTTPException(
                 status_code=403,
                 detail={
                     "code": "robots_unreachable",
-                    "message": f"Fetching this page is not permitted: {decision.reason}.",
+                    "message": (
+                        "Fetching this page is not permitted: "
+                        f"{decision.reason}."
+                    ),
                     "hint": (
                         "The target's robots.txt could not be retrieved. "
                         "Access is denied while robots enforcement is enabled."
                     ),
                 },
             )
+
         raise HTTPException(
             status_code=403,
             detail={
                 "code": "blocked_by_robots",
-                "message": f"Fetching this page is not permitted: {decision.reason}.",
-                "hint": "Bintu respects robots.txt. The site owner controls this.",
+                "message": (
+                    "Fetching this page is not permitted: "
+                    f"{decision.reason}."
+                ),
+                "hint": (
+                    "Bintu respects robots.txt. The site owner controls this."
+                ),
             },
         )
-
-
-
-
-
-
 
 
 @router.get("/", response_model=GatewayResponse)
 def gateway_check(request: Request) -> GatewayResponse:
     settings = request.app.state.settings
-    return GatewayResponse(status="ok", service=settings.service_title, docs="/docs")
+    return GatewayResponse(
+        status="ok",
+        service=settings.service_title,
+        docs="/docs",
+    )
 
 
-
-
-
-
-
-
-@router.get("/healthz", response_model=HealthResponse, include_in_schema=False)
+@router.get(
+    "/healthz",
+    response_model=HealthResponse,
+    include_in_schema=False,
+)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
-
-
-
-
-
-
 
 
 @router.get("/version", response_model=VersionResponse)
@@ -322,12 +271,6 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
     )
-
-
-
-
-
-
 
 
 @router.get(
@@ -358,6 +301,7 @@ async def scrape_text(
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
+
     if render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
@@ -367,6 +311,7 @@ async def scrape_text(
                 "hint": "Retry with render_js=false for plain HTML extraction.",
             },
         )
+
     return await _scrape_text(
         request,
         url,
@@ -377,12 +322,6 @@ async def scrape_text(
         render_js,
         skip_cache,
     )
-
-
-
-
-
-
 
 
 @router.post(
@@ -406,8 +345,11 @@ async def mobile_scrape_text(
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     user_id = await asyncio.to_thread(
-        verify_supabase_user, request, request.app.state.settings
+        verify_supabase_user,
+        request,
+        request.app.state.settings,
     )
+
     if payload.render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
@@ -417,6 +359,7 @@ async def mobile_scrape_text(
                 "hint": "Retry with render_js=false for plain HTML extraction.",
             },
         )
+
     return await _scrape_text(
         request,
         payload.url,
@@ -427,12 +370,6 @@ async def mobile_scrape_text(
         payload.render_js,
         skip_cache,
     )
-
-
-
-
-
-
 
 
 async def _fetch_and_extract(
@@ -447,20 +384,10 @@ async def _fetch_and_extract(
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
-
-
-
-
-
     Returns:
         document: FetchedHTML for a fresh fetch; None for a cache hit.
         result: extracted markdown, truncation flag, and extraction economics.
         cache_layer: "none", "memory", or "persistent".
-
-
-
-
-
 
     Raises the same HTTPException and scraper exceptions as the REST endpoint.
     """
@@ -469,12 +396,9 @@ async def _fetch_and_extract(
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
     cache_layer = "none"
-    request_id = getattr(getattr(request, "state", None), "request_id", None)
-
-
-
-
-
+    request_id = getattr(
+        getattr(request, "state", None), "request_id", None
+    )
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
     if database_client is not None and not skip_cache:
@@ -496,16 +420,9 @@ async def _fetch_and_extract(
                 type(error).__name__,
             )
 
-
-
-
-
-
-    cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
-
-
-
-
+    cache_key = hashlib.sha256(
+        f"{int(render_js)}:{url}".encode()
+    ).hexdigest()
 
     if result is not None:
         cache_layer = "persistent"
@@ -516,45 +433,13 @@ async def _fetch_and_extract(
             layer=cache_layer,
         )
 
-
-
-
-
-
-        # Persistent-cache rows contain already-extracted text, not HTML.
-        # Preserve the original extraction economics rather than recomputing
-        # them from a missing HTML source.
-        extracted = extract_text_result(
-            result.markdown,
-            settings.max_text_characters,
-            include_nav=include_nav,
-            include_header=include_header,
-            include_footer=include_footer,
-            from_encoding=None,
-            base_url=url,
-        )
-        result = CachedMarkdown(
-            markdown=extracted.text,
-            truncated=extracted.truncated,
-            html_tokens=result.html_tokens,
-            tokens_saved_estimate=result.tokens_saved_estimate,
-            limiting_factor=result.limiting_factor,
-            extracted_at=result.extracted_at,
-        )
+        # Persistent-cache rows contain already-extracted Markdown, not HTML.
+        # Return it unchanged: running the HTML extractor again would parse
+        # Markdown as HTML and destroy intentional newlines and table shape.
         return document, result, cache_layer
-
-
-
-
-
 
     cache = request.app.state.cache
     document = None if skip_cache else cache.get(cache_key)
-
-
-
-
-
 
     if document is not None:
         cache_layer = "memory"
@@ -572,19 +457,9 @@ async def _fetch_and_extract(
             layer="none",
         )
 
-
-
-
-
-
         # robots.txt is checked before any network fetch of the page.
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
-
-
-
-
-
 
         if render_js:
             document = await fetch_rendered_html_document(url, settings)
@@ -592,19 +467,13 @@ async def _fetch_and_extract(
             # The existing transport pins each request to a validated public IP.
             # Keep it off the event loop rather than replacing that SSRF guard
             # with HTTPX's second, independently resolved DNS lookup.
-            document = await asyncio.to_thread(fetch_html_document, url, settings)
-
-
-
-
-
+            document = await asyncio.to_thread(
+                fetch_html_document,
+                url,
+                settings,
+            )
 
         cache.set(cache_key, document)
-
-
-
-
-
 
     extracted = extract_text_result(
         document.body,
@@ -616,10 +485,6 @@ async def _fetch_and_extract(
         base_url=document.final_url or url,
     )
 
-
-
-
-
     html_source_text = _decode_source_text(document)
     html_tokens = _compute_approx_tokens(html_source_text)
     tokens_saved_estimate = _compute_tokens_saved_estimate(
@@ -627,10 +492,6 @@ async def _fetch_and_extract(
         extracted.text,
     )
     extracted_at = datetime.now(timezone.utc).isoformat()
-
-
-
-
 
     result = CachedMarkdown(
         markdown=extracted.text,
@@ -640,11 +501,6 @@ async def _fetch_and_extract(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at,
     )
-
-
-
-
-
 
     if database_client is not None:
         try:
@@ -677,18 +533,7 @@ async def _fetch_and_extract(
                 type(error).__name__,
             )
 
-
-
-
-
-
     return document, result, cache_layer
-
-
-
-
-
-
 
 
 async def _scrape_text(
@@ -707,18 +552,11 @@ async def _scrape_text(
         or uuid.uuid4().hex
     )
 
-
-
-
-
-
     try:
-        await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
-
-
-
-
-
+        await asyncio.to_thread(
+            request.app.state.rate_limiter.check,
+            identity,
+        )
 
         document, result, cache_layer = await _fetch_and_extract(
             request,
@@ -730,17 +568,18 @@ async def _scrape_text(
             skip_cache=skip_cache,
         )
 
-
-
-
-
-
         if (
             request.app.state.supabase_client is not None
             and has_valid_proxy_secret(request, settings)
         ):
-            rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
-            if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
+            rapidapi_user = request.headers.get(
+                "X-RapidAPI-User", ""
+            ).strip()
+            if (
+                rapidapi_user
+                and len(rapidapi_user) <= 256
+                and rapidapi_user.isprintable()
+            ):
                 try:
                     await asyncio.wait_for(
                         increment_developer_usage(
@@ -755,11 +594,6 @@ async def _scrape_text(
                         type(error).__name__,
                     )
 
-
-
-
-
-
         response = _build_response(
             url,
             result,
@@ -768,10 +602,6 @@ async def _scrape_text(
             request_id,
             settings,
         )
-
-
-
-
 
         log_extraction_completed(
             request_id=request_id,
@@ -786,16 +616,7 @@ async def _scrape_text(
             limiting_factor=result.limiting_factor,
         )
 
-
-
-
-
         return response
-
-
-
-
-
 
     except HTTPException:
         raise
@@ -867,6 +688,7 @@ async def _scrape_text(
             error.status_code,
             error.reason,
         )
+
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             # Returned as 502 so a target's 401/403 is never mistaken for a problem
             # with the caller's own API key. No retries, no workarounds.
@@ -874,22 +696,25 @@ async def _scrape_text(
                 status_code=502,
                 detail={
                     "code": "upstream_access_denied",
-                    "message": f"The target refused access (HTTP {error.status_code}).",
-                    "hint": "Bintu does not retry, log in, solve CAPTCHAs or work around blocks.",
+                    "message": (
+                        "The target refused access "
+                        f"(HTTP {error.status_code})."
+                    ),
+                    "hint": (
+                        "Bintu does not retry, log in, solve CAPTCHAs or "
+                        "work around blocks."
+                    ),
                     "upstream_status": error.status_code,
                 },
             ) from error
-
-
-
-
-
 
         raise HTTPException(
             status_code=502,
             detail={
                 "code": "upstream_http_error",
-                "message": f"The target returned HTTP {error.status_code}.",
+                "message": (
+                    f"The target returned HTTP {error.status_code}."
+                ),
                 "hint": "The target server returned an error. Try again later.",
             },
         ) from error
@@ -959,7 +784,10 @@ async def _scrape_text(
             url=url,
             request_id=request_id,
         )
-        logger.error("scrape_failed error_type=%s", type(error).__name__)
+        logger.error(
+            "scrape_failed error_type=%s",
+            type(error).__name__,
+        )
         raise HTTPException(
             status_code=500,
             detail={
@@ -967,12 +795,6 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
-
-
-
-
-
-
 
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).
