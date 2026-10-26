@@ -215,7 +215,7 @@ async def _enforce_robots(
                     "code": "robots_unreachable",
                     "message": (
                         "Fetching this page is not permitted: "
-                        f"{decision.reason}."
+                        f"{decision.reason.rstrip('.')}."
                     ),
                     "hint": (
                         "The target's robots.txt could not be retrieved. "
@@ -230,7 +230,7 @@ async def _enforce_robots(
                 "code": "blocked_by_robots",
                 "message": (
                     "Fetching this page is not permitted: "
-                    f"{decision.reason}."
+                    f"{decision.reason.rstrip('.')}."
                 ),
                 "hint": (
                     "Bintu respects robots.txt. The site owner controls this."
