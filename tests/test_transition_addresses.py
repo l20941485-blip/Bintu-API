@@ -134,6 +134,25 @@ class TransitionAddressTests(unittest.TestCase):
     def test_fetch_rejects_6to4_private_address_before_connection(self):
         self.assert_rejects_wrapped_address("2002:a00:1::")
 
+    def test_parse_target_rejects_ipv4_translated_loopback(self):
+        with self.assertRaises(TargetURLRejected):
+            _parse_target(
+                "http://[::ffff:0:7f00:1]/",
+                settings=self.settings,
+            )
+
+    def test_parse_target_rejects_ipv4_translated_private_address(self):
+        with self.assertRaises(TargetURLRejected):
+            _parse_target(
+                "http://[::ffff:0:0a00:1]/",
+                settings=self.settings,
+            )
+
+    def test_fetch_rejects_ipv4_translated_loopback_before_connection(self):
+        self.assert_rejects_wrapped_address("::ffff:0:7f00:1")
+
+    def test_fetch_rejects_ipv4_translated_private_address_before_connection(self):
+        self.assert_rejects_wrapped_address("::ffff:0:0a00:1")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

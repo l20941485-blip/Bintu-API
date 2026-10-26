@@ -1,8 +1,8 @@
-"""Phase D tests for Provenance model, CacheInfo, and RemovedStats."""
+"""Phase D tests for Provenance model and CacheInfo."""
 import unittest
 from datetime import datetime, timezone
 
-from bintu_api.schemas import Provenance, CacheInfo, RemovedStats
+from bintu_api.schemas import Provenance, CacheInfo
 
 
 class ProvenanceTests(unittest.TestCase):
@@ -20,7 +20,6 @@ class ProvenanceTests(unittest.TestCase):
             bytes_fetched=1234,
             content_sha256="abc123",
             cache=CacheInfo(hit=False, layer="memory", age_seconds=0),
-            removed=RemovedStats(hidden_elements=0, zero_width_chars=0, comments=0),
             extractor_version="1.1.0",
         )
         self.assertEqual(provenance.request_id, "req-123")
@@ -42,20 +41,12 @@ class ProvenanceTests(unittest.TestCase):
             bytes_fetched=500,
             content_sha256="def456",
             cache=CacheInfo(hit=True, layer="persistent", age_seconds=300),
-            removed=RemovedStats(hidden_elements=0, zero_width_chars=0, comments=0),
             extractor_version="1.1.0",
         )
         self.assertTrue(provenance.cache.hit)
         self.assertEqual(provenance.cache.layer, "persistent")
         self.assertEqual(provenance.cache.age_seconds, 300)
         self.assertEqual(provenance.redirect_count, 1)
-
-    def test_removed_stats_minimal(self) -> None:
-        """Phase D: RemovedStats requires all fields."""
-        removed = RemovedStats(hidden_elements=0, zero_width_chars=0, comments=0)
-        self.assertEqual(removed.hidden_elements, 0)
-        self.assertEqual(removed.zero_width_chars, 0)
-        self.assertEqual(removed.comments, 0)
 
     def test_cache_info_minimal(self) -> None:
         """Phase D: CacheInfo requires all fields."""

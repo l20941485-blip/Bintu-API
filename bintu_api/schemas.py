@@ -45,21 +45,6 @@ class CacheInfo(BaseModel):
     )
 
 
-class RemovedStats(BaseModel):
-    hidden_elements: int = Field(
-        default=0,
-        description="Hidden elements removed during extraction.",
-    )
-    zero_width_chars: int = Field(
-        default=0,
-        description="Zero-width characters removed during extraction.",
-    )
-    comments: int = Field(
-        default=0,
-        description="HTML comments removed during extraction.",
-    )
-
-
 class Provenance(BaseModel):
     request_id: str = Field(description="Identifier of the request.")
     fetched_at: str = Field(
@@ -105,13 +90,6 @@ class Provenance(BaseModel):
     extractor_version: str | None = Field(
         default=None,
         description="Extractor version.",
-    )
-    removed: RemovedStats | None = Field(
-        default=None,
-        description=(
-            "Counts of content stripped during extraction. "
-            "Reporting only, not a security control."
-        ),
     )
 
 
