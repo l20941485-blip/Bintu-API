@@ -356,6 +356,37 @@ class ScraperNetworkTests(unittest.TestCase):
 
         self.assertEqual(connection.request_args[1], "/caf%C3%A9?q=a%20b")
 
+    def test_fetch_tries_next_address_after_connection_failure(self):
+        first = MagicMock()
+        first.request.side_effect = OSError("first address unavailable")
+
+        second = FakeResponse()
+        second_connection = FakeConnection(second)
+
+        with (
+            patch(
+                "bintu_api.scraper.socket.getaddrinfo",
+                return_value=[
+                    dns_result("93.184.216.34"),
+                    dns_result("8.8.8.8"),
+                ],
+            ),
+            patch(
+                "bintu_api.scraper._make_connection",
+                side_effect=[first, second_connection],
+            ) as make_connection,
+        ):
+            document = fetch_html_document(
+                "http://example.com/",
+                self.settings,
+            )
+
+        self.assertEqual(document.body, b"<p>safe</p>")
+        self.assertEqual(document.final_url, "http://example.com/")
+        self.assertEqual(make_connection.call_count, 2)
+        first.close.assert_called_once()
+        self.assertTrue(second_connection.request_args)
+        self.assertTrue(second_connection.closed)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

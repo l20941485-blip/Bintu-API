@@ -513,37 +513,57 @@ def fetch_html_document(
                 )
             current_scheme = parsed.scheme
 
-        address = resolve_public_addresses(
+        addresses = resolve_public_addresses(
             host,
             port,
-        )[0]
-        connection = _make_connection(
-            parsed,
-            host,
-            address,
-            port,
-            settings.request_timeout_seconds,
         )
+        connection = None
+        response = None
+        last_error = None
+
+        # Try each validated public address. A connection failure at one
+        # address should not fail the request when another address works.
+        for address in addresses:
+            candidate = _make_connection(
+                parsed,
+                host,
+                address,
+                port,
+                settings.request_timeout_seconds,
+            )
+
+            try:
+                candidate.request(
+                    "GET",
+                    path,
+                    headers={
+                        "Accept": (
+                            "text/html, application/xhtml+xml"
+                        ),
+                        "Accept-Encoding": "identity",
+                        "Connection": "close",
+                        "Host": _host_header(
+                            host,
+                            port,
+                            parsed.scheme,
+                        ),
+                        "User-Agent": get_user_agent(settings),
+                    },
+                )
+                response = candidate.getresponse()
+                connection = candidate
+                break
+            except (OSError, http.client.HTTPException) as error:
+                last_error = error
+                candidate.close()
+                continue
+
+        if connection is None or response is None:
+            raise last_error or OSError(
+                "No validated address could be connected to"
+            )
 
         try:
-            connection.request(
-                "GET",
-                path,
-                headers={
-                    "Accept": (
-                        "text/html, application/xhtml+xml"
-                    ),
-                    "Accept-Encoding": "identity",
-                    "Connection": "close",
-                    "Host": _host_header(
-                        host,
-                        port,
-                        parsed.scheme,
-                    ),
-                    "User-Agent": get_user_agent(settings),
-                },
-            )
-            response = connection.getresponse()
             status = response.status
 
             if status in REDIRECT_STATUSES:
