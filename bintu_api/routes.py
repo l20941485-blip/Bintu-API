@@ -11,7 +11,9 @@ from urllib.parse import urlparse, urlunparse
 
 
 
+
 from fastapi import APIRouter, HTTPException, Request, Security, status
+
 
 
 
@@ -73,8 +75,10 @@ from bintu_api.settings import Settings
 
 
 
+
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
+
 
 
 
@@ -90,18 +94,60 @@ UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
 
 
 
+
+SENSITIVE_QUERY_PARAMETER_NAMES = frozenset(
+    {
+        "key",
+        "token",
+        "secret",
+        "password",
+        "api_key",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "client_secret",
+    }
+)
+
+
+
+
+
+
+
+
 def sanitize_url(url: str) -> str:
-    """Strip sensitive-looking query parameters. For logs and provenance only;
-    never use the result to fetch or to replace the caller's URL."""
+    """Strip sensitive-looking query parameters.
+
+    For logs and provenance only; never use the result to fetch or to replace
+    the caller's URL. Parameter names are compared case-insensitively, and
+    tracking parameters such as ``utm_source`` are removed as well.
+    """
     parsed = urlparse(url)
     safe_query = "&".join(
         part
         for part in parsed.query.split("&")
-        if not part.lower().startswith(("key=", "token=", "secret=", "password=", "utm_"))
+        if part
+        and not _is_sensitive_query_parameter(part.split("=", 1)[0])
     )
     return urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, safe_query, parsed.fragment)
     )
+
+
+
+
+
+
+
+
+def _is_sensitive_query_parameter(name: str) -> bool:
+    normalized = name.strip().lower()
+    return (
+        normalized in SENSITIVE_QUERY_PARAMETER_NAMES
+        or normalized.startswith("utm_")
+    )
+
 
 
 
@@ -136,6 +182,7 @@ def _build_provenance(
 
 
 
+
 def _build_response(
     url: str,
     result: CachedMarkdown,
@@ -149,6 +196,7 @@ def _build_response(
 
 
 
+
     # Preserve the economics of the original extraction on cache hits. A
     # persistent-cache row no longer has the source HTML, so recomputing savings
     # would incorrectly report zero.
@@ -158,6 +206,7 @@ def _build_response(
         saved = _compute_tokens_saved_estimate(document.body, result.markdown)
     else:
         saved = 0
+
 
 
 
@@ -180,8 +229,10 @@ def _build_response(
 
 
 
+
 async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     """Check robots.txt before any network fetch of the page.
+
 
 
 
@@ -233,6 +284,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
 
 
 
+
 @router.get("/", response_model=GatewayResponse)
 def gateway_check(request: Request) -> GatewayResponse:
     settings = request.app.state.settings
@@ -244,9 +296,11 @@ def gateway_check(request: Request) -> GatewayResponse:
 
 
 
+
 @router.get("/healthz", response_model=HealthResponse, include_in_schema=False)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
+
 
 
 
@@ -268,6 +322,7 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
     )
+
 
 
 
@@ -329,6 +384,7 @@ async def scrape_text(
 
 
 
+
 @router.post(
     "/api/v1/mobile/scrape/text",
     response_model=ScrapeTextResponse,
@@ -378,6 +434,7 @@ async def mobile_scrape_text(
 
 
 
+
 async def _fetch_and_extract(
     request: Request,
     url: str,
@@ -394,10 +451,12 @@ async def _fetch_and_extract(
 
 
 
+
     Returns:
         document: FetchedHTML for a fresh fetch; None for a cache hit.
         result: extracted markdown, truncation flag, and extraction economics.
         cache_layer: "none", "memory", or "persistent".
+
 
 
 
@@ -411,6 +470,7 @@ async def _fetch_and_extract(
     document: FetchedHTML | None = None
     cache_layer = "none"
     request_id = getattr(getattr(request, "state", None), "request_id", None)
+
 
 
 
@@ -440,7 +500,9 @@ async def _fetch_and_extract(
 
 
 
+
     cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
+
 
 
 
@@ -453,6 +515,7 @@ async def _fetch_and_extract(
             request_id=request_id,
             layer=cache_layer,
         )
+
 
 
 
@@ -484,8 +547,10 @@ async def _fetch_and_extract(
 
 
 
+
     cache = request.app.state.cache
     document = None if skip_cache else cache.get(cache_key)
+
 
 
 
@@ -511,9 +576,11 @@ async def _fetch_and_extract(
 
 
 
+
         # robots.txt is checked before any network fetch of the page.
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
+
 
 
 
@@ -531,7 +598,9 @@ async def _fetch_and_extract(
 
 
 
+
         cache.set(cache_key, document)
+
 
 
 
@@ -550,6 +619,7 @@ async def _fetch_and_extract(
 
 
 
+
     html_source_text = _decode_source_text(document)
     html_tokens = _compute_approx_tokens(html_source_text)
     tokens_saved_estimate = _compute_tokens_saved_estimate(
@@ -557,6 +627,7 @@ async def _fetch_and_extract(
         extracted.text,
     )
     extracted_at = datetime.now(timezone.utc).isoformat()
+
 
 
 
@@ -569,6 +640,7 @@ async def _fetch_and_extract(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at,
     )
+
 
 
 
@@ -609,7 +681,9 @@ async def _fetch_and_extract(
 
 
 
+
     return document, result, cache_layer
+
 
 
 
@@ -637,8 +711,10 @@ async def _scrape_text(
 
 
 
+
     try:
         await asyncio.to_thread(request.app.state.rate_limiter.check, identity)
+
 
 
 
@@ -653,6 +729,7 @@ async def _scrape_text(
             render_js=render_js,
             skip_cache=skip_cache,
         )
+
 
 
 
@@ -682,6 +759,7 @@ async def _scrape_text(
 
 
 
+
         response = _build_response(
             url,
             result,
@@ -690,6 +768,7 @@ async def _scrape_text(
             request_id,
             settings,
         )
+
 
 
 
@@ -710,7 +789,9 @@ async def _scrape_text(
 
 
 
+
         return response
+
 
 
 
@@ -803,6 +884,7 @@ async def _scrape_text(
 
 
 
+
         raise HTTPException(
             status_code=502,
             detail={
@@ -885,6 +967,7 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
+
 
 
 
