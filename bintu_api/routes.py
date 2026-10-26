@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+import os
 import socket
 import uuid
 from datetime import datetime, timezone
@@ -253,8 +254,18 @@ def gateway_check(request: Request) -> GatewayResponse:
     response_model=HealthResponse,
     include_in_schema=False,
 )
-def health_check() -> HealthResponse:
-    return HealthResponse(status="ok")
+def health_check(request: Request) -> HealthResponse:
+    """Return liveness and non-secret deployed-build metadata."""
+    settings: Settings = request.app.state.settings
+    commit = os.getenv("RENDER_GIT_COMMIT", "").strip() or None
+    environment = os.getenv("RENDER_SERVICE_NAME", "").strip() or None
+
+    return HealthResponse(
+        status="ok",
+        version=settings.service_version,
+        commit=commit,
+        environment=environment,
+    )
 
 
 @router.get("/version", response_model=VersionResponse)
