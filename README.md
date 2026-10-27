@@ -225,7 +225,7 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 
 **Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
 
-Limits everywhere: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (plain HTML only until `RENDER_JS_ENABLED=true` on paid infra). Error codes: see [Common errors](#common-errors).
+Legacy scrape endpoint limits: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (plain HTML only until `RENDER_JS_ENABLED=true` on paid infra). Error codes: see [Common errors](#common-errors).
 
 ## RapidAPI Publishing
 
@@ -278,6 +278,138 @@ node .\node_modules\expo\bin\cli start
 Scan the QR code shown by Expo Go. The app handles confirmation and password-reset links and lets the user set a new password after following a recovery link. The `EXPO_PUBLIC_` Supabase key is a client/public key, not a service secret; the API verifies sessions and keeps the Bintu server key private. A local `.env` file is git-ignored. iOS simulator builds require macOS and Xcode; public app-store distribution has separate developer enrollment requirements and fees.
 
 This is an early MVP: the API's in-memory limiter resets on restart and does not provide account-abuse prevention or a monthly user quota. Review hosting and Supabase plan limits before inviting more users.
+
+## REST document reader
+
+The reader provides paginated access to a retained text snapshot through
+`POST /api/v1/reader/read` and `POST /api/v1/reader/continue`. These routes
+are separate from the existing scrape endpoints and are not exposed as
+new MCP tools. They become available when a version containing this
+change is deployed.
+
+### Authentication and ownership
+
+Both endpoints require either the configured direct `API_KEY` in
+`X-API-Key`, or a verified RapidAPI proxy request with a valid
+`X-RapidAPI-User`. Unauthenticated local development mode does not grant
+reader access.
+
+Ownership is credential-level: all callers using the same direct API key
+share one owner identity. Verified RapidAPI subscribers have separate
+owner identities. An unverified subscriber header does not establish
+ownership. Mobile Supabase sessions and the scoped `MCP_API_KEY` are not
+reader credentials.
+
+Treat continuation cursors as sensitive, temporary handles. Use the same
+authenticated owner for the initial read and subsequent continuations.
+
+### Read and continue
+
+For local testing, start the application with an `API_KEY` configured,
+and set that same key in `$env:BINTU_API_KEY`. Use a deployed base URL
+only after the reader changes have been deployed.
+
+```powershell
+$readerBaseUrl = "http://127.0.0.1:8000"
+$headers = @{ "X-API-Key" = $env:BINTU_API_KEY }
+
+$body = @{
+    url = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
+    max_tokens = 1000
+    include_nav = $false
+    include_header = $false
+    include_footer = $false
+} | ConvertTo-Json
+
+$page = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$readerBaseUrl/api/v1/reader/read" `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $body
+
+$page.text
+
+while ($page.has_more) {
+    $body = @{
+        cursor = $page.next_cursor
+        max_tokens = 1000
+    } | ConvertTo-Json
+
+    $page = Invoke-RestMethod `
+        -Method Post `
+        -Uri "$readerBaseUrl/api/v1/reader/continue" `
+        -Headers $headers `
+        -ContentType "application/json" `
+        -Body $body
+
+    $page.text
+}
+```
+
+The initial request checks robots policy, fetches the page using the
+existing guarded fetcher, and extracts a text snapshot. Continuations
+read that snapshot without refetching the target. Pages therefore
+represent the original extraction, not subsequent website changes.
+
+`max_tokens` must be a JSON integer from 1 through 6000; it defaults to
+1000 on each request. It budgets page text only, not JSON framing,
+metadata, or other model context. The response includes `approx_tokens`
+and `token_method`; do not treat the estimate as an exact count for
+every model tokenizer.
+
+Responses include `text`, `start_offset`, `end_offset`, `has_more`,
+`next_cursor`, `approx_tokens`, `token_method`, `boundary_split`, and
+`budget_scope` (`page_text_only`). Continue using the returned cursor,
+not a client-supplied offset. The final page has `has_more=false` and
+`next_cursor=null`. The three extraction inclusion flags default to
+false and are set only on the initial request.
+
+### Retention and deployment limits
+
+The reader rejects oversized extracted documents instead of silently
+shortening them. Its retention limit is separate from the legacy scrape
+response character limit; upstream fetch size and media-type guards
+still apply.
+
+The application's default snapshot store has:
+
+- A fixed 600-second lifetime from snapshot creation. Reads do not
+  extend it.
+- Capacity for 16 retained documents and 256 continuation handles per
+  application store.
+- Oldest-inserted eviction when either capacity is exceeded.
+- Process-local memory only: snapshots are not persisted or shared
+  between workers or instances, and disappear on restart.
+
+Ten minutes is an expiry limit, not a guaranteed availability window:
+eviction can invalidate a cursor sooner. A continuation sent to another
+worker or instance cannot resolve the original worker's cursor.
+Multi-worker or multi-instance deployments need an explicit routing or
+shared-storage design before reliable continuation can be promised.
+
+Unknown, expired, evicted, and wrong-owner cursors all return HTTP 404
+with `detail.code=reader_snapshot_unavailable`. Start a new read to
+recover; doing so fetches the target again and may produce different
+text.
+
+Both initial reads and continuations pass through the rate limiter.
+Successful verified RapidAPI requests on either endpoint attempt a
+developer usage increment when the database client is available.
+Database usage-recording failures do not fail an otherwise successful
+reader response. This accounting is not a replacement for gateway plan
+quotas.
+
+### Observability
+
+Reader requests pass through the existing HTTP observability
+middleware: request count, error count, duration, request-completion
+logs, and the `X-Request-ID` response header.
+
+The reader route implementation does not call the existing
+extraction-completion and extraction-failure metric helpers. Do not
+interpret those extraction-specific metrics as complete reader usage
+or failure coverage.
 
 ## Tests
 
