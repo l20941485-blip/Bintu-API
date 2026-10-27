@@ -52,6 +52,37 @@ See README.md and DEPLOYMENT.md for the contract and release checks.
 - Historical workstation-specific failures below are dated observations,
   not evidence that the current suite is failing.
 
+## Production validation: 2026-10-27
+
+Deployment: Render reported merge commit `83e8511` as Live for `main`.
+
+### Existing smoke check
+
+The existing production smoke check passed:
+
+- `/healthz` returned OK.
+- Authenticated `/api/v1/scrape/text` returned 173 characters.
+- `http://127.0.0.1/` was rejected with `invalid_or_unsafe_url`.
+- `/metrics` was accessible.
+- `/robots.txt`, `/llms.txt`, and public MCP `tools/list` were accessible.
+- The optional MCP cache check was skipped because
+  `BINTU_SMOKE_MCP_CACHE` was not set to `1`.
+
+### REST reader
+
+An authenticated live reader check against
+`https://www.iana.org/domains/reserved` passed:
+
+- Initial read and 18 sequential continuations completed successfully.
+- The response delivered 2,215 characters across 19 pages.
+- Page offsets remained continuous from 0 through 2215.
+- Each page reported at most 32 approximate page-text tokens.
+- The final page returned `has_more=false`.
+
+This validates the tested sequential flow on the reported deployment. It
+does not validate multi-worker routing, expiry or capacity eviction under
+production load, every upstream target, or the skipped MCP cache check.
+
 ## Historical status log
 
 The entries below preserve earlier observations and work notes. Their test
