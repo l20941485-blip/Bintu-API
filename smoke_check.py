@@ -15,6 +15,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from smoke_discovery import check_discovery
+
 
 DEFAULT_TARGET_URL = "https://example.com/"
 UNSAFE_TARGET_URL = "http://127.0.0.1/"
@@ -242,6 +244,13 @@ def main() -> None:
         _check_metrics(base_url, api_key)
     else:
         print("SKIP /metrics (BINTU_API_KEY is not set)")
+
+    try:
+        check_discovery(base_url)
+    except Exception as error:
+        # Avoid dumping upstream bodies, URLs, or credentials on failure.
+        _fail(f"Discovery check failed ({type(error).__name__}). "
+              "Inspect the public discovery endpoints.")
 
     print("Smoke check passed.")
 
