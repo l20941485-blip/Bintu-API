@@ -110,22 +110,25 @@ def _check_metrics(base_url: str, api_key: str) -> None:
         )
 
     if status != 200:
-        _fail(f"/metrics returned HTTP {status}: {body[:300]!r}")
+        _fail(f"/metrics returned HTTP {status}.")
 
     metrics_text = body.decode("utf-8", errors="replace")
 
-    cache_hits = _metric_value(
-        metrics_text,
-        "bintu_cache_hits_total",
-    )
-    cache_misses = _metric_value(
-        metrics_text,
-        "bintu_cache_misses_total",
-    )
-    tokens_saved = _metric_value(
-        metrics_text,
-        "bintu_tokens_saved_estimate_total",
-    )
+    try:
+        cache_hits = _metric_value(
+            metrics_text,
+            "bintu_cache_hits_total",
+        )
+        cache_misses = _metric_value(
+            metrics_text,
+            "bintu_cache_misses_total",
+        )
+        tokens_saved = _metric_value(
+            metrics_text,
+            "bintu_tokens_saved_estimate_total",
+        )
+    except ValueError:
+        _fail("/metrics returned invalid numeric data.")
 
     cache_lookups = cache_hits + cache_misses
     cache_hit_rate = (
@@ -158,15 +161,15 @@ def main() -> None:
     status, headers, body = _request(f"{base_url}/healthz")
 
     if status != 200:
-        _fail(f"/healthz returned HTTP {status}: {body[:200]!r}")
+        _fail(f"/healthz returned HTTP {status}.")
 
     try:
         health = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        _fail(f"/healthz returned non-JSON body: {error}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        _fail("/healthz returned invalid JSON.")
 
-    if health.get("status") != "ok":
-        _fail(f"/healthz unexpected payload: {health}")
+    if not isinstance(health, dict) or health.get("status") != "ok":
+        _fail("/healthz returned an unexpected payload.")
 
     print("OK  /healthz")
 
@@ -194,17 +197,20 @@ def main() -> None:
         )
 
     if status != 200:
-        _fail(f"Scrape returned HTTP {status}: {body[:300]!r}")
+        _fail(f"Scrape returned HTTP {status}.")
 
     try:
         payload = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        _fail(f"Scrape returned non-JSON body: {error}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        _fail("Scrape returned invalid JSON.")
+
+    if not isinstance(payload, dict):
+        _fail("Scrape returned an unexpected payload.")
 
     text = payload.get("text")
 
     if not isinstance(text, str) or not text.strip():
-        _fail(f"Scrape returned empty or missing text: {payload}")
+        _fail("Scrape returned empty or missing text.")
 
     request_id = _header(headers, "X-Request-ID")
 
@@ -232,28 +238,26 @@ def main() -> None:
 
     if status != 400:
         _fail(
-            f"Unsafe URL returned HTTP {status}; expected 400: "
-            f"{body[:300]!r}"
+            f"Unsafe URL returned HTTP {status}; expected 400."
         )
 
     try:
         unsafe_payload = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        _fail(f"Unsafe URL response was not JSON: {error}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        _fail("Unsafe URL response returned invalid JSON.")
+
+    if not isinstance(unsafe_payload, dict):
+        _fail("Unsafe URL response returned an unexpected payload.")
 
     detail = unsafe_payload.get("detail")
 
     if not isinstance(detail, dict):
-        _fail(
-            "Unsafe URL response detail is not an object: "
-            f"{unsafe_payload}"
-        )
+        _fail("Unsafe URL response detail is not an object.")
 
     if detail.get("code") != "invalid_or_unsafe_url":
         _fail(
             "Unsafe URL response does not use "
-            "invalid_or_unsafe_url: "
-            f"{unsafe_payload}"
+            "invalid_or_unsafe_url."
         )
 
     if UNSAFE_TARGET_URL in body.decode(
