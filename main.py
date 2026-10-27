@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bintu_api.auth import verify_api_access
 from bintu_api.cache import TTLCache
+from bintu_api.discovery import router as discovery_router
 from bintu_api.database import (
     DATABASE_TIMEOUT_SECONDS,
     close_supabase_client,
@@ -111,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.cache = TTLCache(app_settings.cache_ttl_seconds)
     application.state.supabase_client = None
     application.add_middleware(RequestObservabilityMiddleware)
+    application.include_router(discovery_router)
     application.include_router(router)
     application.include_router(mcp_router)
     # Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0 at POST /mcp) for
