@@ -89,10 +89,10 @@ class Settings:
     # clickable subscribe link in-chat. Override with BINTU_UPGRADE_URL.
     # No tier caps are enforced in code; dashboards own quota.
     upgrade_url: str = "https://mcpize.com"
-    # JavaScript rendering boots Playwright/Chromium (2-4s + RAM). Off by
-    # default on free infra; set RENDER_JS_ENABLED=true only on paid plans
-    # where the latency and quota cost are covered. RapidAPI does not send
-    # plan tier in headers, so per-plan gating is not enforceable here.
+    # Keep JavaScript rendering disabled until browser connection targeting,
+    # redirects, and subresource requests are hardened and tested.
+    # Paid infrastructure does not resolve its DNS-rebinding risk.
+    # See SECURITY.md; Chromium also adds startup latency and RAM costs.
     render_js_enabled: bool = False
     # REQUIRE_AUTH=true forbids the open-dev early return in verify_api_access:
     # if both secrets are empty the service answers 500 auth_misconfiguration
