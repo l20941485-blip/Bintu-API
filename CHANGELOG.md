@@ -12,6 +12,16 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 ### Added
 
+- `persist=false` opt-out for REST, mobile, and MCP scrape requests,
+  preventing a fresh successful result from being written to the
+  persistent cache.
+- Credential-like query values are redacted before a URL is written to
+  the Supabase persistent cache.
+- Cache reads and in-memory cache identity continue to use the original
+  request URL, preserving existing cache-hit behavior.
+
+
+
 - `bintu_rate_limiter_mode` Prometheus gauge reporting whether the active
   limiter is Redis-backed (`1`) or process-local fallback (`0`).
 - Fallback-mode reporting when a configured Redis rate limiter fails and
