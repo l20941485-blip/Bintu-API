@@ -35,7 +35,7 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      # Off by default on free infra (Chromium boot = latency + RAM).
-      # Set to "true" only on paid plans where rendering cost is covered.
+      # Keep disabled until browser security hardening is complete.
+      # Paid infrastructure does not resolve the risk; see SECURITY.md.
       - key: RENDER_JS_ENABLED
         value: "false"
