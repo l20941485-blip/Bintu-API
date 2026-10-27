@@ -246,6 +246,15 @@ TOOL_INPUT_SCHEMA = {
                 "cache reads but does not disable writes of fresh results."
             ),
         },
+        "persist": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Allow a fresh successful result to be written to the "
+                "persistent cache. False prevents that write; memory "
+                "caching and extraction are unchanged."
+            ),
+        },
     },
     "required": ["url"],
     "additionalProperties": False,
@@ -272,6 +281,7 @@ class ToolArguments(BaseModel):
         le=50000,
     )
     cache: bool = True
+    persist: bool = True
 
     @model_validator(mode="before")
     @classmethod
@@ -388,6 +398,7 @@ async def call_tool(
             include_footer=False,
             render_js=arguments.render_js,
             skip_cache=not arguments.cache,
+            persist=arguments.persist,
         )
     except TargetURLRejected as error:
         return _mcp_error_response(

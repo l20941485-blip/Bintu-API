@@ -56,6 +56,8 @@ from bintu_api.scraper import (
     fetch_html_document,
     fetch_rendered_html_document,
 )
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.scrape")
@@ -309,6 +311,7 @@ async def scrape_text(
     include_footer: bool = False,
     render_js: bool = False,
     skip_cache: bool = False,
+    persist: bool = True,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
@@ -332,6 +335,7 @@ async def scrape_text(
         rate_limit_identity(request, settings),
         render_js,
         skip_cache,
+        persist,
     )
 
 
@@ -353,6 +357,7 @@ async def mobile_scrape_text(
     request: Request,
     payload: MobileScrapeTextRequest,
     skip_cache: bool = False,
+    persist: bool = True,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     user_id = await asyncio.to_thread(
@@ -380,6 +385,56 @@ async def mobile_scrape_text(
         f"supabase:{user_id}",
         payload.render_js,
         skip_cache,
+        persist,
+    )
+
+
+_CREDENTIAL_QUERY_PARAMS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "apikey",
+        "auth",
+        "authorization",
+        "key",
+        "password",
+        "secret",
+        "session",
+        "sessionid",
+        "token",
+    }
+)
+
+
+def redact_cache_url(url: str) -> str:
+    """Redact credential-like query values before persistent-cache storage.
+
+    Cache lookups continue to use the original request URL. Only the URL
+    written to Supabase is redacted, preventing bearer tokens, session IDs,
+    and similar caller credentials from being retained in cache rows.
+    """
+    parsed = urlsplit(url)
+    if not parsed.query:
+        return url
+
+    try:
+        pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    except ValueError:
+        return url
+
+    redacted_pairs = [
+        (name, "[REDACTED]" if name.lower() in _CREDENTIAL_QUERY_PARAMS else value)
+        for name, value in pairs
+    ]
+
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            urlencode(redacted_pairs),
+            parsed.fragment,
+        )
     )
 
 
@@ -392,6 +447,7 @@ async def _fetch_and_extract(
     include_footer: bool,
     render_js: bool,
     skip_cache: bool,
+    persist: bool = True,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
@@ -516,12 +572,12 @@ async def _fetch_and_extract(
         extracted_at=extracted_at,
     )
 
-    if database_client is not None:
+    if database_client is not None and persist:
         try:
             await asyncio.wait_for(
                 upsert_cached_markdown(
                     database_client,
-                    url,
+                    redact_cache_url(url),
                     render_js,
                     include_nav,
                     include_header,
@@ -559,6 +615,7 @@ async def _scrape_text(
     identity: str,
     render_js: bool = False,
     skip_cache: bool = False,
+    persist: bool = True,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     request_id = (
@@ -580,6 +637,7 @@ async def _scrape_text(
             include_footer=include_footer,
             render_js=render_js,
             skip_cache=skip_cache,
+            persist=persist,
         )
 
         if (
