@@ -1,0 +1,56 @@
+name: Live smoke check
+
+on:
+  workflow_dispatch:
+    inputs:
+      mcp_cache:
+        description: "Refresh example.com via MCP and verify persistent-cache fidelity"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  live-smoke:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: main - bintu-data-extraction-api
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run live smoke check
+        env:
+          BINTU_BASE_URL: "https://bintu-api.onrender.com"
+          BINTU_SMOKE_TARGET_URL: "https://example.com/"
+          BINTU_API_KEY: ${{ secrets.BINTU_API_KEY }}
+          BINTU_SMOKE_MCP_CACHE: ${{ inputs.mcp_cache && '1' || '0' }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+
+          if not os.environ.get("BINTU_API_KEY", "").strip():
+              print(
+                  "Missing environment secret BINTU_API_KEY.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          PY
+          python smoke_check.py
