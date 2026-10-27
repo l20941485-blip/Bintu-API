@@ -97,3 +97,48 @@ def test_redis_failure_reports_fallback_mode_and_uses_local_guard():
 
     assert error.value.status_code == 429
     assert gauge_value() == 0
+
+@pytest.mark.parametrize("over_limit", [False, True])
+def test_redis_recovery_restores_redis_mode(over_limit):
+    with patch(
+        "bintu_api.rate_limit.redis.from_url",
+        return_value=FailingRedis(),
+    ):
+        limiter = create_rate_limiter(settings("redis://localhost:6379/0"))
+
+    assert gauge_value() == 1
+
+    with patch(
+        "bintu_api.rate_limit.time.monotonic",
+        return_value=100.0,
+    ):
+        limiter.check("caller")
+
+    assert gauge_value() == 0
+
+    recovered = WorkingRedis()
+    if over_limit:
+        recovered.values["rate_limit:caller"] = 2
+
+    recovery_time = limiter._circuit_open_until + 1.0
+
+    with (
+        patch.object(limiter, "_redis", recovered),
+        patch(
+            "bintu_api.rate_limit.time.monotonic",
+            return_value=recovery_time,
+        ),
+    ):
+        if over_limit:
+            with pytest.raises(HTTPException) as error:
+                limiter.check("caller")
+
+            assert error.value.status_code == 429
+            assert error.value.headers["Retry-After"] == "60"
+        else:
+            limiter.check("caller")
+
+    assert recovered.values["rate_limit:caller"] == (
+        3 if over_limit else 1
+    )
+    assert gauge_value() == 1

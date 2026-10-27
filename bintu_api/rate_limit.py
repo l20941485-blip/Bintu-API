@@ -107,6 +107,8 @@ class RedisRateLimiter:
             self._fallback.check(identity)
             return
 
+        RATE_LIMITER_MODE.set(1)
+
         if count > self._limit:
             retry_after = ttl if isinstance(ttl, int) and ttl > 0 else self._window
             raise HTTPException(
