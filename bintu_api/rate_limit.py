@@ -5,6 +5,7 @@ import time
 from collections import deque
 
 from fastapi import HTTPException
+from prometheus_client import Gauge
 
 from bintu_api.settings import Settings
 
@@ -15,6 +16,11 @@ except ImportError:
 
 
 logger = logging.getLogger("bintu_api.rate_limit")
+
+RATE_LIMITER_MODE = Gauge(
+    "bintu_rate_limiter_mode",
+    "Active rate-limiter mode: 1 for Redis-backed, 0 for process-local fallback.",
+)
 
 
 class BurstRateLimiter:
@@ -97,6 +103,7 @@ class RedisRateLimiter:
         except Exception as error:  # redis.RedisError plus transport errors
             logger.warning("redis_rate_limiter_unavailable error_type=%s", type(error).__name__)
             self._circuit_open_until = now + self.CIRCUIT_OPEN_SECONDS
+            RATE_LIMITER_MODE.set(0)
             self._fallback.check(identity)
             return
 
@@ -115,5 +122,8 @@ class RedisRateLimiter:
 def create_rate_limiter(settings: Settings):
     """Factory function to create the appropriate rate limiter."""
     if settings.redis_url and redis is not None:
-        return RedisRateLimiter(settings.redis_url, settings)
+        limiter = RedisRateLimiter(settings.redis_url, settings)
+        RATE_LIMITER_MODE.set(1)
+        return limiter
+    RATE_LIMITER_MODE.set(0)
     return BurstRateLimiter(settings)

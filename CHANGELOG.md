@@ -12,6 +12,13 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 ### Added
 
+- `bintu_rate_limiter_mode` Prometheus gauge reporting whether the active
+  limiter is Redis-backed (`1`) or process-local fallback (`0`).
+- Fallback-mode reporting when a configured Redis rate limiter fails and
+  enters its existing 30-second fallback circuit.
+
+
+
 - Authenticated REST document reader at `POST /api/v1/reader/read` and
   `POST /api/v1/reader/continue`.
 - Caller-bound, opaque continuation handles for reading retained text
