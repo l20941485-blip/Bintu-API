@@ -16,6 +16,13 @@ from main import create_app
 
 class RenderJsContractTests(unittest.TestCase):
     def setUp(self) -> None:
+        # These contract tests isolate robots retrieval from page fetching.
+        robots_patcher = patch(
+            "bintu_api.routes._enforce_robots",
+            new=AsyncMock(return_value=None),
+        )
+        self.addCleanup(robots_patcher.stop)
+        robots_patcher.start()
         self.url = "https://example.com/app"
         self.document = FetchedHTML(
             final_url=self.url,

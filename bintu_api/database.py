@@ -32,6 +32,8 @@ else:
 
 
 logger = logging.getLogger("bintu_api.database")
+# Bump when extracted Markdown or its stored metadata changes.
+EXTRACTOR_VERSION = "2026-10-27.1"
 CACHE_TTL = timedelta(hours=24)
 DATABASE_TIMEOUT_SECONDS = 2.0
 
@@ -112,6 +114,7 @@ async def get_cached_markdown(
         .eq("include_nav", include_nav)
         .eq("include_header", include_header)
         .eq("include_footer", include_footer)
+        .eq("extractor_version", EXTRACTOR_VERSION)
         .gt("created_at", cutoff)
         .limit(1)
         .execute()
@@ -198,6 +201,7 @@ async def upsert_cached_markdown(
                 "include_nav": include_nav,
                 "include_header": include_header,
                 "include_footer": include_footer,
+                "extractor_version": EXTRACTOR_VERSION,
                 "markdown": markdown,
                 "truncated": truncated,
                 "html_tokens": max(0, int(html_tokens)),

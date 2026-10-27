@@ -63,3 +63,12 @@ as $$
 $$;
 
 grant execute on function public.increment_developer_usage(text) to service_role;
+
+-- Persistent extraction metadata and version discrimination.
+-- Existing/unversioned writers remain legacy; current writers set their version.
+alter table public.scrape_cache
+    add column if not exists html_tokens bigint not null default 0,
+    add column if not exists tokens_saved_estimate bigint not null default 0,
+    add column if not exists limiting_factor text not null default 'none',
+    add column if not exists extracted_at timestamptz,
+    add column if not exists extractor_version text not null default 'legacy';

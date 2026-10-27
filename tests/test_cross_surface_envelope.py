@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -30,6 +30,13 @@ MCP_CORE_ENVELOPE_FIELDS = {
 
 class CrossSurfaceEnvelopeTests(unittest.TestCase):
     def setUp(self) -> None:
+        # These contract tests isolate robots retrieval from page fetching.
+        robots_patcher = patch(
+            "bintu_api.routes._enforce_robots",
+            new=AsyncMock(return_value=None),
+        )
+        self.addCleanup(robots_patcher.stop)
+        robots_patcher.start()
         self.url = "https://example.com/page"
         self.document = FetchedHTML(
             final_url=self.url,

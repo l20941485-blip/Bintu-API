@@ -484,7 +484,6 @@ async def _fetch_and_extract(
                 settings,
             )
 
-        cache.set(cache_key, document)
 
     extracted = extract_text_result(
         document.body,
@@ -495,6 +494,10 @@ async def _fetch_and_extract(
         from_encoding=document.charset,
         base_url=document.final_url or url,
     )
+
+    # Replace raw HTML only after a successful, nonempty extraction.
+    if cache_layer == "none" and extracted.text.strip():
+        cache.set(cache_key, document)
 
     html_source_text = _decode_source_text(document)
     html_tokens = _compute_approx_tokens(html_source_text)

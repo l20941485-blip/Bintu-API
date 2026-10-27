@@ -12,6 +12,15 @@ from bintu_api.settings import Settings
 
 
 class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        # These contract tests isolate robots retrieval from page fetching.
+        robots_patcher = patch(
+            "bintu_api.routes._enforce_robots",
+            new=AsyncMock(return_value=None),
+        )
+        self.addCleanup(robots_patcher.stop)
+        robots_patcher.start()
+
     def _request(self) -> MagicMock:
         request = MagicMock()
         request.app.state.settings = Settings(
