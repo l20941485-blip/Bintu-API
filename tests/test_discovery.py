@@ -1,5 +1,7 @@
 """Public discovery must work with production authentication enabled."""
 
+import json
+import re
 import unittest
 
 from fastapi.testclient import TestClient
@@ -46,6 +48,23 @@ class DiscoveryTests(unittest.TestCase):
             params={"url": "https://example.com/"},
         )
         self.assertEqual(response.status_code, 401)
+
+
+
+    def test_llms_json_example_has_plain_target_url(self):
+        response = self.client.get("/llms.txt")
+        self.assertEqual(response.status_code, 200)
+        match = re.search(
+            r"```json\s*(.*?)\s*```",
+            response.text,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match, "Missing JSON example")
+        example = json.loads(match.group(1))
+        self.assertEqual(
+            example["params"]["arguments"]["url"],
+            "https://" + "example.com/",
+        )
 
 
 if __name__ == "__main__":

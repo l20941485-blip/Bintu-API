@@ -44,7 +44,7 @@ Do not assume support for a newer protocol solely from the transport name.
 Example tools/call JSON-RPC body:
 
 ```json
-{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bintu_scrape_text","arguments":{"url":"[https://example.com/](https://example.com/)","mode":"summarize","max_tokens":500,"render_js":false,"cache":true}}}
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bintu_scrape_text","arguments":{"url":"https://example.com/","mode":"summarize","max_tokens":500,"render_js":false,"cache":true}}}
 ```
 
 Send Content-Type: application/json and valid authentication, such as
