@@ -8,6 +8,32 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 
 
+## [Unreleased]
+
+### Added
+
+- Authenticated REST document reader at `POST /api/v1/reader/read` and
+  `POST /api/v1/reader/continue`.
+- Caller-bound, opaque continuation handles for reading retained text
+  snapshots without refetching the target.
+- Reader page-text budgets with a default of 1,000 and a permitted range
+  of 1 through 6,000 approximate tokens.
+- A 200,000-character extracted-document retention limit; larger
+  extractions are rejected rather than silently shortened.
+- Bounded process-local retention: fixed 600-second snapshot lifetime,
+  up to 16 documents and 256 continuation handles per application store.
+  Capacity eviction can invalidate continuations before expiry.
+- Reader route and real-application integration tests.
+- Reader documentation covering authentication, continuation, retention,
+  multi-worker limitations, and HTTP-level observability.
+
+### Documentation
+
+- Consolidated security guidance in root `SECURITY.md` and removed the
+  duplicate `docs/SECURITY.md`.
+- Clarified that paid infrastructure does not resolve the documented
+  JavaScript-rendering DNS-rebinding risk.
+
 ## [1.2.0] — 2026-10-25
 
 

@@ -1,199 +1,194 @@
 # Bintu API Deployment Runbook
 
-This runbook covers deploying, validating, monitoring, and recovering the Bintu API service.
+This runbook covers release preparation, deployment validation, monitoring,
+and recovery. Run repository commands from the repository root.
 
-## 1. Deployment source
+## 1. Prepare the release
 
-The deployment branch is:
+Production deployments are intended to use `main`. Confirm the actual
+repository and deployment branch in the Render dashboard before deploying.
 
-```text
-main
-```
+Work on a feature branch and review changes through a pull request.
+Do not run `git pull origin main` from an arbitrary feature branch as a
+deployment preparation step.
 
-Before deploying, ensure the working tree is clean and the latest commit is pushed:
-
-```powershell
-cd C:\Users\Bubacarr\Documents\Bintu-API
-git status
-git pull origin main
-git log --oneline -5
-```
-
-Expected:
-
-```text
-nothing to commit, working tree clean
-```
-
-## 2. Required environment variables
-
-Configure these in the Render dashboard under **Environment**. Never commit secrets to Git.
-
-| Variable | Required | Purpose |
-|---|---:|---|
-| `API_KEY` | Yes for production | Master API key for direct API and MCP access. |
-| `RAPIDAPI_PROXY_SECRET` | Optional | Enables RapidAPI subscriber identity and metering. |
-| `SUPABASE_URL` | Optional | Enables persistent cache and usage persistence. |
-| `SUPABASE_SERVICE_KEY` | Optional | Service credential for Supabase access. |
-| `RENDER_JS_ENABLED` | Optional | Set to `true` to enable JavaScript rendering. |
-| `CONTACT_EMAIL` | Recommended | Contact address included in the honest User-Agent. |
-| `BOT_INFO_URL` | Recommended | Public bot information URL included in the User-Agent. |
-
-Do not place raw API keys in URLs, logs, commits, or client-side code.
-
-## 3. Deploy to Render
-
-1. Open the Render dashboard.
-2. Select the Bintu API service.
-3. Confirm the connected repository and branch are `main`.
-4. Select **Manual Deploy** → **Deploy latest commit**.
-5. Wait for the build and deploy to complete.
-6. Confirm the deployment shows the intended commit SHA, for example:
-
-```text
-8b180e6 feat: enforce MCP rate limits and improve URL sanitization
-```
-
-## 4. Run the deployment smoke check
-
-From the local repository:
+Before merging:
 
 ```powershell
-cd C:\Users\Bubacarr\Documents\Bintu-API
-$env:BINTU_BASE_URL = "[https://bintu-api.onrender.com](https://bintu-api.onrender.com)"
-$env:BINTU_API_KEY = "your-production-key"
-python smoke_check.py
-```
-
-Expected output:
-
-```text
-Checking health at [https://bintu-api.onrender.com/healthz](https://bintu-api.onrender.com/healthz) ...
-OK  /healthz
-Checking scrape against [https://example.com/](https://example.com/) ...
-OK  /api/v1/scrape/text
-Checking unsafe URL rejection for http://127.0.0.1/ ...
-OK  unsafe URL rejected with invalid_or_unsafe_url
-Smoke check passed.
-```
-
-If the smoke check fails, do not send production traffic to the new deployment. Follow the rollback procedure below.
-
-## 5. Post-deploy validation
-
-Run the full local test suite before promoting changes:
-
-```powershell
+git status --short --branch
 python -m pytest tests -q
+git diff --check
 ```
 
-Expected:
+Stop if tests or whitespace checks fail. Review the complete PR diff and
+required CI checks. A local passing test run does not establish CI success
+or production availability.
 
-```text
-367 passed
-```
+Record the intended merge commit SHA. Confirm that the deployment uses that
+commit rather than relying on a hardcoded example SHA.
 
-Then verify these live behaviors:
+## 2. Environment configuration
 
-- `/healthz` returns HTTP 200.
-- A public HTTPS URL returns HTTP 200 with non-empty extracted text.
-- `http://127.0.0.1/` returns HTTP 400 with `invalid_or_unsafe_url`.
-- Repeated requests to the same URL can return a cache hit.
-- Rate-limited callers receive HTTP 429 and a `Retry-After` header.
+Configure secrets in the deployment environment, never in committed files.
 
-## 6. Monitoring
+| Variable | Purpose |
+|---|---|
+| `API_KEY` | Master key for direct API access and supported MCP authentication. |
+| `REQUIRE_AUTH` | Set to `true` in production to fail closed when authentication is misconfigured. |
+| `RAPIDAPI_PROXY_SECRET` | Provider secret for verified RapidAPI traffic; match the provider dashboard configuration. |
+| `MCP_API_KEY` | Optional scoped MCP credential; it does not grant REST reader access. |
+| `SUPABASE_URL` | Supabase project URL for configured database/mobile features. |
+| `SUPABASE_ANON_KEY` | Public/anon project key used by configured mobile authentication features. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only credential for persistent cache and usage accounting. Never expose it to clients. |
+| `REDIS_URL` | Optional shared rate-limit backend; separate from reader snapshot storage. |
+| `RENDER_JS_ENABLED` | Keep `false`; paid infrastructure alone does not resolve the documented rendering security risk. |
+| `ROBOTS_MODE` | Keep `enforce` for robots-policy enforcement. |
+| `ROBOTS_CACHE_TTL_SECONDS` | Robots policy cache lifetime; default 3600 seconds. |
+| `CONTACT_EMAIL` | Real operator contact for the crawler User-Agent. |
+| `BOT_INFO_URL` | Real public crawler information URL. |
 
-Watch these signals in Render logs and your observability dashboard.
+Use `.env.example` and `bintu_api/settings.py` for supported configuration.
+Do not assume that copying `.env.example` automatically loads environment
+variables into the running process.
 
-| Signal | Healthy behavior | Investigate when |
-|---|---|---|
-| `/healthz` | HTTP 200, `status: ok` | Non-200 or repeated failures |
-| Extraction success | HTTP 200 with non-empty text | Rising 5xx or empty responses |
-| `invalid_or_unsafe_url` | Present for malicious or private targets | Sudden large increase may indicate scanning |
-| `blocked_by_robots` | Expected for disallowed targets | Sudden increase may indicate upstream policy changes |
-| `robots_unreachable` | Rare | Persistent increase suggests DNS/network issues |
-| `upstream_error` | Low and transient | Persistent increase suggests target or network issues |
-| Cache hits | Increase for repeated public URLs | Zero hits may indicate cache misconfiguration |
-| Rate-limit events | Present under load | Unexpected 429s from legitimate callers |
-| Request duration | Stable for comparable URLs | Sharp increase may indicate upstream or rendering issues |
+See root `SECURITY.md` before changing rendering or outbound-network behavior.
 
-## 7. Rollback procedure
+## 3. Reader deployment constraints
 
-If a deployment fails smoke testing or causes production errors:
+Reader snapshots are stored in memory in each application instance.
+They are not persisted in Supabase or shared through Redis.
 
-1. Open the Render dashboard.
-2. Select **Deploys**.
-3. Find the last known-good deployment.
-4. Select **Rollback**.
-5. Wait for the rollback to become live.
-6. Run the smoke check again:
+Defaults:
+
+- 200,000 extracted text characters per retained document.
+- 600-second fixed snapshot lifetime; continuation does not extend it.
+- Up to 16 retained documents and 256 continuation handles per store.
+- Oldest-inserted eviction when capacity is exceeded.
+
+Restart, deployment, rollback, expiry, or capacity eviction can invalidate
+continuations. Separate workers and instances cannot resolve one another's
+cursors. Before promising reliable multi-worker continuation, implement and
+validate an explicit routing or shared-storage design.
+
+A shared direct API key represents one reader owner, not separate users.
+Use only the reader's supported authenticated identities.
+
+## 4. Deploy the intended commit
+
+1. Merge only after required review and CI checks pass.
+2. Confirm the connected repository and production branch in Render.
+3. Check the configured automatic deployment policy. If deploying manually,
+   select the intended commit through the available dashboard controls.
+4. Wait for the build and deployment to finish.
+5. Verify the running deployment's commit SHA.
+6. Perform the live checks below before marking the release verified.
+
+Do not change deployment policy or enable JavaScript rendering merely to
+complete a release.
+
+## 5. Run the existing production smoke check
+
+The existing smoke script validates its implemented checks; do not assume
+it exercises the reader endpoints.
+
+Use a secure prompt rather than typing the production key into a command:
 
 ```powershell
 $env:BINTU_BASE_URL = "[https://bintu-api.onrender.com](https://bintu-api.onrender.com)"
-$env:BINTU_API_KEY = "your-production-key"
+$secure = Read-Host "Production API key" -AsSecureString
+$env:BINTU_API_KEY = [System.Net.NetworkCredential]::new("", $secure).Password
+Remove-Variable secure
+
 python smoke_check.py
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Production smoke check failed. Investigate before release sign-off."
+}
 ```
 
-7. Create a Git issue describing:
-   - The failing commit SHA.
-   - The smoke-check or production symptom.
-   - Relevant request IDs.
-   - The rollback commit SHA.
+Use a plain URL, not Markdown link syntax, in environment variables.
 
-Do not push a new fix directly to `main` until the failure is understood.
+Alternatively, use the repository's manual live-smoke workflow only after
+reviewing its inputs, secret handling, and target configuration.
 
-## 8. Incident response
+## 6. Validate the deployed reader
 
-### API returns 5xx
+Use the read-and-continue example in the README against the intended
+deployment, with an authorized public HTML target long enough to require
+continuation.
 
-1. Check Render logs for the affected `request_id`.
-2. Identify the `error_type` and target URL hash.
-3. Determine whether the issue is limited to one upstream domain or all requests.
-4. If widespread, roll back to the last known-good deployment.
-5. Re-run the smoke check after rollback.
+Confirm:
 
-### Unsafe URL rejection stops working
+- Both reader routes appear in deployed OpenAPI.
+- An unauthenticated reader request is rejected.
+- An authenticated initial request returns non-empty text.
+- A sufficiently long document returns `has_more=true` and a cursor.
+- Continuation succeeds using the same authenticated owner.
+- Continuation offsets meet the previous page's end offset.
+- The final page returns `has_more=false` and `next_cursor=null`.
+- Unknown cursors return `404 reader_snapshot_unavailable`.
+- Responses contain `X-Request-ID`.
 
-1. Run:
+A short document that fits one page does not validate continuation.
+Do not run burst-load tests against production as part of a routine smoke
+check. Use controlled tests for rate limiting and caller isolation.
 
-```powershell
-python smoke_check.py
-```
+Record the tested commit, date, target, outcomes, and request IDs without
+recording secrets, cursors, or sensitive extracted content.
 
-2. Confirm the unsafe check returns `400 invalid_or_unsafe_url`.
-3. If it does not, roll back immediately.
-4. Investigate the latest changes to `bintu_api/scraper.py` and `bintu_api/routes.py`.
+## 7. Monitoring
 
-### Rate limits are not enforced
+Review HTTP request counts, errors, duration, and request-completion logs.
+Use `X-Request-ID` to correlate reported failures.
 
-1. Run the full suite:
+Reader requests use the shared HTTP observability middleware. The reader
+routes do not call the existing extraction-completion or extraction-failure
+metric helpers; those metrics are not complete reader coverage.
 
-```powershell
-python -m pytest tests/test_rate_limit_contract.py -q
-```
+Investigate:
 
-2. Confirm all three surfaces return HTTP 429 when the limiter trips.
-3. Inspect recent changes to `bintu_api/mcp.py`, `bintu_api/mcp_streamable.py`, and `bintu_api/routes.py`.
-4. Roll back if enforcement is missing in production.
+- Widespread 5xx responses or increased request duration.
+- Unexpected authentication failures or legitimate-caller rate limits.
+- Increased `reader_snapshot_unavailable` responses, especially after
+  deployment or in multi-worker configurations.
+- Rate-limit backend fallback warnings.
+- Unexpected raw credentials, target URLs, cursors, or document text in logs.
 
-### Credentials may have leaked
+Expected expiry and eviction are distinct from upstream fetch failures.
 
-1. Rotate `API_KEY` immediately in Render.
-2. Rotate `SUPABASE_SERVICE_KEY` if applicable.
-3. Review Git history and logs for exposed values.
-4. Invalidate or replace any compromised customer credentials.
-5. Document the incident and corrective actions.
+## 8. Rollback and incidents
+
+If deployment checks fail or production behavior regresses:
+
+1. Identify the affected commit and request IDs.
+2. Use the deployment platform's rollback controls to restore a known-good
+   deployment.
+3. Confirm the restored commit.
+4. Rerun the applicable live checks.
+5. Record the incident and corrective action.
+
+Rollback or process restart invalidates process-local reader snapshots.
+Clients may need to start a new read.
+
+If unsafe-destination rejection regresses, treat it as a security incident
+and stop exposure while investigating the fetch and redirect paths.
+
+If credentials may have leaked, rotate the affected credentials, including
+`API_KEY`, `MCP_API_KEY`, `RAPIDAPI_PROXY_SECRET`,
+`SUPABASE_SERVICE_ROLE_KEY`, or `REDIS_URL` as applicable. Review repository
+history and logs. Removing a visible copy does not revoke a credential.
+
+Do not publish secrets or exploit details in public issues.
 
 ## 9. Release checklist
 
-Before marking a release complete:
-
-- [ ] `git status` is clean.
-- [ ] Latest commit is pushed to `origin/main`.
-- [ ] Full test suite passes.
-- [ ] Render deployment uses the intended commit SHA.
-- [ ] `/healthz` returns HTTP 200.
-- [ ] Production smoke check passes.
-- [ ] Unsafe URL rejection returns `400 invalid_or_unsafe_url`.
-- [ ] Logs contain no raw API keys, target URLs for rejected requests, or caller credentials.
-- [ ] Monitoring dashboards are receiving request and extraction events.
+- [ ] Full local suite passes with `python -m pytest tests -q`.
+- [ ] Complete PR diff reviewed and required CI checks pass.
+- [ ] Intended production commit is identified.
+- [ ] Deployment uses that commit.
+- [ ] Production environment and reader worker topology reviewed.
+- [ ] Existing production smoke check passes.
+- [ ] Reader initial-read and continuation checks pass, if included in release.
+- [ ] HTTP observability is present and its coverage limitations are understood.
+- [ ] No secrets or sensitive content are exposed in validation records.
+- [ ] Validation evidence is recorded separately from historical observations.

@@ -1,5 +1,18 @@
 # Phase 0 — Gap Report: "Trust-first web reader for production AI agents"
 
+> Historical audit record. This document preserves the Phase 0 baseline and
+> subsequent Phase 1 notes; it is not the current API contract or deployment
+> checklist. See README.md, root SECURITY.md, and docs/DEPLOYMENT.md.
+>
+> Old approval requests, line numbers, test counts, and release references
+> below are historical. A finding marked PASS because a feature was disabled
+> does not mean the underlying vulnerability was repaired. In particular,
+> keep JavaScript rendering disabled until its security prerequisites are met.
+>
+> A4 (limiter fallback metrics) and A5 (cache URL privacy) require current
+> implementation review before being classified as resolved or still open.
+
+
 Status: **Phase 1 applied and validated.** Production code was modified in
 Phase 1 (see `CHANGELOG.md` for the 1.0.1 entry); the findings below are the
 Phase 0 baseline, re-verified after the changes.

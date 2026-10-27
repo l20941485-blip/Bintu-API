@@ -367,8 +367,8 @@ false and are set only on the initial request.
 
 ### Retention and deployment limits
 
-The reader rejects oversized extracted documents instead of silently
-shortening them. Its retention limit is separate from the legacy scrape
+The reader retains at most 200,000 extracted text characters per document.
+It rejects larger extracted documents instead of silently shortening them. Its retention limit is separate from the legacy scrape
 response character limit; upstream fetch size and media-type guards
 still apply.
 
