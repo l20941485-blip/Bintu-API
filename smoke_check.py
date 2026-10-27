@@ -2,9 +2,18 @@
 
 Usage (PowerShell):
   $env:BINTU_BASE_URL = "https://your-service.onrender.com"
-  $env:BINTU_API_KEY = "your-api-key"   # required when the service has API_KEY set
+  $env:BINTU_API_KEY = "your-api-key"
   python smoke_check.py
+
+Optional authenticated MCP refresh -> persistent-cache check:
+  $env:BINTU_SMOKE_MCP_CACHE = "1"
+  $env:BINTU_MCP_API_KEY = "your-scoped-mcp-key"
+  python smoke_check.py
+
+BINTU_MCP_API_KEY is optional when BINTU_API_KEY is available.
+REST scrape and metrics checks still use BINTU_API_KEY.
 """
+
 
 from __future__ import annotations
 
@@ -16,7 +25,7 @@ import urllib.parse
 import urllib.request
 
 from smoke_discovery import check_discovery
-
+from smoke_mcp_cache import check_mcp_cache
 
 DEFAULT_TARGET_URL = "https://example.com/"
 UNSAFE_TARGET_URL = "http://127.0.0.1/"
@@ -32,6 +41,7 @@ def _request(
         headers=headers or {},
         method="GET",
     )
+
     try:
         with urllib.request.urlopen(
             request,
@@ -62,9 +72,11 @@ def _header(
     name: str,
 ) -> str | None:
     name = name.lower()
+
     for key, value in headers.items():
         if key.lower() == name:
             return value
+
     return None
 
 
@@ -96,6 +108,7 @@ def _check_metrics(base_url: str, api_key: str) -> None:
             "/metrics returned 401. Set BINTU_API_KEY to the "
             "service API_KEY value."
         )
+
     if status != 200:
         _fail(f"/metrics returned HTTP {status}: {body[:300]!r}")
 
@@ -141,7 +154,9 @@ def main() -> None:
         )
 
     print(f"Checking health at {base_url}/healthz ...")
+
     status, headers, body = _request(f"{base_url}/healthz")
+
     if status != 200:
         _fail(f"/healthz returned HTTP {status}: {body[:200]!r}")
 
@@ -156,6 +171,7 @@ def main() -> None:
     print("OK  /healthz")
 
     scrape_headers = {"Accept": "application/json"}
+
     if api_key:
         scrape_headers["X-API-Key"] = api_key
 
@@ -165,15 +181,18 @@ def main() -> None:
     )
 
     print(f"Checking scrape against {target_url} ...")
+
     status, headers, body = _request(
         scrape_url,
         headers=scrape_headers,
     )
+
     if status == 401:
         _fail(
             "Scrape returned 401. Set BINTU_API_KEY to the "
             "service API_KEY value."
         )
+
     if status != 200:
         _fail(f"Scrape returned HTTP {status}: {body[:300]!r}")
 
@@ -183,10 +202,12 @@ def main() -> None:
         _fail(f"Scrape returned non-JSON body: {error}")
 
     text = payload.get("text")
+
     if not isinstance(text, str) or not text.strip():
         _fail(f"Scrape returned empty or missing text: {payload}")
 
     request_id = _header(headers, "X-Request-ID")
+
     if not request_id:
         _fail("Scrape response missing X-Request-ID header")
 
@@ -203,10 +224,12 @@ def main() -> None:
         "Checking unsafe URL rejection for "
         f"{UNSAFE_TARGET_URL} ..."
     )
+
     status, headers, body = _request(
         unsafe_url,
         headers=scrape_headers,
     )
+
     if status != 400:
         _fail(
             f"Unsafe URL returned HTTP {status}; expected 400: "
@@ -219,6 +242,7 @@ def main() -> None:
         _fail(f"Unsafe URL response was not JSON: {error}")
 
     detail = unsafe_payload.get("detail")
+
     if not isinstance(detail, dict):
         _fail(
             "Unsafe URL response detail is not an object: "
@@ -249,8 +273,30 @@ def main() -> None:
         check_discovery(base_url)
     except Exception as error:
         # Avoid dumping upstream bodies, URLs, or credentials on failure.
-        _fail(f"Discovery check failed ({type(error).__name__}). "
-              "Inspect the public discovery endpoints.")
+        _fail(
+            f"Discovery check failed ({type(error).__name__}). "
+            "Inspect the public discovery endpoints."
+        )
+
+    if os.getenv("BINTU_SMOKE_MCP_CACHE", "").strip() == "1":
+        mcp_key = os.getenv("BINTU_MCP_API_KEY", "").strip() or api_key
+
+        if not mcp_key:
+            _fail(
+                "MCP cache check requires BINTU_MCP_API_KEY "
+                "or BINTU_API_KEY."
+            )
+
+        try:
+            check_mcp_cache(base_url, mcp_key, target_url)
+        except Exception as error:
+            # Avoid dumping upstream bodies, URLs, or credentials on failure.
+            _fail(
+                f"MCP cache check failed ({type(error).__name__}). "
+                "Inspect MCP authentication and persistent-cache health."
+            )
+    else:
+        print("SKIP MCP cache check (BINTU_SMOKE_MCP_CACHE is not 1)")
 
     print("Smoke check passed.")
 
