@@ -21,6 +21,8 @@ from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp_streamable import router as mcp_streamable_router
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
 from bintu_api.rate_limit import create_rate_limiter
+from bintu_api.reader_routes import router as reader_router
+from bintu_api.reader_store import SnapshotStore
 from bintu_api.routes import router
 from bintu_api.settings import Settings
 
@@ -40,6 +42,7 @@ logging.basicConfig(
 # query URLs (including scraped target URLs) into Render logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 
 
 
@@ -111,9 +114,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.rate_limiter = create_rate_limiter(app_settings)
     application.state.cache = TTLCache(app_settings.cache_ttl_seconds)
     application.state.supabase_client = None
+    application.state.reader_store = SnapshotStore()
     application.add_middleware(RequestObservabilityMiddleware)
     application.include_router(discovery_router)
     application.include_router(router)
+    application.include_router(reader_router)
     application.include_router(mcp_router)
     # Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0 at POST /mcp) for
     # Claude connectors and Claude Code; hidden from /docs since it is not

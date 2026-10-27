@@ -18,7 +18,48 @@ Open an issue (or a row in the table below for quick triage) with the fields fro
 response header: it is echoed on every response and is what correlates a caller's
 complaint with the `bintu_api.request` log line and `/metrics` counters.
 
-## Current status
+## Latest recorded local validation: 2026-10-27
+
+This checkpoint records local evidence, not production availability.
+
+| Check | Recorded result |
+|---|---|
+| Full local suite before documentation cleanup | 642 passed, 273 subtests passed, 1 deprecation warning |
+| Reader-focused suite | 27 passed, including a test through `main.create_app()` |
+| Reader implementation commit | `bb3ebb9` on `feat/document-continuation` |
+| Remote publication | Feature branch pushed and tracking `origin/feat/document-continuation` |
+| Documentation cleanup | Full local suite rerun after edits: 642 passed, 273 subtests passed, 1 warning |
+| CI for the proposed PR | Not verified in this checkpoint |
+| Deployed REST reader | Not verified in this checkpoint |
+| Live reader initial read and continuation | Not verified in this checkpoint |
+
+The reader integration tests mock page transport and database startup.
+They do not prove live upstream reliability or production worker routing.
+
+The reader retains process-local snapshots. Restarts, capacity eviction,
+expiry, or routing to another worker can invalidate continuation.
+See README.md and DEPLOYMENT.md for the contract and release checks.
+
+### Findings requiring current review
+
+- The historical Phase 0 A4 finding concerns rate-limiter fallback metrics.
+  Its present resolution status has not been established by this review.
+- The historical Phase 0 A5 finding concerns sensitive target URLs in
+  persistent cache storage. Its present resolution status has not been
+  established by this review.
+- JavaScript rendering must remain disabled until its documented security
+  prerequisites are met.
+- Historical workstation-specific failures below are dated observations,
+  not evidence that the current suite is failing.
+
+## Historical status log
+
+The entries below preserve earlier observations and work notes. Their test
+counts, pending-push instructions, environment details, configuration advice,
+and deployment claims are not a current release checklist. Use README.md,
+root SECURITY.md, and DEPLOYMENT.md for current instructions.
+
+
 
 | Area | State | Evidence |
 |---|---|---|
@@ -119,7 +160,7 @@ paywall, CAPTCHA, or anti-bot control are declined, not deferred.
 
 ## Release gate
 
-1. Offline suite green: `python -m unittest discover -s tests -t . -p "test_*.py"` (CI runs
+1. Offline suite green: `python -m pytest tests -q` (CI runs
    this on push/PR; Render deploys linked commits only once checks pass).
 2. `python smoke_check.py` green against the deployed instance.
 3. `/version` reviewed to confirm no secret material is echoed.

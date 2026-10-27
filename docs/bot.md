@@ -1,167 +1,104 @@
-# BintuBot - Compliance Reference Overview
+# BintuBot Reference
 
-## Crawler Identity
+## Identity and contact
 
-**Identity:** BintuBot  
-**Base Version:** 1.1.0  
-**User-Agent Format:** `BintuBot/<version> (+[BOT_INFO_URL]; [CONTACT_EMAIL])`
+Outbound fetches identify the crawler as BintuBot. The User-Agent is built
+from the service version and configured `BOT_INFO_URL` and `CONTACT_EMAIL`.
 
-Example: `BintuBot/1.1.0 (+https://bintu-api.example.com/bot-info; ops@example.com)`
+Operators must configure a real public information URL and monitored contact
+address. Example-domain URLs and example email addresses are placeholders,
+not working support or security-reporting channels.
 
----
+The reviewed HTML and robots fetch paths request `Accept-Encoding: identity`.
+Do not infer exact request headers from an outdated static example.
 
-## Structural Signatures
+## Fetching and content
 
-### Request Format
+Bintu extracts text from supported public HTML/XHTML pages through the
+guarded fetcher. Upstream size, redirect, destination-validation, and
+media-type controls apply.
 
-| Header | Value |
-|--------|-------|
-| User-Agent | BintuBot/1.1.0 (+https://bintu-api.example.com/bot-info; ops@example.com) |
-| Accept | text/html, application/xhtml+xml, */* |
-| Accept-Encoding | gzip, deflate, br |
-| Connection | keep-alive |
+Keep JavaScript rendering disabled until the security prerequisites in
+root SECURITY.md are satisfied. Paid infrastructure alone does not resolve
+the documented rendering risk.
 
-### Scraping Behavior
+Fetched text remains untrusted content. Bintu is not a prompt-injection
+sanitizer or malware scanner.
 
-- HTML/XHTML pages only (text of public web content)
-- Respects `robots.txt` directives
-- No credentials, no cookies sent
-- Maximum 1 MiB HTML response body
-- Maximum 5 redirects
-- 10-second request timeout
+## Robots policy
 
----
+`ROBOTS_MODE` controls enforcement:
 
-## Contact Mechanisms
+| Mode | Behavior |
+|---|---|
+| `enforce` | Default. Denials and retrieval failures block page fetching. |
+| `warn` | Evaluate policy, log denials or retrieval failures, and continue. |
+| `off` | Skip robots checking. |
 
-### Compliance Inquiries
+In enforce mode:
 
-**Primary Contact:** ops@example.com  
-**Support URL:** https://bintu-api.example.com/bot-info
+- Explicit policy denial returns HTTP 403 with `blocked_by_robots`.
+- Retrieval failure returns HTTP 403 with `robots_unreachable`.
 
-### Header Reference
+The reviewed robots fetcher treats HTTP 4xx responses as no rules retrieved.
+Other unsuccessful non-redirect statuses, including 5xx, produce a retrieval
+failure. Network failures and timeouts also produce a retrieval failure.
+This summarizes implementation behavior, not a blanket standards-compliance
+guarantee.
 
-| Component | Value |
-|-----------|-------|
-| BOT_INFO_URL | https://bintu-api.example.com/bot-info |
-| CONTACT_EMAIL | ops@example.com |
+Policy entries are cached by origin, including scheme and effective port.
+The normal lifetime defaults to 3600 seconds and is configurable with
+`ROBOTS_CACHE_TTL_SECONDS`. Retrieval failures use a separate cache lifetime.
+Not all outcomes are cached for exactly one hour.
 
----
+## Webmaster controls
 
-## Webmaster Instructions
+To block BintuBot, publish this at the origin's `/robots.txt`:
 
-### How to Allow BintuBot
-
-Add the following to your `robots.txt` file at the root of your domain:
-
-```
-User-agent: BintuBot
-Allow: /
-```
-
-**Example:**
-
-```
-# robots.txt
-User-agent: BintuBot
-Allow: /
-```
-
-### How to Block BintuBot
-
-To block all scraping by BintuBot:
-
-```
+```text
 User-agent: BintuBot
 Disallow: /
 ```
 
-### Fine-Grained Control
+To allow BintuBot:
 
-Block specific paths:
-
+```text
+User-agent: BintuBot
+Allow: /
 ```
+
+To disallow specific paths:
+
+```text
 User-agent: BintuBot
 Disallow: /admin/
 Disallow: /private/
 ```
 
-Allow specific paths while blocking others:
+Changes may not affect an already cached decision immediately.
+Keep enforcement enabled; do not bypass site policy to troubleshoot
+extraction.
 
-```
-User-agent: BintuBot
-Allow: /public/
-Disallow: /admin/
-```
+## Troubleshooting
 
-### Checking Your robots.txt
+### HTTP 403
 
-Verify your `robots.txt` is correctly configured:
+Inspect `detail.code` rather than assuming every 403 is a policy denial:
 
-1. Visit: `https://yourdomain.com/robots.txt`
-2. Verify BintuBot entry is present
-3. Test using the BintuBot User-Agent header
+- `blocked_by_robots`: the evaluated policy disallows the requested path.
+- `robots_unreachable`: the service could not retrieve a usable policy.
 
----
+Use the response's `X-Request-ID` when reporting a problem.
 
-## RFC 9309 Compliance Features
+### Missing or shortened content
 
-### Robots Mode Toggles
+Check the selected endpoint's limits and response metadata. Legacy scrape
+responses can be truncated by their character cap. The reader instead
+rejects extractions above its retention limit and pages retained text
+through continuation handles.
 
-| Mode | Behavior |
-|------|----------|
-| `enforce` (default) | Blocks scraping when `robots.txt` prohibits access (HTTP 403) |
-| `warn` | Skips enforcement but logs protocol evaluation metrics |
-| `off` | Skips robots.txt checking entirely |
+JavaScript-dependent content may be absent from plain HTML. Changing robots
+cache settings does not repair extraction limits or JavaScript-dependent
+content.
 
-### HTTP Status Code Mapping
-
-| Status Code | Meaning |
-|-------------|---------|
-| 4xx | Authorization to parse (explicit rules found) |
-| 5xx | Total access restriction block (disallow) |
-| Timeout | Total access restriction block (disallow) |
-
-### Caching
-
-- Origin policy structures cached locally for exactly 1 hour (configurable via `robots_cache_ttl_seconds`)
-- Cache keyed by normalized hostname
-
----
-
-## Common Issues
-
-### Issue: BintuBot returns 403
-
-**Cause:** `robots.txt` explicitly disallows BintuBot  
-**Solution:** Add `User-agent: BintuBot` with `Allow: /` or remove `Disallow` entries.
-
-### Issue: BintuBot times out checking robots.txt
-
-**Cause:** `robots.txt` server on target is slow or unreachable  
-**Solution:** Configure `robots_cache_ttl_seconds` for your deployment.
-
-### Issue: Content appears truncated
-
-**Cause:** Target site has a `Content-Length` limit or server throttling  
-**Solution:** Check target server configuration and BintuBot rate limits.
-
----
-
-## Compliance Statement
-
-BintuBot operates in compliance with standard web crawling guidelines. We respect `robots.txt` directives, do not scrape protected content without authorization, and provide clear contact information for compliance inquiries.
-
-Report any issues or concerns to **ops@example.com**.
-
----
-
-## Version History
-
-### v1.1.0 (Current)
-
-- Dynamic User-Agent with configurable info URL and contact email
-- RFC 9309 robots.txt compliance with status code mapping
-- 1-hour local policy cache
-- ROBOTS_MODE toggles (enforce/warn/off)
-- Upstream error interception for 401/402/403/429
+See README.md for endpoint contracts and DEPLOYMENT.md for release validation.

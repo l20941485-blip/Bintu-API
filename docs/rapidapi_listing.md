@@ -1,4 +1,11 @@
 # Bintu Data Extraction API — RapidAPI + MCPize listing pack (paste into provider dashboards)
+
+> Scope: this pack describes the existing scrape and MCP surfaces,
+> not the REST reader as a new MCP tool. Pricing, quotas, marketplace
+> configuration, and dated live observations require separate
+> verification. Token counts are estimates, not exact model-tokenizer
+> counts.
+
 # Source of truth: README.md "Storefront parity" table + /docs. Error codes and limits must match the app.
 # NEVER send MCPize buyers to RapidAPI (or vice versa): each gateway bills its own subscribers.
 
@@ -77,7 +84,7 @@ Plans (monthly quota enforced by RapidAPI; burst guard always 60/60s; plain HTML
 - PRO $9: 10,000 req/mo — matches current subscriber
 - ULTRA $29: 50,000 req/mo
 - MEGA $79: 100,000+ req/mo, contact seller for custom
-JS rendering (`render_js=true`) currently returns 400 `render_js_disabled` on all plans; quotas above are plain-HTML. Rendering returns only if re-enabled via `RENDER_JS_ENABLED=true` on paid infra.
+JS rendering (`render_js=true`) currently returns 400 `render_js_disabled` on all plans; quotas above are plain-HTML. Rendering must remain disabled until the security prerequisites in root SECURITY.md are satisfied.
 Support: include the `X-Request-ID` response header (see FEEDBACK.md template).
 Docs: https://bintu-api.onrender.com/docs — Health: https://bintu-api.onrender.com/healthz
 
@@ -94,7 +101,7 @@ OAuth path verified live 2026-10-18: Claude Web connector "Sign in now"
 Card / Short description (the form's "few plain words" card field — keep it one or two sentences):
 
 ```markdown
-Web scraper MCP server for Claude, Cursor, and LLM agents. Returns clean Markdown from any public page — up to 70% less token overhead. Powered by Bintu.
+Web scraper MCP server for Claude, Cursor, and LLM agents. Returns readable Markdown from supported public HTML pages. Powered by Bintu.
 ```
 
 GitHub field: `https://github.com/l20941485-blip/Bintu-API` (fills the audit's Trust signal; leave Website empty unless you have a real site — never `example.com`).
@@ -118,7 +125,7 @@ What it refuses (by design, no exceptions):
 - Non-HTML content (PDFs, images, video, JSON)
 - Private/non-public URLs (SSRF-guarded, 1 MiB cap, 5 redirects max)
 
-Limits: 60 req / 60 s burst guard per subscriber · monthly quota enforced by your MCPize plan, not the tool.
+Limits: the upstream service applies a burst guard; callers sharing an upstream credential may share its bucket. Subscriber plan quotas are managed by MCPize.
 Docs & examples: https://github.com/l20941485-blip/Bintu-API
 ```
 
@@ -159,9 +166,9 @@ Publisher tiers (dashboard → Monetize; mirror RapidAPI so storefronts don't un
 Tags: scraper, claude, web-scraping + readability, rag, markdown, extraction (if slots allow).
 
 Upstream notes (operator only, NOT for the listing): Base URL `https://bintu-api.onrender.com/mcp`;
-upstream auth = single `X-API-Key` (Render `API_KEY`); `initialize` is a public
-handshake so the Test button passes without the token, `tools/list` + `tools/call`
-require it; `GET /sse` + `GET /mcp/sse` aliases cover the SSE probe; keep the
+upstream auth = single `X-API-Key` (Render `API_KEY`).
+`initialize`, `tools/list`, and `ping` are public discovery methods.
+`tools/call` requires authentication; `GET /sse` + `GET /mcp/sse` aliases cover the SSE probe; keep the
 MCPize gateway URL on the cron keep-alive next to Render `/healthz`.
 
 ## Endpoint tests (add in RapidAPI dashboard, all against https://example.com/, render_js=false)
@@ -178,5 +185,5 @@ web scraping, html to text, article extractor, readability api, rag ingestion, m
 ## render_js policy (decided 2026-10-14: soft-disabled, NOT paid-only)
 RapidAPI does not send plan tier in headers (`X-RapidAPI-User` only), so per-plan
 gating is unenforceable. `render_js=true` returns 400 `render_js_disabled` on all
-entry points (REST, mobile, MCP) until `RENDER_JS_ENABLED=true` is set on paid infra.
-Re-enable = one env var, no code deploy. Update plans copy when that happens.
+entry points (REST, mobile, MCP) while rendering is disabled.
+Do not re-enable rendering until the security prerequisites in root SECURITY.md are satisfied. Paid infrastructure alone does not resolve the documented rendering risk.
