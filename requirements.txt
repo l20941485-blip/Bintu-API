@@ -8,3 +8,4 @@ supabase==2.15.0
 httpx==0.28.1
 starlette==0.37.2
 pytest
+trafilatura==2.3.1
