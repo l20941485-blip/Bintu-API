@@ -1,4 +1,4 @@
-"""Token Tax engine tests: aliases, unified envelope, 401 upgrade_url, metering header."""
+﻿"""Token Tax engine tests: aliases, unified envelope, 401 upgrade_url, metering header."""
 
 import json
 import unittest
@@ -337,11 +337,18 @@ class TokenMeteringTests(unittest.TestCase):
             envelope = json.loads(response.json()["result"]["content"][0]["text"])
             # The document really was large, so a tight bound is meaningful.
             self.assertGreater(envelope["html_tokens"], 300)
-            self.assertLessEqual(
-                envelope["tokens_saved_estimate"],
-                8,
-                f"{mode} mode must not claim savings it does not perform",
-            )
+            if mode == "scrape":
+                self.assertEqual(
+                    envelope["tokens_saved_estimate"],
+                    max(0, envelope["html_tokens"] - envelope["tokens"]),
+                    "scrape mode must report HTML-to-delivered-text savings",
+                )
+            else:
+                self.assertLessEqual(
+                    envelope["tokens_saved_estimate"],
+                    8,
+                    "chunk mode must not claim savings it does not perform",
+                )
 
     def test_summarize_mode_reports_real_savings(self) -> None:
         long_text = "Sentence one is here and it is long. " * 200
