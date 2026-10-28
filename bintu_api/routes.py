@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import hashlib
 import logging
 import os
@@ -312,6 +312,7 @@ async def scrape_text(
     render_js: bool = False,
     skip_cache: bool = False,
     persist: bool = True,
+    max_tokens: int = 6000,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
@@ -336,6 +337,7 @@ async def scrape_text(
         render_js,
         skip_cache,
         persist,
+        max_tokens,
     )
 
 
@@ -606,6 +608,8 @@ async def _fetch_and_extract(
     return document, result, cache_layer
 
 
+from bintu_api.extraction_quality import truncate_to_token_budget
+
 async def _scrape_text(
     request: Request,
     url: str,
@@ -616,6 +620,7 @@ async def _scrape_text(
     render_js: bool = False,
     skip_cache: bool = False,
     persist: bool = True,
+    max_tokens: int = 6000,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     request_id = (
@@ -675,6 +680,17 @@ async def _scrape_text(
             settings,
         )
 
+        text, token_truncated = truncate_to_token_budget(
+            response.text,
+            max_tokens,
+        )
+
+        if token_truncated:
+            response.text = text
+            response.truncated = True
+            response.limiting_factor = "token_budget"
+            response.approx_tokens = max(0, -(-len(text) // 4))
+            response.tokens = response.approx_tokens
         log_extraction_completed(
             request_id=request_id,
             url=url,
@@ -871,3 +887,4 @@ async def _scrape_text(
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).
 scrape_text = _scrape_text
+
