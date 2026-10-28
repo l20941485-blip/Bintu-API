@@ -691,6 +691,10 @@ async def _scrape_text(
             response.limiting_factor = "token_budget"
             response.approx_tokens = max(0, -(-len(text) // 4))
             response.tokens = response.approx_tokens
+            response.tokens_saved_estimate = max(
+                0,
+                result.html_tokens - response.approx_tokens,
+            )
         log_extraction_completed(
             request_id=request_id,
             url=url,

@@ -594,10 +594,7 @@ async def extract_context(
 
 
     if tokens_saved_estimate is None:
-        if mode == "scrape":
-            tokens_saved_estimate = max(0, html_tokens - scrape_baseline_tokens)
-        else:
-            tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+        tokens_saved_estimate = max(0, html_tokens - approx_tokens)
 
 
     record_cache_tokens_saved(
@@ -653,5 +650,6 @@ async def extract_context(
         cache=None,
         extractor_version=None,
     )
+
 
 
