@@ -1,11 +1,11 @@
-"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
+﻿"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
 
 Modes:
-    scrape    — plain readable text (existing behavior), with token count + provenance
-    chunk     — text split into max_tokens-sized chunks, each with token count,
+    scrape    â€” plain readable text (existing behavior), with token count + provenance
+    chunk     â€” text split into max_tokens-sized chunks, each with token count,
                 ready to drop straight into a vector database
-    summarize — condensed text truncated to max_tokens (sentence-aware)
+    summarize â€” condensed text truncated to max_tokens (sentence-aware)
 
 
 Designed for AI-agent context engineering: instead of returning a raw blob of
@@ -49,6 +49,13 @@ ContextMode = Literal["scrape", "chunk", "summarize"]
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
 # while the canonical protocol stays "chunk" / "max_tokens" so existing
 # Claude connectors never break. Normalization is case/whitespace tolerant.
+from bintu_api.extraction_quality import (
+    dedupe_blocks,
+    normalize_markdown,
+    strip_noise_lines,
+    truncate_to_token_budget,
+)
+
 MODE_ALIASES = {"chunked": "chunk"}
 
 
@@ -103,6 +110,7 @@ class ContextResult:
     extracted_at: str = ""
     tokens_saved_estimate: int = 0
     truncated: bool = False
+    deduplicated_count: int = 0
     split: bool = False
     # Provenance (added in Phase D): additive for both REST and MCP surfaces.
     request_id: str | None = None
@@ -134,7 +142,7 @@ def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
 
 
-    The baseline deliberately counts the raw document — markup included — so
+    The baseline deliberately counts the raw document â€” markup included â€” so
     `tokens_saved_estimate` is approximately "fetched HTML tokens minus
     delivered text tokens", the all-in number the cost-reduction story needs.
     """
@@ -405,7 +413,7 @@ async def extract_context(
     """Fetch, extract, and transform a page into a context-ready document.
 
 
-    Reuses the existing fetch → extract → cache pipeline from
+    Reuses the existing fetch â†’ extract â†’ cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
     """
@@ -474,25 +482,43 @@ async def extract_context(
     )
 
 
+    # --- Extraction quality normalization ---------------------------------
+    
+    deduplicated_count = 0
+    token_truncated = False
+    scrape_baseline_tokens = 0
+    
+    raw_text = strip_noise_lines(raw_text)
+    raw_text = normalize_markdown(raw_text)
+    raw_text, deduplicated_count = dedupe_blocks(raw_text)
+    
     # --- Mode transformation -----------------------------------------------
     raw_tokens = count_tokens(raw_text)
     split = False
     limiting_factor = "char_cap" if content_truncated else "none"
+    
     transformation_truncated = False
 
 
     if mode == "scrape":
-        final_text = raw_text
+        final_text, token_truncated = truncate_to_token_budget(
+            raw_text,
+            max_tokens,
+        )
         chunks = [
             {
                 "index": 0,
-                "text": raw_text,
-                "approx_tokens": count_tokens(raw_text),
-                "tokens": count_tokens(raw_text),
+                "text": final_text,
+                "approx_tokens": count_tokens(final_text),
+                "tokens": count_tokens(final_text),
             }
         ]
+        scrape_baseline_tokens = count_tokens(raw_text)
         approx_tokens = count_tokens(final_text)
-        transformation_truncated = content_truncated
+        transformation_truncated = content_truncated or token_truncated
+
+        if token_truncated:
+            limiting_factor = "token_budget"
 
 
     elif mode == "chunk":
@@ -549,7 +575,7 @@ async def extract_context(
                 cut = final_text[: char_budget - 1]
                 if " " in cut:
                     cut = cut.rsplit(" ", 1)[0]
-                final_text = cut.rstrip() + "…"
+                final_text = cut.rstrip() + "â€¦"
 
 
             chunks = [
@@ -568,7 +594,10 @@ async def extract_context(
 
 
     if tokens_saved_estimate is None:
-        tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+        if mode == "scrape":
+            tokens_saved_estimate = max(0, html_tokens - scrape_baseline_tokens)
+        else:
+            tokens_saved_estimate = max(0, html_tokens - approx_tokens)
 
 
     record_cache_tokens_saved(
@@ -602,6 +631,7 @@ async def extract_context(
         approx_tokens=approx_tokens,
         html_tokens=html_tokens,
         token_method=TOKEN_METHOD,
+        deduplicated_count=deduplicated_count,
         limiting_factor=resolved_limiting_factor,
         tokens=approx_tokens,
         chunk_count=len(chunks),
@@ -623,3 +653,5 @@ async def extract_context(
         cache=None,
         extractor_version=None,
     )
+
+

@@ -1,4 +1,4 @@
-"""MCP-compatible tool discovery and invocation helpers.
+﻿"""MCP-compatible tool discovery and invocation helpers.
 
 Two surfaces intentionally share the same tool definitions:
 
@@ -486,6 +486,7 @@ async def call_tool(
         "source_url": routes.sanitize_url(arguments.url),
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
+        "deduplicated_count": context.deduplicated_count,
         "truncated": context.truncated,
         "split": context.split,
         "chunks": context.chunks,

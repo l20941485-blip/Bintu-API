@@ -1,8 +1,8 @@
-"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
+﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
-Exposes the single ``bintu_scrape_text`` tool to real MCP clients — Claude
+Exposes the single ``bintu_scrape_text`` tool to real MCP clients â€” Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
-any other Streamable HTTP client — without adding the ``mcp`` SDK dependency.
+any other Streamable HTTP client â€” without adding the ``mcp`` SDK dependency.
 Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 ``2025-03-26`` during negotiation):
 
@@ -10,8 +10,8 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
   single ``application/json`` response (the spec allows skipping SSE when
   the server never pushes messages). ``initialize``, ``tools/list`` and
   ``ping`` are public discovery/onboarding methods (protocol negotiation,
-  tool schemas, liveness — never extraction); every other method — above
-  all ``tools/call`` — requires the master API_KEY, the scoped
+  tool schemas, liveness â€” never extraction); every other method â€” above
+  all ``tools/call`` â€” requires the master API_KEY, the scoped
   MCP_API_KEY, or ``Authorization: Bearer`` with either key, so gateway
   health-checkers and marketplace audits that omit the upstream token
   complete instantly while all billable work stays behind auth (401 with
@@ -38,7 +38,7 @@ Error mapping follows the spec: protocol failures (unknown method/tool,
 invalid arguments, malformed payloads) use JSON-RPC error codes, while tool
 execution failures (unsafe URL, rate limit, upstream errors, render_js
 disabled) are returned in-band with ``isError: true`` and a readable text so
-the model can self-correct — e.g. retrying with ``render_js=false``.
+the model can self-correct â€” e.g. retrying with ``render_js=false``.
 """
 
 import asyncio
@@ -118,7 +118,7 @@ SERVER_INSTRUCTIONS = (
     "Every mode returns the unified JSON envelope {mode, tokens, chunk_count, "
     "cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks} "
     "for predictable context budgets. This server is stateless: no MCP sessions, "
-    "no subscriptions, no SSE streams — POST one JSON-RPC message per request; "
+    "no subscriptions, no SSE streams â€” POST one JSON-RPC message per request; "
     "GET returns an empty SSE stream. Discovery (initialize, tools/list, ping) is "
     "public; tools/call requires X-API-Key or Authorization: Bearer."
 )
@@ -166,7 +166,7 @@ def _protocol_version_header(request: Request) -> str:
 
 def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONResponse:
     # Strict scanners expect the standard JSON-RPC envelope even for
-    # transport-level rejections — never a bare {"error": ...} shape.
+    # transport-level rejections â€” never a bare {"error": ...} shape.
     return JSONResponse(
         status_code=400,
         content=_rpc_error(
@@ -185,7 +185,7 @@ def _accept_header_serves_json(request: Request) -> bool:
     text/event-stream``. This server answers every POST with a single JSON
     response and never opens an SSE stream, so a client that lists other
     media types but not JSON cannot be served (HTTP 406). Clients that send
-    no Accept header at all (gateway Test buttons, curl) are tolerated —
+    no Accept header at all (gateway Test buttons, curl) are tolerated â€”
     rejecting the largest installed base would be worse than the
     corner-case protocol violation.
     """
@@ -679,6 +679,7 @@ async def _tools_call_result(
         "source_url": safe_source_url,
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
+        "deduplicated_count": context.deduplicated_count,
         "truncated": context.truncated,
         "split": context.split,
         "chunks": context.chunks,
