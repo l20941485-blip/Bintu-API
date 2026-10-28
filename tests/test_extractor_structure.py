@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+import unittest.mock
 
 from bintu_api.scraper import extract_text_result
 
@@ -88,5 +89,38 @@ class ExtractorStructureTests(unittest.TestCase):
         self.assertIn("report (https://example.com/report)", result.text)
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+
+
+    def test_trafilatura_fallback_runs_for_sparse_html(self):
+        html = """
+        <html><body><script>ignored</script></body></html>
+        """
+        with unittest.mock.patch(
+            "bintu_api.scraper._trafilatura_fallback",
+            return_value="A much longer fallback article body with enough content to replace the sparse BeautifulSoup extraction result.",
+        ) as fallback:
+            result = self.extract(html)
+
+        fallback.assert_called_once()
+        self.assertIn(
+            "A much longer fallback article body",
+            result.text,
+        )
+
+    def test_trafilatura_fallback_does_not_replace_normal_extraction(self):
+        html = """
+        <html><body>
+          <main>
+            <h1>Article headline</h1>
+            <p>Article body.</p>
+          </main>
+        </body></html>
+        """
+        with unittest.mock.patch(
+            "bintu_api.scraper._trafilatura_fallback",
+        ) as fallback:
+            result = self.extract(html)
+
+        self.assertIn("Article headline", result.text)
+        self.assertIn("Article body.", result.text)

@@ -1139,6 +1139,73 @@ def _pick_content_root(soup, *, min_ratio: float = 0.3):
     return soup
 
 
+def _truncate_extracted_text(
+    text: str,
+    max_characters: int,
+) -> ExtractedText:
+    if len(text) <= max_characters:
+        return ExtractedText(
+            text=text,
+            truncated=False,
+        )
+
+    truncated_text = text[:max_characters]
+    last_boundary = max(
+        truncated_text.rfind("\n"),
+        truncated_text.rfind(" "),
+    )
+
+    if last_boundary > 0:
+        truncated_text = truncated_text[:last_boundary].rstrip()
+
+    return ExtractedText(
+        text=truncated_text,
+        truncated=True,
+    )
+
+
+def _trafilatura_fallback(
+    html_bytes: bytes,
+    max_characters: int,
+    from_encoding: str | None,
+    base_url: str | None,
+) -> str | None:
+    """Extract main content with Trafilatura when BeautifulSoup is too sparse."""
+    import trafilatura
+
+    try:
+        html = html_bytes.decode(
+            from_encoding or "utf-8",
+            errors="replace",
+        )
+        text = trafilatura.extract(
+            html,
+            url=base_url,
+            output_format="txt",
+            include_links=True,
+            include_tables=True,
+        )
+    except Exception as error:
+        logger.warning(
+            "trafilatura_fallback_failed error=%s",
+            error,
+        )
+        return None
+
+    if not text:
+        return None
+
+    lines = []
+    for line in text.splitlines():
+        line = re.sub(r"[\u200b\u2060\ufeff]", " ", line)
+        line = re.sub(r"\s+", " ", line).strip()
+        line = re.sub(r"\s+([,.;:!?])", r"\1", line)
+        if line:
+            lines.append(line)
+
+    return "\n".join(lines)
+
+
 def extract_text_result(
     html_bytes: bytes,
     max_characters: int,
@@ -1468,27 +1535,34 @@ def extract_text_result(
     text = "\n".join(lines)
 
 
-    if len(text) <= max_characters:
-        return ExtractedText(
-            text=text,
-            truncated=False,
+    bs4_text = text.strip()
+    minimum_useful_text = min(120, max_characters)
+
+    fallback_text = None
+    if len(bs4_text) == 0 and comment_thread_root is None:
+        fallback_text = _trafilatura_fallback(
+            html_bytes,
+            max_characters,
+            from_encoding,
+            base_url,
         )
 
+    if (
+        fallback_text
+        and len(fallback_text.strip())
+        >= len(bs4_text) + 80
+    ):
+        if normalized_title:
+            fallback_text = (
+                f"# {normalized_title}\n{fallback_text}"
+            )
 
-    truncated_text = text[:max_characters]
-    last_boundary = max(
-        truncated_text.rfind("\n"),
-        truncated_text.rfind(" "),
-    )
+        return _truncate_extracted_text(
+            fallback_text,
+            max_characters,
+        )
 
-
-    if last_boundary > 0:
-        truncated_text = truncated_text[
-            :last_boundary
-        ].rstrip()
-
-
-    return ExtractedText(
-        text=truncated_text,
-        truncated=True,
+    return _truncate_extracted_text(
+        text,
+        max_characters,
     )
