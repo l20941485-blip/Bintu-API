@@ -1,11 +1,11 @@
-﻿"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
+"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
 
 Modes:
-    scrape    â€” plain readable text (existing behavior), with token count + provenance
-    chunk     â€” text split into max_tokens-sized chunks, each with token count,
+    scrape    — plain readable text (existing behavior), with token count + provenance
+    chunk     — text split into max_tokens-sized chunks, each with token count,
                 ready to drop straight into a vector database
-    summarize â€” condensed text truncated to max_tokens (sentence-aware)
+    summarize — condensed text truncated to max_tokens (sentence-aware)
 
 
 Designed for AI-agent context engineering: instead of returning a raw blob of
@@ -45,6 +45,30 @@ logger = logging.getLogger("bintu_api.context")
 
 ContextMode = Literal["scrape", "chunk", "summarize"]
 
+DEFAULT_MAX_TEXT_CHARACTERS = 6_000
+MAX_EXTRACTION_CHARACTERS = 200_000
+
+
+def resolve_effective_char_cap(
+    requested_max_tokens: int,
+    configured_char_cap: int,
+    default_char_cap: int = DEFAULT_MAX_TEXT_CHARACTERS,
+) -> int:
+    """Resolve the extraction character cap for a request.
+
+    The default character cap is a floor: a larger max_tokens budget may
+    raise it. An operator-configured non-default cap is a hard ceiling and
+    is never overridden by a caller's token budget.
+    """
+    if configured_char_cap != default_char_cap:
+        return min(configured_char_cap, MAX_EXTRACTION_CHARACTERS)
+
+    if requested_max_tokens <= 0:
+        return min(configured_char_cap, MAX_EXTRACTION_CHARACTERS)
+
+    token_derived_cap = requested_max_tokens * 4
+    effective_cap = max(configured_char_cap, token_derived_cap)
+    return min(effective_cap, MAX_EXTRACTION_CHARACTERS)
 
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
 # while the canonical protocol stays "chunk" / "max_tokens" so existing
@@ -142,7 +166,7 @@ def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
 
 
-    The baseline deliberately counts the raw document â€” markup included â€” so
+    The baseline deliberately counts the raw document — markup included — so
     `tokens_saved_estimate` is approximately "fetched HTML tokens minus
     delivered text tokens", the all-in number the cost-reduction story needs.
     """
@@ -413,7 +437,7 @@ async def extract_context(
     """Fetch, extract, and transform a page into a context-ready document.
 
 
-    Reuses the existing fetch â†’ extract â†’ cache pipeline from
+    Reuses the existing fetch → extract → cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
     """
@@ -575,7 +599,7 @@ async def extract_context(
                 cut = final_text[: char_budget - 1]
                 if " " in cut:
                     cut = cut.rsplit(" ", 1)[0]
-                final_text = cut.rstrip() + "â€¦"
+                final_text = cut.rstrip() + "…"
 
 
             chunks = [
@@ -650,6 +674,7 @@ async def extract_context(
         cache=None,
         extractor_version=None,
     )
+
 
 
 

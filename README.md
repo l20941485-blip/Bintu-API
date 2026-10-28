@@ -352,11 +352,13 @@ existing guarded fetcher, and extracts a text snapshot. Continuations
 read that snapshot without refetching the target. Pages therefore
 represent the original extraction, not subsequent website changes.
 
-`max_tokens` must be a JSON integer from 1 through 6000; it defaults to
+`max_tokens` must be a JSON integer from 100 through 50000; it defaults to
 1000 on each request. It budgets page text only, not JSON framing,
-metadata, or other model context. The response includes `approx_tokens`
-and `token_method`; do not treat the estimate as an exact count for
-every model tokenizer.
+metadata, or other model context. A larger budget raises the effective
+extraction cap above the 6,000-character default, subject to a 200,000
+character absolute ceiling. The response includes `approx_tokens` and
+`token_method`; do not treat the estimate as an exact count for every
+model tokenizer.
 
 Responses include `text`, `start_offset`, `end_offset`, `has_more`,
 `next_cursor`, `approx_tokens`, `token_method`, `boundary_split`, and
