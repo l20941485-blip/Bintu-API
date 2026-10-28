@@ -17,7 +17,11 @@ from bintu_api.auth import (
     verify_api_access,
     verify_supabase_user,
 )
-from bintu_api.context import _decode_source_text, resolve_effective_char_cap
+from bintu_api.context import (
+    MAX_EXTRACTION_CHARACTERS,
+    _decode_source_text,
+    resolve_effective_char_cap,
+)
 from bintu_api.database import (
     CachedMarkdown,
     DATABASE_TIMEOUT_SECONDS,
@@ -450,6 +454,7 @@ async def _fetch_and_extract(
     render_js: bool,
     skip_cache: bool,
     persist: bool = True,
+    mode: str = "scrape",
     max_tokens: int = 6000,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
@@ -546,9 +551,13 @@ async def _fetch_and_extract(
 
     extracted = extract_text_result(
         document.body,
-        resolve_effective_char_cap(
-            max_tokens,
-            settings.max_text_characters,
+        (
+            min(settings.max_text_characters, MAX_EXTRACTION_CHARACTERS)
+            if mode == "chunk"
+            else resolve_effective_char_cap(
+                max_tokens,
+                settings.max_text_characters,
+            )
         ),
         include_nav=include_nav,
         include_header=include_header,
