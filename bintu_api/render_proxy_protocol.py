@@ -61,3 +61,82 @@ def parse_connect_authority(authority: str) -> ConnectTarget:
         raise ProxyRequestRejected("Invalid CONNECT port")
 
     return ConnectTarget(host=host, port=port)
+
+
+MAX_CONNECT_HEAD_BYTES = 16384
+MAX_CONNECT_LINE_BYTES = 4096
+MAX_CONNECT_HEADERS = 64
+
+
+@dataclass(frozen=True)
+class ConnectRequestHead:
+    target: ConnectTarget
+    headers: tuple[tuple[str, str], ...]
+
+
+def parse_connect_request_head(data: bytes) -> ConnectRequestHead:
+    """Parse exactly one CONNECT head, including its final CRLFCRLF.
+
+    No body, tunnel bytes, or subsequent request may be included.
+    A future stream reader must separate and bound input before calling.
+    This function performs no network access or destination authorization.
+    """
+    if not data or len(data) > MAX_CONNECT_HEAD_BYTES:
+        raise ProxyRequestRejected("Invalid request-head size")
+
+    if not data.endswith(b"\r\n\r\n"):
+        raise ProxyRequestRejected("Incomplete request head")
+
+    lines = data[:-4].split(b"\r\n")
+    if any(len(line) > MAX_CONNECT_LINE_BYTES for line in lines):
+        raise ProxyRequestRejected("Request line or header too long")
+
+    if any(
+        byte < 32 or byte > 126
+        for line in lines
+        for byte in line
+    ):
+        raise ProxyRequestRejected("Unsupported request-head characters")
+
+    request_line = lines[0].decode("ascii")
+    match = re.fullmatch(r"CONNECT ([^ ]+) HTTP/1\.1", request_line)
+    if match is None:
+        raise ProxyRequestRejected("Only CONNECT HTTP/1.1 is supported")
+
+    target = parse_connect_authority(match.group(1))
+
+    if len(lines) - 1 > MAX_CONNECT_HEADERS:
+        raise ProxyRequestRejected("Too many headers")
+
+    headers: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    host_target = None
+
+    for raw_line in lines[1:]:
+        line = raw_line.decode("ascii")
+        name, separator, value = line.partition(":")
+        if not separator or re.fullmatch(
+            r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+",
+            name,
+        ) is None:
+            raise ProxyRequestRejected("Invalid header field")
+
+        name = name.lower()
+        value = value.strip(" ")
+
+        if name in seen:
+            raise ProxyRequestRejected("Duplicate header field")
+        seen.add(name)
+
+        if name in {"content-length", "transfer-encoding", "expect", "upgrade"}:
+            raise ProxyRequestRejected("Unsupported CONNECT framing")
+
+        if name == "host":
+            host_target = parse_connect_authority(value)
+
+        headers.append((name, value))
+
+    if host_target is None or host_target != target:
+        raise ProxyRequestRejected("Host must match CONNECT target")
+
+    return ConnectRequestHead(target=target, headers=tuple(headers))
