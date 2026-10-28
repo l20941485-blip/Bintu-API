@@ -1,4 +1,4 @@
-﻿"""MCP-compatible tool discovery and invocation helpers.
+"""MCP-compatible tool discovery and invocation helpers.
 
 Two surfaces intentionally share the same tool definitions:
 

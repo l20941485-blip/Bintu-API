@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import hashlib
 import logging
 import os
@@ -17,7 +17,7 @@ from bintu_api.auth import (
     verify_api_access,
     verify_supabase_user,
 )
-from bintu_api.context import _decode_source_text
+from bintu_api.context import _decode_source_text, resolve_effective_char_cap
 from bintu_api.database import (
     CachedMarkdown,
     DATABASE_TIMEOUT_SECONDS,
@@ -450,6 +450,7 @@ async def _fetch_and_extract(
     render_js: bool,
     skip_cache: bool,
     persist: bool = True,
+    max_tokens: int = 6000,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
@@ -545,7 +546,10 @@ async def _fetch_and_extract(
 
     extracted = extract_text_result(
         document.body,
-        settings.max_text_characters,
+        resolve_effective_char_cap(
+            max_tokens,
+            settings.max_text_characters,
+        ),
         include_nav=include_nav,
         include_header=include_header,
         include_footer=include_footer,
@@ -643,6 +647,7 @@ async def _scrape_text(
             render_js=render_js,
             skip_cache=skip_cache,
             persist=persist,
+            max_tokens=max_tokens,
         )
 
         if (
