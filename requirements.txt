@@ -6,6 +6,6 @@ redis==8.1.0
 playwright==1.51.0
 supabase==2.15.0
 httpx==0.28.1
-starlette==0.37.2
+starlette==1.10.0
 pytest
 trafilatura==2.3.1
