@@ -110,6 +110,15 @@ class ScrapeTextResponse(BaseModel):
             "was shortened."
         )
     )
+    limiting_factor: str | None = Field(
+        default=None,
+        description="Which limit bound the returned text: character cap or token budget.",
+    )
+    deduplicated_count: int = Field(
+        default=0,
+        description="Number of duplicate blocks removed during extraction quality normalization.",
+    )
+
     cache_layer: Literal["none", "memory", "persistent"] = Field(
         default="none",
         description=(
@@ -176,3 +185,5 @@ class VersionResponse(BaseModel):
     rate_limit_requests: int
     rate_limit_window_seconds: int
     cache_ttl_seconds: int
+
+
