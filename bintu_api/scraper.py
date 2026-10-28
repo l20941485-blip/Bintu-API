@@ -1094,6 +1094,51 @@ def _select_comment_thread_root(soup):
 
 
 
+def _pick_content_root(soup, *, min_ratio: float = 0.3):
+    """Select a root containing a meaningful share of visible page text.
+
+    A homepage may contain an <article> for only its hero story. Prefer a
+    semantic container only when it contains enough of the page text;
+    otherwise retain the whole document.
+    """
+    body = soup.body or soup
+    total = len(body.get_text(" ", strip=True))
+
+    candidates = (
+        soup.find("article"),
+        soup.find("main"),
+        soup.find(
+            attrs={
+                "role": re.compile(r"^main$", re.IGNORECASE),
+            }
+        ),
+        soup.find(
+            id=re.compile(
+                r"^(?:main|content|article|post|entry)"
+                r"(?:[-_](?:main|content|article|body))?$",
+                re.IGNORECASE,
+            )
+        ),
+        soup.find(
+            class_=re.compile(
+                r"^(?:main|content|article|post|entry)"
+                r"(?:[-_](?:main|content|article|body))?$",
+                re.IGNORECASE,
+            )
+        ),
+    )
+
+    for candidate in candidates:
+        if candidate is None:
+            continue
+
+        candidate_text = len(candidate.get_text(" ", strip=True))
+        if candidate_text >= total * min_ratio:
+            return candidate
+
+    return soup
+
+
 def extract_text_result(
     html_bytes: bytes,
     max_characters: int,
@@ -1219,31 +1264,7 @@ def extract_text_result(
 
     content_root = (
         comment_thread_root
-        or soup.find("article")
-        or soup.find("main")
-        or soup.find(
-            attrs={
-                "role": re.compile(
-                    r"^main$",
-                    re.IGNORECASE,
-                )
-            }
-        )
-        or soup.find(
-            id=re.compile(
-                r"^(?:main|content|article|post|entry)"
-                r"(?:[-_](?:main|content|article|body))?$",
-                re.IGNORECASE,
-            )
-        )
-        or soup.find(
-            class_=re.compile(
-                r"^(?:main|content|article|post|entry)"
-                r"(?:[-_](?:main|content|article|body))?$",
-                re.IGNORECASE,
-            )
-        )
-        or soup
+        or _pick_content_root(soup)
     )
 
     content_roots = [content_root]
@@ -1340,11 +1361,17 @@ def extract_text_result(
 
 
         if destination != label:
-            anchor.replace_with(
-                NavigableString(
-                    f"{label} ({destination})"
+            if anchor.find(list(BLOCK_TAGS)):
+                anchor.append(
+                    NavigableString(f" ({destination})")
                 )
-            )
+                anchor.unwrap()
+            else:
+                anchor.replace_with(
+                    NavigableString(
+                        f"{label} ({destination})"
+                    )
+                )
 
 
     boundary = "\x00BINTU_BLOCK_BOUNDARY\x00"
