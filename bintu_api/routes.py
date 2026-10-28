@@ -552,7 +552,7 @@ async def _fetch_and_extract(
     extracted = extract_text_result(
         document.body,
         (
-            min(settings.max_text_characters, MAX_EXTRACTION_CHARACTERS)
+            MAX_EXTRACTION_CHARACTERS
             if mode == "chunk"
             else resolve_effective_char_cap(
                 max_tokens,
