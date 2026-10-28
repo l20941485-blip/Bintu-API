@@ -448,6 +448,7 @@ async def _tools_call_result(
             render_js=arguments.render_js,
             skip_cache=not arguments.cache,
             persist=arguments.persist,
+            max_tokens=arguments.max_tokens,
         )
     except TargetURLRejected as error:
         log_extraction_failed(
