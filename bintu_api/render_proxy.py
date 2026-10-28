@@ -8,7 +8,14 @@ from __future__ import annotations
 import ipaddress
 import math
 import socket
+import time
 
+from bintu_api.render_proxy_protocol import (
+    MAX_CONNECT_HEAD_BYTES,
+    ConnectRequestHead,
+    ProxyRequestRejected,
+    parse_connect_request_head,
+)
 from bintu_api.settings import Settings
 
 
@@ -55,3 +62,58 @@ def open_validated_socket(url: str, settings: Settings) -> socket.socket:
     if last_error is not None:
         raise last_error
     raise OSError("No validated destination could be connected to")
+
+
+def read_connect_request_head(
+    client: socket.socket,
+    *,
+    timeout_seconds: float = 5.0,
+) -> tuple[ConnectRequestHead, bytes]:
+    """Read and parse one bounded CONNECT head from a connected socket.
+
+    Return the parsed head and any bytes read beyond its terminator.
+    Apply one overall read deadline and restore the original socket timeout.
+    The caller retains ownership of the socket, including after errors.
+
+    No DNS resolution, destination authorization, forwarding, or response.
+    """
+    timeout = float(timeout_seconds)
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("Request-head timeout must be finite and positive")
+
+    original_timeout = client.gettimeout()
+    deadline = time.monotonic() + timeout
+    buffer = bytearray()
+
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ProxyRequestRejected("Request-head deadline exceeded")
+
+            capacity = MAX_CONNECT_HEAD_BYTES - len(buffer)
+            if capacity <= 0:
+                raise ProxyRequestRejected("Request head too large")
+
+            client.settimeout(remaining)
+            try:
+                chunk = client.recv(min(4096, capacity))
+            except TimeoutError as error:
+                raise ProxyRequestRejected(
+                    "Request-head deadline exceeded"
+                ) from error
+
+            if time.monotonic() >= deadline:
+                raise ProxyRequestRejected("Request-head deadline exceeded")
+
+            if not chunk:
+                raise ProxyRequestRejected("EOF before complete request head")
+
+            buffer.extend(chunk)
+            marker = buffer.find(b"\r\n\r\n")
+            if marker != -1:
+                end = marker + 4
+                head = parse_connect_request_head(bytes(buffer[:end]))
+                return head, bytes(buffer[end:])
+    finally:
+        client.settimeout(original_timeout)
