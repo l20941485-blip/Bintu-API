@@ -1,4 +1,4 @@
-"""Phase 2 cross-surface contract tests.
+﻿"""Phase 2 cross-surface contract tests.
 
 REST, legacy MCP, and Streamable MCP intentionally expose different transport
 shapes, but they must agree on the shared extraction semantics: text, URL,
@@ -46,6 +46,7 @@ EXPECTED_TEXT = "Cross-surface contract text"
 PARITY_URL = "https://example.com/parity"
 
 MCP_ENVELOPE_FIELDS = {
+    "deduplicated_count",
     "mode",
     "tokens",
     "approx_tokens",
