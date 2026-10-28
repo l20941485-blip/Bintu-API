@@ -399,6 +399,7 @@ async def call_tool(
             render_js=arguments.render_js,
             skip_cache=not arguments.cache,
             persist=arguments.persist,
+            max_tokens=arguments.max_tokens,
         )
     except TargetURLRejected as error:
         return _mcp_error_response(

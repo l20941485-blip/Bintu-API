@@ -1,3 +1,6 @@
+import inspect
+import bintu_api.mcp
+
 import unittest
 
 from bintu_api.context import resolve_effective_char_cap, split_into_chunks
@@ -35,3 +38,9 @@ class ChunkPaginationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class McpTokenBudgetExtractionTests(unittest.TestCase):
+    def test_mcp_forwards_max_tokens_to_extraction(self):
+        source = inspect.getsource(bintu_api.mcp)
+        self.assertIn("max_tokens=arguments.max_tokens", source)
+
