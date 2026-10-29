@@ -1,0 +1,251 @@
+name: Container compatibility
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Docker tooling and Compose configuration
+        run: |
+          docker version
+          docker compose version
+          docker compose config --quiet
+
+      - name: Build production image
+        run: docker build --tag bintu-ci:${{ github.sha }} .
+
+      - name: Start isolated API container
+        run: |
+          docker run --detach \
+            --name bintu-ci \
+            --publish 127.0.0.1:18000:10000 \
+            --env PORT=10000 \
+            --env REQUIRE_AUTH=true \
+            --env API_KEY=ci_container_placeholder_key_32_chars_long \
+            --env RENDER_JS_ENABLED=false \
+            bintu-ci:${{ github.sha }}
+
+      - name: Check health and public MCP compatibility
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.error
+          import urllib.request
+
+          BASE_URL = "http://127.0.0.1:18000"
+          VERSIONS = (
+              "2025-11-25",
+              "2025-06-18",
+              "2025-03-26",
+          )
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          def rpc(method, params, version, request_id):
+              payload = {
+                  "jsonrpc": "2.0",
+                  "id": request_id,
+                  "method": method,
+                  "params": params,
+              }
+              request = urllib.request.Request(
+                  f"{BASE_URL}/mcp",
+                  data=json.dumps(payload).encode("utf-8"),
+                  headers={
+                      "Content-Type": "application/json",
+                      "Accept": "application/json, text/event-stream",
+                      "MCP-Protocol-Version": version,
+                  },
+                  method="POST",
+              )
+
+              try:
+                  with urllib.request.urlopen(request, timeout=15) as response:
+                      status = response.status
+                      raw = response.read()
+              except urllib.error.HTTPError as error:
+                  status = error.code
+                  raw = error.read()
+
+              document = json.loads(raw.decode("utf-8", errors="strict"))
+              require(
+                  document.get("jsonrpc") == "2.0",
+                  f"{method}: missing JSON-RPC envelope",
+              )
+              require(
+                  document.get("id") == request_id,
+                  f"{method}: incorrect response ID",
+              )
+              return status, document
+
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen(
+                      f"{BASE_URL}/healthz", timeout=2
+                  ) as response:
+                      health = json.loads(response.read().decode("utf-8"))
+                      ready = (
+                          response.status == 200
+                          and isinstance(health, dict)
+                          and health.get("status") == "ok"
+                      )
+                      if ready:
+                          break
+              except (
+                  urllib.error.URLError,
+                  TimeoutError,
+                  OSError,
+                  UnicodeDecodeError,
+                  json.JSONDecodeError,
+              ):
+                  pass
+              time.sleep(2)
+          else:
+              raise RuntimeError("Container did not become healthy")
+
+          print("PASS: container health")
+
+          reference_tools = None
+
+          for index, version in enumerate(VERSIONS, start=1):
+              request_id = index * 10
+              status, document = rpc(
+                  "initialize",
+                  {
+                      "protocolVersion": version,
+                      "capabilities": {},
+                      "clientInfo": {
+                          "name": "bintu-container-ci",
+                          "version": "1.0.0",
+                      },
+                  },
+                  version,
+                  request_id,
+              )
+              require(status == 200, f"{version}: initialize failed")
+              require("error" not in document, f"{version}: initialize error")
+
+              result = document["result"]
+              require(
+                  result.get("protocolVersion") == version,
+                  f"{version}: incorrect negotiated version",
+              )
+              require(
+                  result.get("serverInfo", {}).get("name") == "bintu",
+                  f"{version}: incorrect server identity",
+              )
+
+              instructions = result.get("instructions")
+              require(
+                  isinstance(instructions, str),
+                  f"{version}: missing instructions",
+              )
+              require(
+                  instructions.isascii(),
+                  f"{version}: unexpected non-ASCII instruction text",
+              )
+              for expected in (
+                  "200,000-character ceiling by default",
+                  "selected mode and max_tokens budget",
+                  "Token counts are approximate.",
+                  "no subscriptions, no SSE streams; POST",
+              ):
+                  require(
+                      expected in instructions,
+                      f"{version}: instruction regression",
+                  )
+              require(
+                  instructions.endswith(
+                      "tools/call requires X-API-Key or Authorization: Bearer."
+                  ),
+                  f"{version}: incomplete instructions",
+              )
+
+              status, document = rpc(
+                  "tools/list", {}, version, request_id + 1
+              )
+              require(status == 200, f"{version}: tools/list failed")
+              require("error" not in document, f"{version}: tools/list error")
+
+              tools = document.get("result", {}).get("tools")
+              require(
+                  isinstance(tools, list) and len(tools) == 1,
+                  f"{version}: unexpected tool list",
+              )
+              tool = tools[0]
+              require(
+                  tool.get("name") == "bintu_scrape_text",
+                  f"{version}: unexpected tool name",
+              )
+              require(
+                  isinstance(tool.get("inputSchema"), dict),
+                  f"{version}: missing input schema",
+              )
+              require(
+                  isinstance(tool.get("outputSchema"), dict),
+                  f"{version}: missing output schema",
+              )
+
+              if reference_tools is None:
+                  reference_tools = tools
+              else:
+                  require(
+                      tools == reference_tools,
+                      f"{version}: discovery differs between versions",
+                  )
+
+              status, document = rpc(
+                  "ping", {}, version, request_id + 2
+              )
+              require(
+                  status == 200 and document.get("result") == {},
+                  f"{version}: ping failed",
+              )
+              print(f"PASS: public MCP checks for {version}")
+
+          status, document = rpc(
+              "tools/call",
+              {
+                  "name": "bintu_scrape_text",
+                  "arguments": {"url": "https://example.com/"},
+              },
+              VERSIONS[0],
+              100,
+          )
+          require(status == 401, "Unauthenticated execution was not rejected")
+          require(
+              document.get("error", {}).get("code") == -32001,
+              "Unexpected authentication error envelope",
+          )
+          print("PASS: unauthenticated execution rejected")
+          PY
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs --tail 200 bintu-ci || true
+
+      - name: Remove test container
+        if: always()
+        run: docker rm --force bintu-ci || true

@@ -4,6 +4,7 @@
 
 # Local environments and caches
 .venv
+.venv*
 venv
 __pycache__
 *.py[cod]
@@ -15,6 +16,8 @@ tests_out.txt
 *.out
 *.log
 .env
+.env.*
+!.env.example
 
 # Development-only files that must not ship in the runtime image
 *.md
