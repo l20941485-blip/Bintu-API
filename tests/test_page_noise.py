@@ -153,7 +153,8 @@ def test_same_document_rules():
     base = "https://docs.python.org/3/library/json.html"
     same = lambda url: same_document(base, urlsplit(url))
     assert same("https://docs.python.org/3/library/json.html#basic-usage")
-    assert same("https://DOCS.python.org/3/library/json.html/")
+    assert same("https://DOCS.python.org/3/library/json.html")
+    assert not same("https://DOCS.python.org/3/library/json.html/")
     assert not same("https://docs.python.org/3/library/json.html?x=1")
     assert not same("https://docs.python.org/3/library/pickle.html")
     assert not same_document(None, urlsplit(base))
@@ -218,3 +219,56 @@ def test_permalink_cleanup_preserves_code_content():
     )
     strip_permalinks(soup)
     assert soup.pre.get_text() == "\u00b6"
+
+
+def test_real_extractor_removes_mkdocs_icon_and_duplicate_title():
+    out = _real_extract(
+        "<html><head><title>Writing Your Docs - MkDocs</title></head>"
+        "<body><main>"
+        "<h1>Writing your docs"
+        "<a class='headerlink' href='#writing-your-docs'>\uf0c1</a>"
+        "</h1>"
+        "<h2>File layout<a href='#file-layout'>\uf0c1</a></h2>"
+        "<p>Documentation layout instructions.</p>"
+        "</main></body></html>"
+    )
+    assert out.splitlines()[0] == "# Writing your docs"
+    assert sum(line.startswith("# ") for line in out.splitlines()) == 1
+    assert "\uf0c1" not in out
+    assert "## File layout" in out
+
+
+def test_real_extractor_removes_vitepress_anchor_and_duplicate_title():
+    out = _real_extract(
+        "<html><head><title>Markdown Extensions | VitePress</title></head>"
+        "<body><main>"
+        "<h1>Markdown Extensions "
+        "<a class='header-anchor' href='#markdown-extensions'>\u200b</a>"
+        "</h1>"
+        "<h2>Header Anchors<a href='#header-anchors'>\u200b</a></h2>"
+        "<p>Headers support anchor links.</p>"
+        "</main></body></html>"
+    )
+    assert out.splitlines()[0] == "# Markdown Extensions"
+    assert sum(line.startswith("# ") for line in out.splitlines()) == 1
+    assert "\u200b" not in out
+    assert "## Header Anchors" in out
+
+
+def test_real_extractor_keeps_same_document_labels_without_url():
+    out = _real_extract(SPHINX)
+    assert "[1]" in out
+    assert f"[1] ({BASE})" not in out
+    assert "JSON (https://json.org)" in out
+    assert "pickle (https://docs.python.org/3/library/pickle.html)" in out
+
+
+def test_real_extractor_preserves_heading_inside_same_document_link():
+    out = _real_extract(
+        "<main>"
+        "<a href='#install'><h2>Install guide</h2></a>"
+        "<p>Installation instructions.</p>"
+        "</main>"
+    )
+    assert "## Install guide" in out.splitlines()
+    assert f"({BASE})" not in out

@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
 
-from bintu_api.page_noise import should_drop_title, strip_permalinks
+from bintu_api.page_noise import same_document, should_drop_title, strip_permalinks
 from bintu_api.settings import Settings
 
 
@@ -1481,6 +1481,10 @@ def extract_text_result(
         ):
             continue
 
+
+        if same_document(base_url, resolved):
+            anchor.unwrap()
+            continue
 
         destination = urlunsplit(
             (
