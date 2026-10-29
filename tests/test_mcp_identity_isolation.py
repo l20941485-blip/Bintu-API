@@ -13,9 +13,9 @@ from bintu_api.settings import Settings
 class McpIdentityIsolationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.settings = Settings(
-            api_key="",
+            api_key="mcp-key-two",
             rapidapi_proxy_secret="",
-            mcp_api_key="",
+            mcp_api_key="mcp-key-one",
         )
         self.request = MagicMock()
         self.request.headers.get.side_effect = (
@@ -49,9 +49,15 @@ class McpIdentityIsolationTests(unittest.TestCase):
 
     def test_raw_credential_is_not_exposed(self) -> None:
         credential = "super-secret-mcp-key"
+        self.settings = Settings(
+            api_key="",
+            rapidapi_proxy_secret="",
+            mcp_api_key=credential,
+        )
 
         identity = self._identity_for_credential(credential)
 
+        self.assertTrue(identity.startswith("mcp:"))
         self.assertNotIn(credential, identity)
         self.assertNotIn("secret", identity)
 

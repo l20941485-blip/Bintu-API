@@ -297,22 +297,26 @@ def _presented_credential(request: Request) -> str | None:
 
 
 def mcp_rate_limit_identity(request: Request, settings: Settings) -> str:
-    """Rate-limit bucket for MCP callers: RapidAPI user, then key fingerprint, then IP.
+    """Use authenticated RapidAPI identity, a validated key fingerprint, or IP.
 
-    All Claude-connector traffic arrives from the MCPize gateway's IP, so keying
-    on IP alone collapses every connector user into one shared bucket (A3) —
-    one greedy caller can starve everyone else. A caller that presents any
-    credential (valid or not) is bucketed by the SHA-256 fingerprint of that
-    credential instead, so distinct keys stay separated and a flood of invalid
-    keys cannot evict a valid one. The raw secret never appears in the bucket
-    name, keys, or logs.
+    Bearer credentials take precedence, matching MCP execution authorization.
+    Invalid headers must not create new buckets or override a valid credential.
+    Raw credentials never appear in the returned identity.
     """
     if has_valid_proxy_secret(request, settings):
         rapidapi_user = request.headers.get("X-RapidAPI-User")
         if rapidapi_user:
             return f"rapidapi:{rapidapi_user}"
-    credential = _presented_credential(request)
-    if credential:
-        fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()[:16]
-        return f"mcp:{fingerprint}"
+    scheme, separator, token = request.headers.get("Authorization", "").partition(" ")
+    bearer = token.strip() if separator and scheme.lower() == "bearer" else ""
+    header_key = request.headers.get("X-API-Key", "")
+
+    for credential in (bearer, header_key):
+        if credential and (
+            _secret_matches(credential, settings.mcp_api_key)
+            or _secret_matches(credential, settings.api_key)
+        ):
+            fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()[:16]
+            return f"mcp:{fingerprint}"
+
     return request.client.host if request.client else "unknown"
