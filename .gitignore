@@ -31,3 +31,5 @@ test_verify.py
 tatus
 run_tests.py
 tatus
+
+p45-mcp-chunk-*.json
