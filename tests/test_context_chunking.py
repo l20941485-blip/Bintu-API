@@ -1,6 +1,6 @@
 import re
 
-import baseline_context as old
+from bintu_api import context_baseline as old
 from bintu_api import context_chunking as new
 
 try:
@@ -173,4 +173,5 @@ def test_empty_and_zero_budget():
 def test_abbreviations_and_initials_do_not_split_sentences():
     pieces = new.sentence_pieces("Dr. Smith met J. Jones in the U.S. office. They talked. Then left.")
     assert pieces == ["Dr. Smith met J. Jones in the U.S. office.", "They talked.", "Then left."]
+
 
