@@ -1,30 +1,22 @@
 # Bintu Data Extraction API
 
-
 Bintu is a FastAPI-based API for extracting readable text from public HTML pages. It limits upstream responses to 1 MiB, accepts HTML/XHTML only, pins outbound connections to validated public IPs, and applies a 60-request per-minute process-local burst limit.
-
 
 ## Live API
 
-
 The service is live on Render and ready to test:
-
 
 - Base URL: [https://bintu-api.onrender.com](https://bintu-api.onrender.com)
 - OpenAPI docs: [https://bintu-api.onrender.com/docs](https://bintu-api.onrender.com/docs)
 - Health check: [https://bintu-api.onrender.com/healthz](https://bintu-api.onrender.com/healthz)
 
-
 ### Health check
-
 
 ```bash
 curl [https://bintu-api.onrender.com/healthz](https://bintu-api.onrender.com/healthz)
 ```
 
-
 Example response:
-
 
 ```json
 {
@@ -32,12 +24,9 @@ Example response:
 }
 ```
 
-
 ### Scrape text
 
-
 For direct access to the deployed service, set your API key in PowerShell. The secure prompt avoids echoing the key as you type:
-
 
 ```powershell
 $env:BINTU_BASE_URL = "[https://bintu-api.onrender.com](https://bintu-api.onrender.com)"
@@ -46,15 +35,12 @@ $env:BINTU_API_KEY = [System.Net.NetworkCredential]::new("", $secure).Password
 Remove-Variable secure
 ```
 
-
 Send an authenticated scrape request:
-
 
 ```powershell
 $target = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
 $encodedUrl = [uri]::EscapeDataString($target)
 $headers = @{ "X-API-Key" = $env:BINTU_API_KEY }
-
 
 try {
     $result = Invoke-RestMethod `
@@ -77,9 +63,7 @@ catch {
 }
 ```
 
-
 Successful response:
-
 
 ```json
 {
@@ -89,12 +73,9 @@ Successful response:
 }
 ```
 
-
 `truncated` is `true` if the extracted text exceeded the configured character limit. The API returns the requested URL in `url`.
 
-
 For `curl.exe` in PowerShell, the same request can be made with:
-
 
 ```powershell
 curl.exe --get "$env:BINTU_BASE_URL/api/v1/scrape/text" `
@@ -103,15 +84,61 @@ curl.exe --get "$env:BINTU_BASE_URL/api/v1/scrape/text" `
   --header "Accept: application/json"
 ```
 
-
 The Render `API_KEY` is available in the service's Environment settings. Keep it private, do not commit it, and do not put it in a URL. The examples above keep it in the current PowerShell process environment. If no API key or proxy secret is configured (as in the default local development setup), authentication is not required. Interactive API docs are available at [`/docs`](https://bintu-api.onrender.com/docs) — click **Authorize** (top right) and paste the key into `ApiKeyAuth`, or the Supabase session token into `BearerAuth` for the mobile endpoint, then use **Try it out** on any locked route.
 
+### Scrape chunks
+
+Use `POST /api/v1/scrape/chunks` when the extracted page needs to be divided into model-friendly, approximately token-budgeted pieces. This is useful for long articles, documentation, and retrieval workflows.
+
+Set the API key as shown in [Scrape text](#scrape-text), then send:
+
+```powershell
+$target = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
+
+$body = @{
+    url = $target
+    include_nav = $false
+    include_header = $false
+    include_footer = $false
+    render_js = $false
+} | ConvertTo-Json
+
+$result = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$env:BINTU_BASE_URL/api/v1/scrape/chunks?max_tokens=1000" `
+    -Headers @{ "X-API-Key" = $env:BINTU_API_KEY } `
+    -ContentType "application/json" `
+    -Body $body
+
+$result | ConvertTo-Json -Depth 5
+```
+
+The response contains ordered chunks:
+
+```json
+{
+  "url": "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)",
+  "mode": "chunk",
+  "max_tokens": 1000,
+  "split": true,
+  "chunk_count": 3,
+  "chunks": [
+    {
+      "index": 0,
+      "text": "# IANA-managed Reserved Domains\n...",
+      "tokens": 987
+    }
+  ]
+}
+```
+
+`max_tokens` controls the approximate size of **each** chunk, not the total amount of source retained. It must be between 100 and 50,000; the default is 6,000. Chunk boundaries preserve words and URLs, and fenced Markdown code blocks are kept intact when they fit within the requested budget. An oversized code block is split only within its body, with valid opening and closing fences restored to every resulting chunk.
+
+Like the text endpoint, chunk mode retains up to 200,000 extracted characters. If that ceiling is reached, the response is truncated before chunking and returns `truncated: true` with `limiting_factor: "char_cap"`.
 
 ### Common errors
 
-
 Errors use a JSON `detail` object with `code`, `message`, and, when applicable, `hint`. For example, a missing or invalid key returns HTTP 401:
-
 
 ```json
 {
@@ -122,9 +149,7 @@ Errors use a JSON `detail` object with `code`, `message`, and, when applicable, 
 }
 ```
 
-
 An invalid or unsafe URL returns HTTP 400:
-
 
 ```json
 {
@@ -136,10 +161,9 @@ An invalid or unsafe URL returns HTTP 400:
 }
 ```
 
-
 | HTTP status | Error code(s) | What to do |
 |---|---|---|
-| 400 | `invalid_or_unsafe_url`, `render_js_disabled` | Use a well-formed public HTTP or HTTPS URL. Private-network destinations are blocked. `render_js=true` is disabled unless the service enables it — retry with `render_js=false`. |
+| 400 | `invalid_or_unsafe_url`, `render_js_disabled`, `invalid_token_budget` | Use a well-formed public HTTP or HTTPS URL. Private-network destinations are blocked. `render_js=true` is disabled unless the service enables it — retry with `render_js=false`. For chunk requests, `max_tokens` must be between 100 and 50,000. |
 | 401 | `invalid_api_key` | Send the current `X-API-Key` configured in Render. |
 | 500 | `auth_misconfiguration` | `REQUIRE_AUTH=true` is set (Render production default) but `API_KEY` and `RAPIDAPI_PROXY_SECRET` are both empty. Restore the secrets in the Render dashboard, then redeploy. |
 | 413 | `payload_too_large` | The HTML exceeds 1 MiB after decompression. |
@@ -148,15 +172,11 @@ An invalid or unsafe URL returns HTTP 400:
 | 502 | `upstream_http_error`, `upstream_connection_error`, `upstream_render_error`, `unsupported_content_encoding`, or `too_many_redirects` | The target returned an error, could not be reached or rendered, used unsupported compression, or redirected too many times. |
 | 504 | `upstream_timeout` | The target did not respond in time. |
 
-
 The 429 response also includes a `Retry-After` header. Avoid repeatedly retrying 4xx responses; correct the request or wait as indicated.
-
 
 ## Run Locally
 
-
 Use Python 3.12. Install the application and test dependencies, then start the service:
-
 
 ```powershell
 python -m venv .venv
@@ -165,53 +185,40 @@ python -m pip install -r requirements-dev.txt
 uvicorn main:app --reload
 ```
 
-
 The interactive API documentation is at `/docs`. With no keys configured, local development is open. Never deploy an unprotected instance; the Render blueprint generates an `API_KEY` by default.
 
-
 ### Docker
-
 
 ```powershell
 docker build -t bintu-api .
 docker run -p 8000:8000 -e API_KEY=your-key bintu-api
 ```
 
-
 Or with Docker Compose:
-
 
 ```powershell
 docker-compose up
 ```
 
-
 ## API
-
 
 `GET /healthz` is a lightweight Render health check. It does not require authentication.
 
-
 `GET /version` returns service configuration (no secrets exposed).
-
 
 `GET /metrics` exposes Prometheus request counts, error counts, latency histograms, and cache hit/miss counters. Metrics use route templates rather than request URLs and do not include scraped content. Application request logs include a request ID, method, route template, status, and duration; they do not log target URLs or page text. The Render and Docker launch configurations disable Uvicorn access logs because access-log request lines can include the `url` query parameter. It is protected by the same credentials as the API, so send `X-API-Key` (or the RapidAPI proxy header) when a key is configured. `X-Request-ID` is returned on every response; valid caller-provided IDs are preserved, otherwise the API generates one.
 
-
 `GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com` returns the requested URL, extracted text, and a `truncated` boolean. `truncated` is `true` only when extracted content exceeded the configured text limit. When available, the extractor prefers `<article>` or `<main>` content, then a `role="main"` or commonly named main/content container (such as `id="main"`), and otherwise falls back to the full document. It omits hidden elements and common controls or page furniture, and renders links as `link text (absolute URL)`. Headings are marked with Markdown `#` prefixes, paragraphs and other block elements are separated by line breaks, and table cells within each row are joined with ` | ` with a separator beneath header rows. If the document title duplicates its first heading, it is omitted. Character encoding is detected from the upstream HTTP charset and HTML metadata. Direct callers must send `X-API-Key` when `API_KEY` is configured. The endpoint supports public HTTP/HTTPS destinations only and does not bypass access controls.
 
+`POST /api/v1/scrape/chunks` returns readable text as approximately token-budgeted chunks. It uses the same guarded fetching, extraction, authentication, caching, and rate limiting as `/api/v1/scrape/text`, but divides the extracted Markdown into ordered chunks using `max_tokens`.
 
 JavaScript rendering is experimental. Keep `RENDER_JS_ENABLED=false`: the browser path has an unresolved DNS-rebinding time-of-check-to-time-of-use risk. Do not enable it until connection targeting, redirects, and browser subresource requests are hardened and tested. Paid infrastructure does not resolve this risk; see [Security Notes](SECURITY.md#javascript-rendering). When enabled, `render_js=true` selects headless Chromium rendering. Rendering waits for `networkidle`, validates browser-requested HTTP destinations against public DNS addresses, and omits images, media, and fonts to reduce memory use. Non-rendered requests retain the existing lightweight transport that pins each connection to a validated public IP. Both modes use the same extractor, text limits, persistent cache, authentication, and rate limiting.
 
-
 `POST /mcp` is a standard MCP Streamable HTTP endpoint (stateless JSON-RPC 2.0) for Claude custom connectors and Claude Code: it answers `initialize`, `ping`, `tools/list`, and `tools/call` for the single `bintu_scrape_text` tool, and requires `Content-Type: application/json` plus the same API key as normal requests. Point a Claude custom connector at `https://<your-host>/mcp` with an `X-API-Key` request header. Notifications get `202`; `GET`/`DELETE` return `405` since the server keeps no sessions or streams.
-
 
 `GET /mcp/tools` advertises the `bintu_scrape_text` tool, and `POST /mcp/tools/call` invokes it with `{"name":"bintu_scrape_text","arguments":{"url":"https://example.com","render_js":false}}`. Successful responses follow the MCP tool content shape and include the same extraction envelope as both structured content and serialized JSON: `structuredContent` contains the canonical extraction envelope, while `content[0].text` contains its JSON serialization. Tool calls use the same API authentication and rate limits as normal scrape requests.
 
-
 ### Query Parameters
-
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -221,22 +228,39 @@ JavaScript rendering is experimental. Keep `RENDER_JS_ENABLED=false`: the browse
 | `include_header` | bool | false | Preserve `<header>` elements in output |
 | `include_footer` | bool | false | Preserve `<footer>` elements in output |
 
+### Chunk Endpoint Parameters
+
+`POST /api/v1/scrape/chunks` accepts the extraction fields in its JSON body and the following query parameters:
+
+| Parameter | Type | Default | Description |
+|---|---|---:|---|
+| `max_tokens` | integer | 6000 | Approximate token budget for each chunk; must be 100–50,000 |
+| `skip_cache` | bool | false | Bypass cached extraction and fetch the page again |
+| `persist` | bool | true | Allow a successful extraction to be written to the persistent cache |
+
+The JSON body accepts:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | required | Public HTTP or HTTPS URL to scrape |
+| `include_nav` | bool | false | Preserve `<nav>` elements |
+| `include_header` | bool | false | Preserve `<header>` elements |
+| `include_footer` | bool | false | Preserve `<footer>` elements |
+| `render_js` | bool | false | Request JavaScript rendering; disabled unless `RENDER_JS_ENABLED=true` |
 
 ### Service Limits
-
 
 - Request timeout: 10 seconds per connection attempt.
 - Redirects: at most 5, with URL and DNS validation repeated for every destination.
 - HTML body: at most 1 MiB after decompression, read in chunks no larger than 4 KiB. Gzip-encoded HTML is supported with the same decoded-size limit.
 - Text response: at most 6,000 characters; `truncated` is true when the content exceeds the limit. Truncated text ends at the last available word boundary.
+- Chunk mode: retains up to 200,000 extracted characters before chunking. Each returned chunk is budgeted by `max_tokens` (100–50,000; default 6,000). Fenced code blocks are preserved when they fit and are split with restored fences when they do not.
 - JavaScript rendering: disabled by default (`RENDER_JS_ENABLED=false`); `render_js=true` returns 400 `render_js_disabled`. Keep it disabled until the browser path is hardened and tested; paid infrastructure does not resolve the documented DNS-rebinding risk. See [Security Notes](SECURITY.md#javascript-rendering).
 - Local abuse guard: 60 requests per client identity per 60 seconds, in process memory only. Behind Render, a client IP is honored only from Render's proxy range (`100.64.0.0/10`), so the guard cannot be bypassed by spoofing `X-Forwarded-For`. Set `REDIS_URL` to share the counter across instances; the window TTL is set once per window, and if Redis is unreachable the guard falls back to process memory rather than failing requests.
 - Process-local HTML cache: 5-minute TTL, bounded to 64 entries per instance with least-recently-used eviction. `CACHE_TTL_SECONDS=0` disables this local cache. When configured, the separate Supabase Markdown cache retains successful extractions for 24 hours.
 - Paid subscription quotas and billing: configured and enforced by RapidAPI, not by this service.
 
-
 ## Configuration
-
 
 | Environment Variable | Default | Description |
 |---|---|---|
@@ -250,24 +274,18 @@ JavaScript rendering is experimental. Keep `RENDER_JS_ENABLED=false`: the browse
 | `RENDER_JS_ENABLED` | `false` | JavaScript rendering kill-switch. Keep `false` until the browser path is hardened and tested; see [Security Notes](SECURITY.md#javascript-rendering). Only exact `true` enables Chromium; anything else returns 400 `render_js_disabled` for `render_js=true` |
 | `BINTU_UPGRADE_URL` | `https://mcpize.com` | Canonical subscribe URL embedded in MCP 401 `-32001` `upgrade_url` so agents print a clickable link in-chat |
 
-
 ## Deploy To Render
-
 
 1. Push this project to a GitHub repository.
 2. In Render, create a new Blueprint and select that repository. Render reads `render.yaml`, installs `requirements.txt` and Chromium's system dependencies, then starts Uvicorn on the assigned port.
 3. Wait for `/healthz` to pass. Copy the generated `API_KEY` from the service environment for direct API access. Do not commit either secret.
 4. Test the deployed `/docs` page and make an authenticated scrape request before publishing.
 
-
 The free instance can sleep while idle, so the first request may be slow. Free services are best for validation and early users, not latency-sensitive production or an uptime guarantee. The local burst guard resets on restarts and is not shared across instances. It is not a paid quota; use RapidAPI plan limits as the billing authority.
-
 
 ## Storefront parity (single source of truth)
 
-
 One API, three doors. Behaviour is identical; only auth + billing differ per gateway:
-
 
 | | Direct (Render) | RapidAPI | MCPize |
 |---|---|---|---|
@@ -278,9 +296,7 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 | Quota | 60 req / 60 s burst guard per IP | 60/60s per `X-RapidAPI-User` + plan quota | 60/60s global across MCPize subscribers (single upstream token) + plan quota |
 | Cache | 5-min in-memory + 24 h Supabase persistent | Same | Same upstream cache; cold fetch ~2–6 s, cache hit ~300 ms |
 
-
 **Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
-
 
 ### Chunk mode limits
 
@@ -297,68 +313,48 @@ chunk budget. Oversized fenced blocks are split only within the code body;
 each resulting chunk receives restored opening and closing fences, keeping
 every chunk valid, self-contained Markdown.
 
-
 Legacy scrape endpoint limits: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (keep `RENDER_JS_ENABLED=false` until browser security hardening is complete; paid infrastructure does not resolve the risk). Error codes: see [Common errors](#common-errors).
-
 
 ## RapidAPI Publishing
 
-
 RapidAPI handles subscriber authentication and billing at its gateway. In the RapidAPI provider dashboard, point the API base URL at the Render service and configure the provider proxy secret. Set Render's `RAPIDAPI_PROXY_SECRET` to the same value. Requests authenticated with `X-RapidAPI-Proxy-Secret` are accepted; their `X-RapidAPI-User` identity receives an independent 60-request-per-minute bucket. Keep `API_KEY` for owner/direct access, and never expose either secret in client examples.
-
 
 Configure subscription plans, monthly quotas, and pricing in RapidAPI. Start with a small free trial and paid tiers based on measured Render latency, failure rates, and upstream costs. The service's 60-per-minute guard is a burst limit, not a monthly quota or billing system. Marketplace placement and revenue are not guaranteed.
 
-
 Only scrape content you are authorized to access. Respect the target site's terms and robots policy. This API does not circumvent logins, CAPTCHAs, paywalls, or anti-bot controls.
-
 
 ### Connect Claude
 
-
 `POST /mcp` implements the standard MCP Streamable HTTP transport (protocol `2025-11-25`, also accepting `2025-06-18`/`2025-03-26`), so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET` answers with an empty SSE stream (`GET /sse` and `GET /mcp/sse` are compatibility aliases for gateways that probe a dedicated SSE path), `DELETE`/`PUT`/`PATCH` return `405`, and each JSON-RPC message is answered with a single `application/json` response. Requests after `initialize` must carry the negotiated `MCP-Protocol-Version` header (unknown versions get `400`), and a mismatched `Origin` header is rejected with `403` against DNS rebinding. `initialize`, `tools/list`, and `ping` are public discovery methods (protocol negotiation, tool schemas, liveness — no extraction), so gateway health-checkers, marketplace audits, and Claude Web — none of which can send headers during onboarding — complete instantly; `tools/call` and every other method require `X-API-Key` or `Authorization: Bearer` with the scoped `MCP_API_KEY` or the master `API_KEY`, and a missing or invalid credential on an execution call answers `401` with `{"code": "invalid_api_key", "message": "A premium subscription or valid X-API-Key is required to execute scrapes."}` while all billable work stays behind auth.
-
 
 - Direct — Claude web or Desktop: custom connector URL `https://bintu-api.onrender.com/mcp` with request header `X-API-Key: <MCP_API_KEY>`.
 - Direct — Claude Code: `claude mcp add --transport http bintu [https://bintu-api.onrender.com/mcp](https://bintu-api.onrender.com/mcp) --header "X-API-Key: <MCP_API_KEY>"`.
 - MCPize (subscribers): connect to `https://bintu-web-reader.mcpize.run` with your MCPize `sk_…` key — the gateway injects the upstream token. No RapidAPI subscription needed; billing lives on the MCPize listing.
 
-
 `MCP_API_KEY` is the optional scoped key set in the Render dashboard. It is accepted only on the MCP surfaces (`/mcp`, `/mcp/tools`, `/mcp/tools/call`) and never on the REST routes or `/metrics`, so it can be shared with connector users and rotated without touching the master `API_KEY`. While `MCP_API_KEY` is unset, the master `API_KEY` keeps working on `/mcp` exactly as before.
-
 
 The server exposes one tool, `bintu_scrape_text`, with the same schema as the REST scrape. Tool execution failures (unsafe URL, rate limit, upstream error, `render_js_disabled`) come back in-band as `isError: true` with readable text so the model can correct itself. Execution requests (`tools/call`) require a valid key (the master `API_KEY` or the scoped `MCP_API_KEY`, via `X-API-Key` or `Authorization: Bearer`) and count against the same rate limit; discovery (`initialize`, `tools/list`, `ping`) needs no credentials. This endpoint is hidden from `/docs`; see the MCP section of the README.
 
-
 ## Native Mobile MVP
-
 
 The Expo project in `mobile-app/` provides email sign-up/sign-in and a URL-to-readable-text screen for iOS and Android. User sessions are stored with the device's secure storage. The app sends its Supabase access token to `POST /api/v1/mobile/scrape/text`; the API verifies the user with Supabase, requires a verified email address, and applies the existing per-user burst limit. The Bintu `API_KEY` and RapidAPI provider secret are never sent to the app.
 
-
 ### Configure the backend
-
 
 1. Create a Supabase project and enable email/password authentication. Keep email confirmation enabled.
 2. In Supabase project settings, copy the project URL and its publishable key (or legacy anon key). Do not use the `service_role` key or a secret key.
 3. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the Render service environment. Keep the existing generated `API_KEY` private.
 4. To enable persistent scraping cache and RapidAPI usage counts, set the server-only `SUPABASE_SERVICE_ROLE_KEY` in Render. Run [`supabase_schema.sql`](./supabase_schema.sql) in the Supabase SQL editor to create the required tables and atomic usage-increment function. Never include the service-role key in the mobile app. Without this key, scraping continues with the existing bounded in-memory cache and database features are disabled.
 
-
 The persistent cache retains successful Markdown for 24 hours. Cache keys include the URL, rendering mode, and extraction options, and expired entries are ignored. RapidAPI usage counts are incremented only for requests carrying a valid configured RapidAPI proxy secret and a valid `X-RapidAPI-User` header; cached successful calls are counted too. Database failures are logged and fall back to scraping or return the successfully extracted content.
-
 
 The mobile proxy remains unavailable until both Supabase settings are configured. Supabase must be reachable by the API at request time so the API can verify each session.
 
-
 In Supabase **Authentication → URL Configuration → Redirect URLs**, allow the Expo Go callback `exp://**/--/auth/callback` and the installed-app callback `bintu://**`. The app sends an explicit callback URL for sign-up confirmation and password recovery, so those links open Bintu instead of the default `localhost:3000`. Expo Go redirects only work while the development server is running and reachable on the phone's network.
-
 
 ### Run on an Android phone
 
-
 Install a current Node.js LTS release, install Expo Go on an Android phone, and from the `mobile-app/` directory:
-
 
 ```powershell
 Copy-Item .env.example .env
@@ -367,15 +363,11 @@ npm install
 node .\node_modules\expo\bin\cli start
 ```
 
-
 Scan the QR code shown by Expo Go. The app handles confirmation and password-reset links and lets the user set a new password after following a recovery link. The `EXPO_PUBLIC_` Supabase key is a client/public key, not a service secret; the API verifies sessions and keeps the Bintu server key private. A local `.env` file is git-ignored. iOS simulator builds require macOS and Xcode; public app-store distribution has separate developer enrollment requirements and fees.
-
 
 This is an early MVP: the API's in-memory limiter resets on restart and does not provide account-abuse prevention or a monthly user quota. Review hosting and Supabase plan limits before inviting more users.
 
-
 ## REST document reader
-
 
 The reader provides paginated access to a retained text snapshot through
 `POST /api/v1/reader/read` and `POST /api/v1/reader/continue`. These routes
@@ -383,15 +375,12 @@ are separate from the existing scrape endpoints and are not exposed as
 new MCP tools. They become available when a version containing this
 change is deployed.
 
-
 ### Authentication and ownership
-
 
 Both endpoints require either the configured direct `API_KEY` in
 `X-API-Key`, or a verified RapidAPI proxy request with a valid
 `X-RapidAPI-User`. Unauthenticated local development mode does not grant
 reader access.
-
 
 Ownership is credential-level: all callers using the same direct API key
 share one owner identity. Verified RapidAPI subscribers have separate
@@ -399,23 +388,18 @@ owner identities. An unverified subscriber header does not establish
 ownership. Mobile Supabase sessions and the scoped `MCP_API_KEY` are not
 reader credentials.
 
-
 Treat continuation cursors as sensitive, temporary handles. Use the same
 authenticated owner for the initial read and subsequent continuations.
 
-
 ### Read and continue
-
 
 For local testing, start the application with an `API_KEY` configured,
 and set that same key in `$env:BINTU_API_KEY`. Use a deployed base URL
 only after the reader changes have been deployed.
 
-
 ```powershell
 $readerBaseUrl = "http://127.0.0.1:8000"
 $headers = @{ "X-API-Key" = $env:BINTU_API_KEY }
-
 
 $body = @{
     url = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
@@ -425,7 +409,6 @@ $body = @{
     include_footer = $false
 } | ConvertTo-Json
 
-
 $page = Invoke-RestMethod `
     -Method Post `
     -Uri "$readerBaseUrl/api/v1/reader/read" `
@@ -433,16 +416,13 @@ $page = Invoke-RestMethod `
     -ContentType "application/json" `
     -Body $body
 
-
 $page.text
-
 
 while ($page.has_more) {
     $body = @{
         cursor = $page.next_cursor
         max_tokens = 1000
     } | ConvertTo-Json
-
 
     $page = Invoke-RestMethod `
         -Method Post `
@@ -451,17 +431,14 @@ while ($page.has_more) {
         -ContentType "application/json" `
         -Body $body
 
-
     $page.text
 }
 ```
-
 
 The initial request checks robots policy, fetches the page using the
 existing guarded fetcher, and extracts a text snapshot. Continuations
 read that snapshot without refetching the target. Pages therefore
 represent the original extraction, not subsequent website changes.
-
 
 `max_tokens` must be a JSON integer from 100 through 50000; it defaults to
 1000 on each request. It budgets page text only, not JSON framing,
@@ -471,7 +448,6 @@ character absolute ceiling. The response includes `approx_tokens` and
 `token_method`; do not treat the estimate as an exact count for every
 model tokenizer.
 
-
 Responses include `text`, `start_offset`, `end_offset`, `has_more`,
 `next_cursor`, `approx_tokens`, `token_method`, `boundary_split`, and
 `budget_scope` (`page_text_only`). Continue using the returned cursor,
@@ -479,18 +455,14 @@ not a client-supplied offset. The final page has `has_more=false` and
 `next_cursor=null`. The three extraction inclusion flags default to
 false and are set only on the initial request.
 
-
 ### Retention and deployment limits
-
 
 The reader retains at most 200,000 extracted text characters per document.
 It rejects larger extracted documents instead of silently shortening them. Its retention limit is separate from the legacy scrape
 response character limit; upstream fetch size and media-type guards
 still apply.
 
-
 The application's default snapshot store has:
-
 
 - A fixed 600-second lifetime from snapshot creation. Reads do not
   extend it.
@@ -500,19 +472,16 @@ The application's default snapshot store has:
 - Process-local memory only: snapshots are not persisted or shared
   between workers or instances, and disappear on restart.
 
-
 Ten minutes is an expiry limit, not a guaranteed availability window:
 eviction can invalidate a cursor sooner. A continuation sent to another
 worker or instance cannot resolve the original worker's cursor.
 Multi-worker or multi-instance deployments need an explicit routing or
 shared-storage design before reliable continuation can be promised.
 
-
 Unknown, expired, evicted, and wrong-owner cursors all return HTTP 404
 with `detail.code=reader_snapshot_unavailable`. Start a new read to
 recover; doing so fetches the target again and may produce different
 text.
-
 
 Both initial reads and continuations pass through the rate limiter.
 Successful verified RapidAPI requests on either endpoint attempt a
@@ -521,41 +490,33 @@ Database usage-recording failures do not fail an otherwise successful
 reader response. This accounting is not a replacement for gateway plan
 quotas.
 
-
 ### Observability
-
 
 Reader requests pass through the existing HTTP observability
 middleware: request count, error count, duration, request-completion
 logs, and the `X-Request-ID` response header.
-
 
 The reader route implementation does not call the existing
 extraction-completion and extraction-failure metric helpers. Do not
 interpret those extraction-specific metrics as complete reader usage
 or failure coverage.
 
-
 ## Tests
 
-
 The suite lives in the tests/ package and is offline: it patches connections and uses fake responses, so it makes no live network requests.
-
 
 ```powershell
 python -m unittest discover -s tests -t . -p "test_*.py" -v
 ```
 
-
 Integration tests run a real local HTTP server on a loopback port to exercise the full fetch, parse, and extract pipeline, with DNS resolution and connection targeting mocked so the SSRF guards still apply:
-
 
 ```powershell
 python -m unittest tests.test_integration -v
 ```
 
+Chunking is covered by offline unit tests for token budgets, word boundaries, and fenced-code preservation, plus endpoint tests for token-budget validation, disabled JavaScript rendering, and successful chunked responses.
 
 The synthetic golden fixtures in `tests/fixtures/extraction_quality/` cover article, navigation-heavy, and table-heavy HTML without relying on third-party sites. Update a fixture and its expected `.txt` output only after reviewing an intentional extraction change.
-
 
 GitHub Actions runs the offline test suite for pushes and pull requests. Render is configured to deploy linked commits only after CI checks pass. After deploying, verify real upstream fetching with `python smoke_check.py` (set `BINTU_BASE_URL` and `BINTU_API_KEY`); mocked tests cannot catch upstream HTTP regressions on their own.

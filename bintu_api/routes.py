@@ -21,6 +21,7 @@ from bintu_api.context import (
     MAX_EXTRACTION_CHARACTERS,
     _decode_source_text,
     resolve_effective_char_cap,
+    split_into_chunks,
 )
 from bintu_api.database import (
     CachedMarkdown,
@@ -42,6 +43,8 @@ from bintu_api.schemas import (
     HealthResponse,
     MobileScrapeTextRequest,
     Provenance,
+    RestChunk,
+    ScrapeChunksResponse,
     ScrapeTextResponse,
     VersionResponse,
 )
@@ -343,6 +346,271 @@ async def scrape_text(
         persist,
         max_tokens,
     )
+
+
+@router.post(
+    "/api/v1/scrape/chunks",
+    response_model=ScrapeChunksResponse,
+    summary="Extract readable text as approximately token-budgeted chunks",
+    description=(
+        "Fetches a public HTML or XHTML page, extracts readable text, and "
+        "returns fence-aware chunks sized to the requested token budget. "
+        "The extraction character ceiling applies before chunking."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (400, 401, 403, 413, 415, 429, 502, 504)
+    },
+    dependencies=[Security(api_key_scheme, scopes=[])],
+)
+async def scrape_chunks(
+    request: Request,
+    payload: MobileScrapeTextRequest,
+    max_tokens: int = 6000,
+    skip_cache: bool = False,
+    persist: bool = True,
+) -> ScrapeChunksResponse:
+    settings = request.app.state.settings
+    verify_api_access(request, settings)
+
+    if not 100 <= max_tokens <= 50000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_token_budget",
+                "message": "max_tokens must be between 100 and 50000.",
+            },
+        )
+
+    if payload.render_js and not settings.render_js_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "render_js_disabled",
+                "message": "JavaScript rendering is disabled on this service.",
+                "hint": "Retry with render_js=false for plain HTML extraction.",
+            },
+        )
+
+    document, result, cache_layer = await _scrape_chunks(
+        request,
+        payload.url,
+        payload.include_nav,
+        payload.include_header,
+        payload.include_footer,
+        rate_limit_identity(request, settings),
+        payload.render_js,
+        skip_cache,
+        persist,
+        max_tokens,
+    )
+
+    chunk_strings = split_into_chunks(result.markdown, max_tokens)
+    chunks = [
+        RestChunk(
+            index=index,
+            text=chunk,
+            approx_tokens=_compute_approx_tokens(chunk),
+            tokens=_compute_approx_tokens(chunk),
+        )
+        for index, chunk in enumerate(chunk_strings)
+    ]
+
+    approx_tokens = sum(chunk.approx_tokens for chunk in chunks)
+
+    return ScrapeChunksResponse(
+        url=payload.url,
+        mode="chunk",
+        max_tokens=max_tokens,
+        tokens=approx_tokens,
+        approx_tokens=approx_tokens,
+        html_tokens=result.html_tokens,
+        token_method=TOKEN_METHOD,
+        limiting_factor="token_budget" if result.truncated else "none",
+        chunk_count=len(chunks),
+        cache_hit=cache_layer != "none",
+        cache_layer=cache_layer,
+        source_url=document.final_url if document else payload.url,
+        extracted_at=result.extracted_at,
+        tokens_saved_estimate=max(
+            0,
+            result.html_tokens - approx_tokens,
+        ),
+        truncated=result.truncated,
+        split=len(chunks) > 1,
+        chunks=chunks,
+    )
+
+async def _scrape_chunks(
+    request: Request,
+    url: str,
+    include_nav: bool,
+    include_header: bool,
+    include_footer: bool,
+    identity: str,
+    render_js: bool = False,
+    skip_cache: bool = False,
+    persist: bool = True,
+    max_tokens: int = 6000,
+) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
+    settings = request.app.state.settings
+    request_id = (
+        getattr(getattr(request, "state", None), "request_id", None)
+        or uuid.uuid4().hex
+    )
+
+    try:
+        await asyncio.to_thread(
+            request.app.state.rate_limiter.check,
+            identity,
+        )
+
+        document, result, cache_layer = await _fetch_and_extract(
+            request,
+            url,
+            include_nav=include_nav,
+            include_header=include_header,
+            include_footer=include_footer,
+            render_js=render_js,
+            skip_cache=skip_cache,
+            persist=persist,
+            mode="chunk",
+            max_tokens=max_tokens,
+        )
+
+        log_extraction_completed(
+            request_id=request_id,
+            url=url,
+            mode="chunk",
+            cache_hit=cache_layer != "none",
+            cache_layer=cache_layer,
+            approx_tokens=_compute_approx_tokens(result.markdown),
+            html_tokens=result.html_tokens,
+            tokens_saved_estimate=result.tokens_saved_estimate,
+            truncated=result.truncated,
+            limiting_factor=result.limiting_factor,
+        )
+
+        return document, result, cache_layer
+
+    except HTTPException:
+        raise
+    except TargetURLRejected as error:
+        log_upstream_error(
+            error_type="invalid_or_unsafe_url",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_or_unsafe_url",
+                "message": str(error),
+                "hint": "URL must start with http:// or https:// and be publicly accessible",
+            },
+        ) from error
+    except UnsupportedMediaType as error:
+        log_upstream_error(
+            error_type="unsupported_media_type",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=415,
+            detail={
+                "code": "unsupported_media_type",
+                "message": str(error),
+                "hint": "Only HTML and XHTML pages are supported",
+            },
+        ) from error
+    except PayloadTooLarge as error:
+        log_upstream_error(
+            error_type="payload_too_large",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "code": "payload_too_large",
+                "message": "The page exceeds the 1 MiB size limit",
+                "hint": "The page exceeds the 1 MiB size limit",
+            },
+        ) from error
+    except UpstreamHTTPError as error:
+        log_upstream_error(
+            error_type="upstream_http_error",
+            url=url,
+            request_id=request_id,
+            status_code=error.status_code,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "upstream_http_error",
+                "message": f"The target returned HTTP {error.status_code}.",
+                "hint": "The target server returned an error. Try again later.",
+            },
+        ) from error
+    except TooManyRedirects as error:
+        log_upstream_error(
+            error_type="too_many_redirects",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "too_many_redirects",
+                "message": str(error),
+                "hint": "The page has too many redirects",
+            },
+        ) from error
+    except (TimeoutError, socket.timeout) as error:
+        log_upstream_error(
+            error_type="upstream_timeout",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "code": "upstream_timeout",
+                "message": "The target did not respond in time.",
+                "hint": "The target server is slow or unresponsive. Try again later.",
+            },
+        ) from error
+    except OSError as error:
+        log_upstream_error(
+            error_type="upstream_connection_error",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "upstream_connection_error",
+                "message": "Could not connect to the target.",
+                "hint": "The target server may be down or unreachable.",
+            },
+        ) from error
+    except Exception as error:
+        log_upstream_error(
+            error_type="internal_error",
+            url=url,
+            request_id=request_id,
+        )
+        logger.error(
+            "chunk_scrape_failed error_type=%s",
+            type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "internal_error",
+                "message": "An internal extraction error occurred.",
+            },
+        ) from error
 
 
 @router.post(

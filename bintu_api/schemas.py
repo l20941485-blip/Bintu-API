@@ -1,6 +1,8 @@
 ﻿from typing import Literal
 
+
 from pydantic import BaseModel, Field
+
 
 
 class ErrorDetail(BaseModel):
@@ -9,14 +11,17 @@ class ErrorDetail(BaseModel):
     hint: str | None = None
 
 
+
 class ErrorResponse(BaseModel):
     detail: ErrorDetail
+
 
 
 class GatewayResponse(BaseModel):
     status: str
     service: str
     docs: str
+
 
 
 class HealthResponse(BaseModel):
@@ -34,6 +39,7 @@ class HealthResponse(BaseModel):
     )
 
 
+
 class CacheInfo(BaseModel):
     hit: bool = Field(description="Whether the response was served from cache.")
     layer: str = Field(
@@ -43,6 +49,7 @@ class CacheInfo(BaseModel):
         default=None,
         description="Age of the cached entry in seconds, when known.",
     )
+
 
 
 class Provenance(BaseModel):
@@ -93,6 +100,7 @@ class Provenance(BaseModel):
     )
 
 
+
 class ScrapeTextResponse(BaseModel):
     url: str
     # Length is enforced by extract_text_result() against settings.max_text_characters;
@@ -118,6 +126,7 @@ class ScrapeTextResponse(BaseModel):
         default=0,
         description="Number of duplicate blocks removed during extraction quality normalization.",
     )
+
 
     cache_layer: Literal["none", "memory", "persistent"] = Field(
         default="none",
@@ -168,12 +177,42 @@ class ScrapeTextResponse(BaseModel):
     )
 
 
+
+class RestChunk(BaseModel):
+    index: int
+    text: str
+    approx_tokens: int
+    tokens: int
+
+
+class ScrapeChunksResponse(BaseModel):
+    url: str
+    mode: Literal["chunk"]
+    max_tokens: int
+    tokens: int
+    approx_tokens: int
+    html_tokens: int
+    token_method: str
+    limiting_factor: str
+    chunk_count: int
+    cache_hit: bool
+    cache_layer: Literal["none", "memory", "persistent"]
+    source_url: str
+    extracted_at: str
+    tokens_saved_estimate: int
+    truncated: bool
+    split: bool
+    chunks: list[RestChunk]
+
+
+
 class MobileScrapeTextRequest(BaseModel):
     url: str
     include_nav: bool = False
     include_header: bool = False
     include_footer: bool = False
     render_js: bool = False
+
 
 
 class VersionResponse(BaseModel):
@@ -185,5 +224,3 @@ class VersionResponse(BaseModel):
     rate_limit_requests: int
     rate_limit_window_seconds: int
     cache_ttl_seconds: int
-
-
