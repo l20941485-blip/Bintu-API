@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
 
+from bintu_api.page_noise import should_drop_title, strip_permalinks
 from bintu_api.settings import Settings
 
 
@@ -1308,6 +1309,8 @@ def extract_text_result(
     for node in soup(tags_to_remove):
         node.decompose()
 
+    strip_permalinks(soup)
+
 
     for node in soup.find_all(True):
         attributes = node.attrs or {}
@@ -1438,7 +1441,7 @@ def extract_text_result(
 
     if (
         normalized_title
-        and normalized_title == normalized_heading
+        and should_drop_title(normalized_title, normalized_heading)
     ):
         normalized_title = ""
 
