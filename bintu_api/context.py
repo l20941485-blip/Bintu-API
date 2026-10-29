@@ -30,6 +30,7 @@ from fastapi import Request
 
 
 from bintu_api.auth import rate_limit_identity
+from bintu_api.context_chunking import split_into_chunks, summarize_text
 from bintu_api.cache import TTLCache
 from bintu_api.observability import (
     log_cache_lookup_completed,
@@ -224,206 +225,6 @@ def _is_table_block(block: str) -> bool:
 
 
 
-def _pack_chunk_pieces(
-    pieces: list[str], max_tokens: int, separator: str
-) -> list[str]:
-    """Pack intact pieces using the token count of the assembled text."""
-    chunks: list[str] = []
-    current = ""
-
-
-    for piece in pieces:
-        if not piece:
-            continue
-
-
-        candidate = current + separator + piece if current else piece
-        if current and count_tokens(candidate) > max_tokens:
-            chunks.append(current)
-            current = piece
-        else:
-            current = candidate
-
-
-    if current:
-        chunks.append(current)
-
-
-    return chunks
-
-
-
-def _split_oversized_table(block: str, max_tokens: int) -> list[str]:
-    """Keep rows intact, even when an individual row exceeds the budget."""
-    lines = [line for line in block.splitlines() if line.strip()]
-    return _pack_chunk_pieces(lines, max_tokens, "\n")
-
-
-
-def _split_at_whitespace(block: str, max_tokens: int) -> list[str]:
-    """Split oversized prose without cutting words or URLs."""
-    chunks: list[str] = []
-    start: int | None = None
-    end = 0
-
-
-    for match in re.finditer(r"\S+", block):
-        if start is None:
-            start = match.start()
-            end = match.end()
-            continue
-
-
-        candidate = block[start:match.end()]
-        if count_tokens(candidate) > max_tokens:
-            chunks.append(block[start:end])
-            start = match.start()
-
-
-        end = match.end()
-
-
-    if start is not None:
-        chunks.append(block[start:end])
-
-
-    return chunks
-
-
-
-def _split_prose_block(block: str, max_tokens: int) -> list[str]:
-    """Prefer complete sentences; split oversized sentences at whitespace.
-
-
-    Sentence boundaries require punctuation followed by whitespace, so
-    internal periods in domains and URLs do not create boundaries.
-    Original whitespace is retained within each returned piece.
-    """
-    if count_tokens(block) <= max_tokens:
-        return [block]
-
-
-    sentences: list[str] = []
-    position = 0
-    boundary_pattern = re.compile(r"""[.!?]+["')\]]*\s+""")
-
-
-    for match in boundary_pattern.finditer(block):
-        sentence = block[position:match.end()].strip()
-        if sentence:
-            sentences.append(sentence)
-        position = match.end()
-
-
-    remainder = block[position:].strip()
-    if remainder:
-        sentences.append(remainder)
-
-
-    pieces: list[str] = []
-    for sentence in sentences:
-        if count_tokens(sentence) <= max_tokens:
-            pieces.append(sentence)
-        else:
-            pieces.extend(_split_at_whitespace(sentence, max_tokens))
-
-
-    return _pack_chunk_pieces(pieces, max_tokens, " ")
-
-
-
-def _split_block(block: str, max_tokens: int) -> list[str]:
-    """Separate table runs from prose before applying budget splitting."""
-    if count_tokens(block) <= max_tokens:
-        return [block]
-
-
-    if _is_table_block(block):
-        return _split_oversized_table(block, max_tokens)
-
-
-    sections: list[tuple[bool, str]] = []
-    current_lines: list[str] = []
-    current_has_pipe: bool | None = None
-
-
-    for line in block.splitlines():
-        has_pipe = "|" in line
-
-
-        if current_lines and has_pipe != current_has_pipe:
-            sections.append((
-                bool(current_has_pipe),
-                "\n".join(current_lines),
-            ))
-            current_lines = []
-
-
-        current_lines.append(line)
-        current_has_pipe = has_pipe
-
-
-    if current_lines:
-        sections.append((
-            bool(current_has_pipe),
-            "\n".join(current_lines),
-        ))
-
-
-    pieces: list[str] = []
-    for has_pipe, section in sections:
-        if has_pipe and _is_table_block(section):
-            pieces.extend(_split_oversized_table(section, max_tokens))
-        else:
-            pieces.extend(_split_prose_block(section, max_tokens))
-
-
-    return _pack_chunk_pieces(pieces, max_tokens, "\n")
-
-
-
-def split_into_chunks(text: str, max_tokens: int) -> list[str]:
-    """Split text into approximately token-budgeted chunks.
-
-    Preserve paragraph boundaries where possible and never split inside a
-    word, URL, or recognized table row. Fenced code blocks are atomic when
-    they fit within the budget; oversized fences are split with balanced
-    opening and closing fences in every resulting chunk.
-    """
-    if not text:
-        return []
-    if max_tokens <= 0:
-        return [text]
-
-    segments = re.split(r"(```.*?(?:```|\Z))", text, flags=re.DOTALL)
-    pieces: list[str] = []
-
-    for index, segment in enumerate(segments):
-        if not segment.strip():
-            continue
-
-        if index % 2 == 1:
-            fence_lines = segment.strip().splitlines()
-            opener = fence_lines[0]
-            body_lines = (
-                fence_lines[1:-1]
-                if len(fence_lines) > 1 and fence_lines[-1].startswith("```")
-                else fence_lines[1:]
-            )
-            body = "\n".join(body_lines)
-
-            fence_overhead = count_tokens(f"{opener}\n```\n")
-            body_budget = max(1, max_tokens - fence_overhead)
-
-            for body_chunk in _split_block(body, body_budget):
-                pieces.append(f"{opener}\n{body_chunk}\n```")
-            continue
-
-        pieces.extend(_split_block(segment, max_tokens))
-
-    return _pack_chunk_pieces(pieces, max_tokens, "\n\n")
-
-
 async def extract_context(
     request: Request,
     url: str,
@@ -574,55 +375,18 @@ async def extract_context(
 
 
     elif mode == "summarize":
-        if count_tokens(raw_text) <= max_tokens:
-            final_text = raw_text
-            chunks = [
-                {
-                    "index": 0,
-                    "text": raw_text,
-                    "approx_tokens": count_tokens(raw_text),
-                    "tokens": count_tokens(raw_text),
-                }
-            ]
-            approx_tokens = count_tokens(final_text)
-            transformation_truncated = content_truncated
-        else:
-            selected: list[str] = []
-            used = 0
-
-
-            for sentence in _sentences(raw_text):
-                sentence_tokens = count_tokens(sentence)
-                if used + sentence_tokens > max_tokens and selected:
-                    break
-                selected.append(sentence)
-                used += sentence_tokens
-
-
-            final_text = " ".join(selected)
-
-
-            # Sentence selection is best-effort. If a single sentence exceeds
-            # the requested budget, hard-cap the delivered text so summarize
-            # mode can never return a massive context payload.
-            char_budget = max_tokens * 4
-            if count_tokens(final_text) > max_tokens and char_budget > 1:
-                cut = final_text[: char_budget - 1]
-                if " " in cut:
-                    cut = cut.rsplit(" ", 1)[0]
-                final_text = cut.rstrip() + "…"
-
-
-            chunks = [
-                {
-                    "index": 0,
-                    "text": final_text,
-                    "approx_tokens": count_tokens(final_text),
-                    "tokens": count_tokens(final_text),
-                }
-            ]
-            approx_tokens = count_tokens(final_text)
-            transformation_truncated = True
+        final_text, was_truncated = summarize_text(raw_text, max_tokens)
+        chunks = [
+            {
+                "index": 0,
+                "text": final_text,
+                "approx_tokens": count_tokens(final_text),
+                "tokens": count_tokens(final_text),
+            }
+        ]
+        approx_tokens = count_tokens(final_text)
+        transformation_truncated = content_truncated or was_truncated
+        if was_truncated:
             limiting_factor = "token_budget"
     else:
         raise ValueError(f"Unknown context mode: {mode}")
@@ -685,6 +449,7 @@ async def extract_context(
         cache=None,
         extractor_version=None,
     )
+
 
 
 
