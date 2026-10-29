@@ -17,6 +17,10 @@ test_context_chunking.py):
 * chunk: oversized fenced code containing "|" (shell pipes) was treated as a
   table / prose and re-joined with spaces. Code is now split by lines.
 * chunk: a heading could end a chunk with its body in the next one.
+* chunk: a line ending in ":" ("For example:") could be separated from the code
+  fence it introduces; now it moves to the next chunk when it fits.
+* chunk: a table split across chunks lost its header row; the header and
+  separator rows are now repeated in every continuation piece.
 
 Integration (edits in bintu_api/context.py):
 
@@ -149,9 +153,25 @@ def _is_table_block(block: str) -> bool:
     return len(lines) >= 2 and all("|" in line for line in lines)
 
 
+_TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$")
+
+
 def _split_oversized_table(block: str, max_tokens: int) -> list[str]:
+    """Split a table by rows. When the table has a header + separator row, repeat
+    both at the top of every piece so each chunk is self-describing for retrieval.
+    Falls back to plain row packing when there is no header or a header plus a
+    single row would not fit the budget."""
     lines = [line for line in block.splitlines() if line.strip()]
-    return _pack_chunk_pieces(lines, max_tokens, "\n")
+    plain = _pack_chunk_pieces(lines, max_tokens, "\n")
+    if len(lines) < 3 or "|" not in lines[0] or not _TABLE_SEPARATOR.match(lines[1]):
+        return plain
+
+    header = "\n".join(lines[:2])
+    rows = lines[2:]
+    if any(count_tokens(f"{header}\n{row}") > max_tokens for row in rows):
+        return plain
+    row_budget = max_tokens - count_tokens(header) - 1
+    return [f"{header}\n{packed}" for packed in _pack_chunk_pieces(rows, row_budget, "\n")]
 
 
 def split_code_body(body: str, max_tokens: int) -> list[str]:
@@ -217,22 +237,41 @@ def split_block(block: str, max_tokens: int) -> list[str]:
 # --------------------------------------------------------------------------
 
 
-def _keep_headings_with_body(chunks: list[str], max_tokens: int) -> list[str]:
-    """Move a heading that ends a chunk to the start of the next one (if it fits)."""
+def _keep_lead_ins(chunks: list[str], max_tokens: int) -> list[str]:
+    """Keep lead-in lines attached to what they introduce.
+
+    * a heading that ends a chunk moves to the start of the next chunk;
+    * a line ending in ":" moves to the next chunk when that chunk starts with a
+      code fence ("For example:" stays with its example).
+    A move is skipped when the next chunk would exceed the budget.
+    """
     chunks = list(chunks)
-    for index in range(len(chunks) - 1):
-        lines = chunks[index].split("\n")
-        if len(lines) > 1 and _HEADING_LINE.match(lines[-1]):
-            moved = f"{lines[-1]}\n{chunks[index + 1]}"
-            if count_tokens(moved) <= max_tokens:
-                chunks[index] = "\n".join(lines[:-1])
-                chunks[index + 1] = moved
+    for _ in range(4):  # headings and colon lines can chain
+        changed = False
+        for index in range(len(chunks) - 1):
+            lines = chunks[index].split("\n")
+            if len(lines) < 2:
+                continue
+            last = lines[-1]
+            introduces_fence = last.rstrip().endswith(":") and chunks[index + 1].startswith("```")
+            if _HEADING_LINE.match(last) or introduces_fence:
+                moved = f"{last}\n{chunks[index + 1]}"
+                if count_tokens(moved) <= max_tokens:
+                    chunks[index] = "\n".join(lines[:-1])
+                    chunks[index + 1] = moved
+                    changed = True
+        if not changed:
+            break
     return chunks
 
 
-def split_into_chunks(text: str, max_tokens: int) -> list[str]:
+_keep_headings_with_body = _keep_lead_ins  # backwards-compatible name
+
+
+def split_into_chunks(text: str, max_tokens: int, *, keep_lead_ins: bool = True) -> list[str]:
     """Token-budgeted chunks. Fences are atomic when they fit, split with balanced
-    fences when they do not. Chunks are joined line-by-line with single newlines."""
+    fences when they do not. Chunks are joined line-by-line with single newlines.
+    Tables that must be split repeat their header row in every piece."""
     if not text:
         return []
     if max_tokens <= 0:
@@ -247,7 +286,8 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
         if segment.strip():
             pieces.extend(split_block(segment, max_tokens))
 
-    return _keep_headings_with_body(_pack_chunk_pieces(pieces, max_tokens, "\n"), max_tokens)
+    chunks = _pack_chunk_pieces(pieces, max_tokens, "\n")
+    return _keep_lead_ins(chunks, max_tokens) if keep_lead_ins else chunks
 
 
 # --------------------------------------------------------------------------
