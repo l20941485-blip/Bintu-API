@@ -1,4 +1,4 @@
-﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
+"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients â€” Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
@@ -109,7 +109,10 @@ PUBLIC_MCP_METHODS = frozenset({"initialize", "tools/list", "ping"})
 SERVER_INSTRUCTIONS = (
     "Token-Sanitized Context Gateway: bintu_scrape_text fetches one public absolute "
     "http(s) URL (1 MiB cap, HTML/XHTML only, nav/ads/footer stripped, article/main "
-    "preferred) and returns readable text capped at 6,000 characters. "
+    "preferred) and returns readable text or chunks. Extraction uses a "
+    "200,000-character ceiling by default; a non-default operator character "
+    "cap may lower that ceiling. Output is then processed according to the "
+    "selected mode and max_tokens budget. Token counts are approximate. "
     "Pass an absolute http(s) URL; private IPs and non-http schemes fail with "
     "invalid_or_unsafe_url. JavaScript rendering is disabled unless the operator "
     "enabled it: if a call fails with render_js_disabled, retry with "
