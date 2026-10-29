@@ -1,6 +1,44 @@
 from bintu_api.scraper import extract_text_result
 
 
+def _assert_table_chunks_preserve_content(chunks, expected_lines, header, separator):
+    output_lines = [
+        line.strip()
+        for chunk in chunks
+        for line in chunk.splitlines()
+        if line.strip()
+    ]
+    headers = {header, separator}
+
+    # Only the two header lines may repeat; all other content stays exact.
+    assert [
+        line for line in output_lines if line not in headers
+    ] == [
+        line for line in expected_lines if line not in headers
+    ]
+
+    assert output_lines.count(header) >= 1
+    assert output_lines.count(header) == output_lines.count(separator)
+
+    for chunk in chunks:
+        lines = [
+            line.strip()
+            for line in chunk.splitlines()
+            if line.strip()
+        ]
+        table_lines = [line for line in lines if "|" in line]
+        if not table_lines:
+            continue
+
+        assert table_lines[:2] == [header, separator]
+        assert table_lines.count(header) == 1
+        assert table_lines.count(separator) == 1
+
+        header_index = lines.index(header)
+        assert lines[header_index + 1] == separator
+
+
+
 def test_chunk_mode_preserves_domains_and_urls():
     html = (
         b"<main>"
@@ -80,7 +118,9 @@ def test_actual_chunker_preserves_extracted_table_rows():
         for line in extracted.splitlines()
         if line.strip()
     ]
-    assert output_lines == expected_lines
+    _assert_table_chunks_preserve_content(
+        chunks, expected_lines, expected_lines[0], expected_lines[1]
+    )
     assert all(count_tokens(chunk) <= budget for chunk in chunks)
 
 
@@ -163,10 +203,12 @@ def test_actual_chunker_preserves_table_embedded_in_prose():
         if line.strip()
     ]
 
-    for row in rows:
-        assert output_lines.count(row) == 1, (
-            f"Table row was split, flattened, or duplicated: {row!r}"
-        )
+    _assert_table_chunks_preserve_content(
+        chunks,
+        [line.strip() for line in text.splitlines() if line.strip()],
+        rows[0],
+        rows[1],
+    )
 
     assert all(count_tokens(chunk) <= budget for chunk in chunks)
 
@@ -211,6 +253,11 @@ def test_actual_chunker_keeps_wide_table_row_intact():
     ]
     table_lines = [line for line in output_lines if "|" in line]
 
-    assert table_lines == rows
+    _assert_table_chunks_preserve_content(
+        chunks,
+        [line.strip() for line in text.splitlines() if line.strip()],
+        rows[0],
+        rows[1],
+    )
     assert sum(chunk.count(target_row) for chunk in chunks) == 1
     assert all(count_tokens(chunk) <= budget for chunk in chunks)

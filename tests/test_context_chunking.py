@@ -1,4 +1,4 @@
-import re
+﻿import re
 
 from bintu_api import context_baseline as old
 from bintu_api import context_chunking as new
@@ -174,4 +174,99 @@ def test_abbreviations_and_initials_do_not_split_sentences():
     pieces = new.sentence_pieces("Dr. Smith met J. Jones in the U.S. office. They talked. Then left.")
     assert pieces == ["Dr. Smith met J. Jones in the U.S. office.", "They talked.", "Then left."]
 
+
+# ---- table header repetition ----------------------------------------------
+
+TABLE_ROWS = [f"row{i:02d} | value {i} | note for row {i}" for i in range(40)]
+TABLE = "Name | Value | Note\n--- | --- | ---\n" + "\n".join(TABLE_ROWS)
+
+
+def test_split_table_repeats_header_in_every_chunk():
+    chunks = new.split_into_chunks(TABLE, 120)
+    assert len(chunks) > 1
+    for chunk in chunks:
+        assert chunk.startswith("Name | Value | Note\n--- | --- | ---\n")
+        assert count(chunk) <= 120
+    rows = [l for c in chunks for l in c.split("\n")[2:]]
+    assert rows == TABLE_ROWS  # every row exactly once, in order
+
+
+def test_old_chunking_loses_the_header_on_continuation_chunks():
+    chunks = old.split_into_chunks(TABLE, 120)
+    assert len(chunks) > 1
+    assert not chunks[1].startswith("Name | Value | Note")
+
+
+def test_table_that_fits_is_not_touched():
+    small = "A | B\n--- | ---\n1 | 2\n3 | 4"
+    assert new.split_into_chunks(small, 500) == [small]
+
+
+def test_table_without_separator_row_keeps_old_behaviour():
+    plain = "\n".join(TABLE_ROWS)
+    chunks = new.split_into_chunks(plain, 120)
+    assert [l for c in chunks for l in c.split("\n")] == TABLE_ROWS
+
+
+def test_row_too_big_for_header_plus_row_falls_back_without_header():
+    huge = "x | " + "word " * 80
+    text = "H1 | H2\n--- | ---\n" + huge + "\nsmall | row"
+    chunks = new.split_into_chunks(text, 60)
+    assert any(huge.strip() in c for c in chunks)  # row kept whole, nothing lost or raised
+
+
+def test_header_repetition_inside_a_mixed_document():
+    text = IANA_LONG_TABLE = (
+        "## Domains\nIntro line here.\n" + TABLE + "\n## After\nClosing paragraph here."
+    )
+    chunks = new.split_into_chunks(text, 120)
+    assert all(count(c) <= 120 for c in chunks)
+    table_chunks = [c for c in chunks if "row" in c.split("\n")[0] or c.startswith("Name | Value")]
+    assert all(c.startswith("Name | Value | Note\n--- | ---") for c in table_chunks)
+
+
+# ---- colon-before-fence cohesion ------------------------------------------
+
+
+def _doc_with_intro(filler_lines):
+    filler = "\n".join(f"Filler paragraph {i} " + "lorem ipsum dolor sit amet " * 3 for i in range(filler_lines))
+    return filler + "\nFor example:\n```python\nprint('a')\nprint('b')\nprint('c')\n```\nAfter the example."
+
+
+def _colon_split(chunks):
+    return any(
+        chunk.split("\n")[-1].rstrip().endswith(":") and chunks[i + 1].startswith("```")
+        for i, chunk in enumerate(chunks[:-1])
+    )
+
+
+def test_intro_line_is_not_separated_from_its_fence():
+    separated_without_fix = False
+    for filler_lines in range(1, 14):
+        text = _doc_with_intro(filler_lines)
+        without = new.split_into_chunks(text, 90, keep_lead_ins=False)
+        separated_without_fix |= _colon_split(without)
+        with_fix = new.split_into_chunks(text, 90)
+        assert not _colon_split(with_fix), filler_lines
+        assert all(count(c) <= 90 and fences_balanced(c) for c in with_fix)
+        squash = lambda s: re.sub(r"\s+", " ", s).strip()
+        assert squash("\n".join(with_fix)) == squash(text)  # nothing lost or reordered
+    assert separated_without_fix  # the test really exercises the bug
+
+
+def test_heading_then_intro_then_fence_chain_moves_together():
+    text = "Filler " * 20 + "\n## Usage\nRun it like this:\n```shell\n$ run --now\n```"
+    for budget in (40, 50, 60, 80):
+        chunks = new.split_into_chunks(text, budget)
+        assert not _colon_split(chunks)
+        for chunk in chunks[:-1]:
+            assert not re.match(r"^#{1,6}\s", chunk.split("\n")[-1]) or len(chunk.split("\n")) == 1
+
+
+def test_intro_is_left_alone_when_moving_would_break_the_budget():
+    big_fence = "```python\n" + "\n".join(f"line_{i} = {i}" for i in range(20)) + "\n```"
+    text = "Some text here.\nFor example:\n" + big_fence
+    budget = count(big_fence) + 2  # fence fits alone; fence + intro line does not
+    chunks = new.split_into_chunks(text, budget)
+    assert all(count(c) <= budget for c in chunks)
 
