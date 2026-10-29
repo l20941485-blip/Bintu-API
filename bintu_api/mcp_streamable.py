@@ -121,7 +121,7 @@ SERVER_INSTRUCTIONS = (
     "Every mode returns the unified JSON envelope {mode, tokens, chunk_count, "
     "cache_hit, source_url, extracted_at, tokens_saved_estimate, truncated, chunks} "
     "for predictable context budgets. This server is stateless: no MCP sessions, "
-    "no subscriptions, no SSE streams â€” POST one JSON-RPC message per request; "
+    "no subscriptions, no SSE streams; POST one JSON-RPC message per request; "
     "GET returns an empty SSE stream. Discovery (initialize, tools/list, ping) is "
     "public; tools/call requires X-API-Key or Authorization: Bearer."
 )
