@@ -1139,6 +1139,61 @@ def _pick_content_root(soup, *, min_ratio: float = 0.3):
     return soup
 
 
+PRE_NL = "\x01"
+PRE_SP = "\x02"
+PRE_TAB = "\x03"
+
+_LANG_RE = re.compile(r"(?:language|lang|highlight(?:-source)?)-([A-Za-z0-9+#_-]+)")
+
+
+def _fence_language(pre) -> str:
+    """Best-effort language tag from <pre>, <code>, or wrapper classes."""
+    candidates = [pre]
+    code = pre.find("code")
+    if code is not None:
+        candidates.append(code)
+    candidates.extend(list(pre.parents)[:3])
+    for node in candidates:
+        classes = node.get("class", []) if hasattr(node, "get") else []
+        for name in classes if isinstance(classes, list) else [classes]:
+            match = _LANG_RE.search(str(name))
+            if match:
+                language = match.group(1).lower()
+                return "" if language in {"default", "none", "text", "plain"} else language
+    return ""
+
+
+def protect_pre_blocks(root, boundary: str) -> int:
+    """Replace <pre> blocks with fenced placeholders that survive normalization."""
+    replaced = 0
+    for pre in root.find_all("pre"):
+        code = pre.get_text().replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+        if not code.strip():
+            pre.decompose()
+            continue
+        shielded = (
+            code.replace("\u00a0", " ")
+            .replace("\n", PRE_NL)
+            .replace(" ", PRE_SP)
+            .replace("\t", PRE_TAB)
+        )
+        fence = f"```{_fence_language(pre)}{PRE_NL}{shielded}{PRE_NL}```"
+        pre.replace_with(NavigableString(f"{boundary}{fence}{boundary}"))
+        replaced += 1
+    return replaced
+
+
+def restore_pre_placeholders(text: str) -> str:
+    """Restore whitespace shielded by protect_pre_blocks."""
+    return text.replace(PRE_NL, "\n").replace(PRE_SP, " ").replace(PRE_TAB, "\t")
+
+
+def close_open_fence(text: str) -> str:
+    """Close a Markdown code fence left open by truncation."""
+    open_fences = sum(1 for line in text.split("\n") if line.startswith("```")) % 2
+    return f"{text}\n```" if open_fences else text
+
+
 def _truncate_extracted_text(
     text: str,
     max_characters: int,
@@ -1149,7 +1204,10 @@ def _truncate_extracted_text(
             truncated=False,
         )
 
-    truncated_text = text[:max_characters]
+    # Reserve room for a closing code fence if truncation cuts one open.
+    limit = max_characters - 4 if "```" in text else max_characters
+    truncated_text = text[:limit]
+
     last_boundary = max(
         truncated_text.rfind("\n"),
         truncated_text.rfind(" "),
@@ -1157,6 +1215,8 @@ def _truncate_extracted_text(
 
     if last_boundary > 0:
         truncated_text = truncated_text[:last_boundary].rstrip()
+
+    truncated_text = close_open_fence(truncated_text)
 
     return ExtractedText(
         text=truncated_text,
@@ -1384,6 +1444,9 @@ def extract_text_result(
 
 
     for anchor in soup.find_all("a", href=True):
+        if anchor.find_parent("pre"):
+            continue
+
         label = re.sub(
             r"\s+",
             " ",
@@ -1451,6 +1514,8 @@ def extract_text_result(
 
 
     for root in content_roots:
+        protect_pre_blocks(root, boundary)
+
         for row in root.find_all("tr"):
             cells = row.find_all(
                 ["th", "td"],
@@ -1533,7 +1598,7 @@ def extract_text_result(
 
 
     text = "\n".join(lines)
-
+    text = restore_pre_placeholders(text)
 
     bs4_text = text.strip()
     minimum_useful_text = min(120, max_characters)

@@ -385,32 +385,43 @@ def _split_block(block: str, max_tokens: int) -> list[str]:
 def split_into_chunks(text: str, max_tokens: int) -> list[str]:
     """Split text into approximately token-budgeted chunks.
 
-
-    Preserve paragraph boundaries where possible and never split inside
-    a word, URL, or recognized table row. An atomic unit larger than
-    max_tokens is returned intact as an oversized chunk.
-
-
-    Counts use the configured approximate token method, not a tokenizer.
+    Preserve paragraph boundaries where possible and never split inside a
+    word, URL, or recognized table row. Fenced code blocks are atomic when
+    they fit within the budget; oversized fences are split with balanced
+    opening and closing fences in every resulting chunk.
     """
     if not text:
         return []
     if max_tokens <= 0:
         return [text]
 
+    segments = re.split(r"(```.*?(?:```|\Z))", text, flags=re.DOTALL)
+    pieces: list[str] = []
 
-    blocks = [
-        block.strip()
-        for block in re.split(r"\n\s*\n", text)
-        if block.strip()
-    ]
-    pieces = [
-        piece
-        for block in blocks
-        for piece in _split_block(block, max_tokens)
-    ]
+    for index, segment in enumerate(segments):
+        if not segment.strip():
+            continue
+
+        if index % 2 == 1:
+            fence_lines = segment.strip().splitlines()
+            opener = fence_lines[0]
+            body_lines = (
+                fence_lines[1:-1]
+                if len(fence_lines) > 1 and fence_lines[-1].startswith("```")
+                else fence_lines[1:]
+            )
+            body = "\n".join(body_lines)
+
+            fence_overhead = count_tokens(f"{opener}\n```\n")
+            body_budget = max(1, max_tokens - fence_overhead)
+
+            for body_chunk in _split_block(body, body_budget):
+                pieces.append(f"{opener}\n{body_chunk}\n```")
+            continue
+
+        pieces.extend(_split_block(segment, max_tokens))
+
     return _pack_chunk_pieces(pieces, max_tokens, "\n\n")
-
 
 
 async def extract_context(

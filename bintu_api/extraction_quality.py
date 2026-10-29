@@ -21,8 +21,8 @@ def truncate_to_token_budget(text: str, max_tokens: int | None) -> tuple[str, bo
     """Return ``(text, truncated)`` where ``estimate_tokens(text) <= max_tokens``.
 
     ``max_tokens=None`` means no caller budget and returns the input unchanged.
-    Truncation prefers a line boundary, then a word boundary, and avoids leaving
-    a dangling URL fragment.
+    Truncation prefers a line boundary, then a word boundary, avoids leaving a
+    dangling URL fragment, and closes a Markdown code fence it cuts through.
     """
     if max_tokens is None:
         return text, False
@@ -34,6 +34,9 @@ def truncate_to_token_budget(text: str, max_tokens: int | None) -> tuple[str, bo
         return text, False
 
     max_chars = max_tokens * 4
+    if "```" in text:
+        max_chars -= 4  # Reserve room to close a fence cut by truncation.
+
     window = text[:max_chars]
 
     cut = window.rfind("\n")
@@ -46,8 +49,16 @@ def truncate_to_token_budget(text: str, max_tokens: int | None) -> tuple[str, bo
     window = window.rstrip()
     window = re.sub(r"\((?:https?://)?[^\s)]*$", "", window).rstrip()
 
+    if _open_fence(window):
+        window = window + "\n```"
+
     assert estimate_tokens(window) <= max_tokens
     return window, True
+
+
+def _open_fence(text: str) -> bool:
+    """True when text contains an unclosed Markdown code fence."""
+    return sum(1 for line in text.split("\n") if line.startswith("```")) % 2 == 1
 
 
 # ---------------------------------------------------------------------------
@@ -98,17 +109,20 @@ def _normalize_title(title: str) -> str:
 
 
 def dedupe_blocks(text: str) -> tuple[str, int]:
-    """Remove repeated Markdown story blocks.
+    """Remove repeated Markdown story blocks without treating code as headings.
 
-    A block begins at a Markdown heading. Blocks are duplicates when they share
-    a normalized heading and either the same normalized URL set or, for blocks
-    without URLs, the same normalized body.
+    A block begins at a Markdown heading outside a fenced code block. Blocks
+    are duplicates when they share a normalized heading and either the same
+    normalized URL set or, for blocks without URLs, the same normalized body.
     """
     lines = text.split("\n")
     blocks: list[list[str]] = [[]]
+    in_fence = False
 
     for line in lines:
-        if _HEADING_RE.match(line):
+        if line.startswith("```"):
+            in_fence = not in_fence
+        if not in_fence and _HEADING_RE.match(line):
             blocks.append([line])
         else:
             blocks[-1].append(line)
@@ -158,11 +172,15 @@ _INLINE_HEADING_RE = re.compile(
 
 
 def normalize_markdown(text: str) -> str:
-    """Place glued Markdown headings on their own line."""
-    text = _INLINE_HEADING_RE.sub("\n", text)
-    text = re.sub(r"[ \t]+\n", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    """Place glued Markdown headings on their own line without altering code."""
+    parts = re.split(r"(```.*?(?:```|\Z))", text, flags=re.DOTALL)
+
+    for index in range(0, len(parts), 2):
+        part = _INLINE_HEADING_RE.sub("\n", parts[index])
+        part = re.sub(r"[ \t]+\n", "\n", part)
+        parts[index] = re.sub(r"\n{3,}", "\n\n", part)
+
+    return "".join(parts).strip()
 
 
 # ---------------------------------------------------------------------------
