@@ -2,8 +2,9 @@ services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
+      - PORT=8000
       - API_KEY=${API_KEY:-}
       - MCP_API_KEY=${MCP_API_KEY:-}
       - RAPIDAPI_PROXY_SECRET=${RAPIDAPI_PROXY_SECRET:-}
@@ -17,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     restart: unless-stopped
     profiles:
       - redis
