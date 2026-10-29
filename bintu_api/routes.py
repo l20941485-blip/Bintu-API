@@ -18,6 +18,7 @@ from bintu_api.auth import (
     verify_supabase_user,
 )
 from bintu_api.context import (
+    DEFAULT_MAX_TEXT_CHARACTERS,
     MAX_EXTRACTION_CHARACTERS,
     _decode_source_text,
     resolve_effective_char_cap,
@@ -735,6 +736,16 @@ async def _fetch_and_extract(
     Raises the same HTTPException and scraper exceptions as the REST endpoint.
     """
     settings = request.app.state.settings
+    extraction_cap = (
+        MAX_EXTRACTION_CHARACTERS
+        if settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
+        else min(settings.max_text_characters, MAX_EXTRACTION_CHARACTERS)
+    )
+    # Persistent rows share one canonical extraction policy.
+    # Custom operator caps use raw-HTML memory caching only.
+    persistent_cache_enabled = (
+        settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
+    )
     database_client = getattr(request.app.state, "supabase_client", None)
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
@@ -744,7 +755,11 @@ async def _fetch_and_extract(
     )
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
-    if database_client is not None and not skip_cache:
+    if (
+        database_client is not None
+        and persistent_cache_enabled
+        and not skip_cache
+    ):
         try:
             result = await asyncio.wait_for(
                 get_cached_markdown(
@@ -819,14 +834,7 @@ async def _fetch_and_extract(
 
     extracted = extract_text_result(
         document.body,
-        (
-            MAX_EXTRACTION_CHARACTERS
-            if mode == "chunk"
-            else resolve_effective_char_cap(
-                max_tokens,
-                settings.max_text_characters,
-            )
-        ),
+        extraction_cap,
         include_nav=include_nav,
         include_header=include_header,
         include_footer=include_footer,
@@ -855,7 +863,11 @@ async def _fetch_and_extract(
         extracted_at=extracted_at,
     )
 
-    if database_client is not None and persist:
+    if (
+        database_client is not None
+        and persistent_cache_enabled
+        and persist
+    ):
         try:
             await asyncio.wait_for(
                 upsert_cached_markdown(
