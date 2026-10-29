@@ -9,3 +9,4 @@ httpx==0.28.1
 pytest
 trafilatura==2.3.1
 starlette==1.10.0
+python-dotenv
