@@ -33,6 +33,7 @@ Integration (three small edits in extract_text_result):
 from __future__ import annotations
 
 import re
+import unicodedata
 from urllib.parse import urlsplit
 
 PERMALINK_SELECTOR = ", ".join(
@@ -56,6 +57,18 @@ PERMALINK_SELECTOR = ", ".join(
 _PERMALINK_GLYPHS = {"\u00b6", "#", "\u00a7", "\U0001f517", "\u00a4"}  # pilcrow, hash, section, link emoji
 _HEADINGISH = ["h1", "h2", "h3", "h4", "h5", "h6", "dt", "caption", "summary"]
 
+_ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff"
+
+
+def _is_permalink_text(text: str) -> bool:
+    text = text.strip(_ZERO_WIDTH + " \t\r\n")
+    if not text:
+        return True
+    if text in _PERMALINK_GLYPHS:
+        return True
+    return len(text) == 1 and unicodedata.category(text) == "Co"
+
+
 
 def strip_permalinks(soup) -> int:
     """Remove permalink anchors. Returns how many were removed.
@@ -69,7 +82,7 @@ def strip_permalinks(soup) -> int:
         if anchor.find_parent(["pre", "code"]):
             continue
         label = anchor.get_text(strip=True)
-        if label and label not in _PERMALINK_GLYPHS:
+        if not _is_permalink_text(label):
             anchor.unwrap()
         else:
             anchor.decompose()
@@ -77,7 +90,7 @@ def strip_permalinks(soup) -> int:
     for anchor in soup.find_all("a", href=True):
         if (
             anchor.find_parent(["pre", "code"]) is None
-            and anchor.get_text(strip=True) in _PERMALINK_GLYPHS
+            and _is_permalink_text(anchor.get_text())
             and anchor["href"].strip().startswith("#")
             and anchor.find_parent(_HEADINGISH) is not None
         ):
@@ -114,6 +127,6 @@ def same_document(base_url: str | None, resolved) -> bool:
     base = urlsplit(base_url)
 
     def key(parts):
-        return (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/") or "/", parts.query)
+        return (parts.scheme.lower(), parts.netloc.lower(), parts.path or "/", parts.query)
 
     return key(base) == key(resolved)
