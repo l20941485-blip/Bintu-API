@@ -369,7 +369,7 @@ async def extract_context(
             for index, chunk in enumerate(chunk_strings)
         ]
         final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
-        approx_tokens = count_tokens(final_text)
+        approx_tokens = sum(chunk["tokens"] for chunk in chunks)
         split = len(chunk_strings) > 1
         transformation_truncated = content_truncated
 
