@@ -1,19 +1,84 @@
 # Bintu Data Extraction API
 
+## Quickstart
+
+### 1. Authenticate
+
+Send your service key in the `X-API-Key` header. Do not put API keys in URLs.
+
+```powershell
+$BaseUrl = "https://your-bintu-api.onrender.com"
+$ApiKey  = $env:BINTU_API_KEY
+```
+
+### 2. Extract readable text
+
+```powershell
+$url = "https://example.com"
+
+$response = Invoke-RestMethod `
+  -Method Get `
+  -Uri "$BaseUrl/api/v1/scrape/text?url=$([uri]::EscapeDataString($url))" `
+  -Headers @{ "X-API-Key" = $ApiKey }
+
+$response.text
+$response.approx_tokens
+$response.truncated
+```
+
+The response includes `text`, an approximate token count, and `truncated`. If a page returns very little readable text, the response may include `low_yield: true` and a short `yield_hint`, such as a note that the page appears to require JavaScript.
+
+### 3. Use MCP
+
+MCP discovery is available without a key. Tool execution requires either the scoped `MCP_API_KEY` or the master `API_KEY`, sent as `X-API-Key` or `Authorization: Bearer`.
+
+```powershell
+$body = @{
+  jsonrpc = "2.0"
+  id = 1
+  method = "tools/call"
+  params = @{
+    name = "bintu_scrape_text"
+    arguments = @{
+      url = "https://example.com"
+      max_tokens = 2000
+    }
+  }
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/mcp" `
+  -Headers @{
+    "X-API-Key" = $ApiKey
+    "Accept" = "application/json, text/event-stream"
+  } `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+### Common responses
+
+| Situation | What to check |
+|---|---|
+| `401 invalid_api_key` | Send a valid REST `X-API-Key`; an MCP-only key does not unlock REST routes. |
+| `truncated: true` | Raise `max_tokens`, or request the next chunk using the continuation endpoint. |
+| `low_yield: true` | Try a print, AMP, RSS, or server-rendered version of the page. |
+
 Bintu is a FastAPI-based API for extracting readable text from public HTML pages. It limits upstream responses to 1 MiB, accepts HTML/XHTML only, pins outbound connections to validated public IPs, and applies a 60-request per-minute process-local burst limit.
 
 ## Live API
 
 The service is live on Render and ready to test:
 
-- Base URL: [https://bintu-api.onrender.com](https://bintu-api.onrender.com)
-- OpenAPI docs: [https://bintu-api.onrender.com/docs](https://bintu-api.onrender.com/docs)
-- Health check: [https://bintu-api.onrender.com/healthz](https://bintu-api.onrender.com/healthz)
+- Base URL: https://bintu-api.onrender.com
+- OpenAPI docs: https://bintu-api.onrender.com/docs
+- Health check: https://bintu-api.onrender.com/healthz
 
 ### Health check
 
 ```bash
-curl [https://bintu-api.onrender.com/healthz](https://bintu-api.onrender.com/healthz)
+curl https://bintu-api.onrender.com/healthz
 ```
 
 Example response:
@@ -29,7 +94,7 @@ Example response:
 For direct access to the deployed service, set your API key in PowerShell. The secure prompt avoids echoing the key as you type:
 
 ```powershell
-$env:BINTU_BASE_URL = "[https://bintu-api.onrender.com](https://bintu-api.onrender.com)"
+$env:BINTU_BASE_URL = "https://bintu-api.onrender.com"
 $secure = Read-Host "Paste your Render API_KEY" -AsSecureString
 $env:BINTU_API_KEY = [System.Net.NetworkCredential]::new("", $secure).Password
 Remove-Variable secure
@@ -38,7 +103,7 @@ Remove-Variable secure
 Send an authenticated scrape request:
 
 ```powershell
-$target = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
+$target = "https://www.iana.org/domains/reserved"
 $encodedUrl = [uri]::EscapeDataString($target)
 $headers = @{ "X-API-Key" = $env:BINTU_API_KEY }
 
@@ -67,7 +132,7 @@ Successful response:
 
 ```json
 {
-  "url": "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)",
+  "url": "https://www.iana.org/domains/reserved",
   "text": "# IANA-managed Reserved Domains\n## Example domains\n...",
   "truncated": false
 }
@@ -93,7 +158,7 @@ Use `POST /api/v1/scrape/chunks` when the extracted page needs to be divided int
 Set the API key as shown in [Scrape text](#scrape-text), then send:
 
 ```powershell
-$target = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
+$target = "https://www.iana.org/domains/reserved"
 
 $body = @{
     url = $target
@@ -117,7 +182,7 @@ The response contains ordered chunks:
 
 ```json
 {
-  "url": "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)",
+  "url": "https://www.iana.org/domains/reserved",
   "mode": "chunk",
   "max_tokens": 1000,
   "split": true,
@@ -328,7 +393,7 @@ Only scrape content you are authorized to access. Respect the target site's term
 `POST /mcp` implements the standard MCP Streamable HTTP transport (protocol `2025-11-25`, also accepting `2025-06-18`/`2025-03-26`), so any MCP client can call the scraper. It is stateless: no `Mcp-Session-Id` is issued, `GET` answers with an empty SSE stream (`GET /sse` and `GET /mcp/sse` are compatibility aliases for gateways that probe a dedicated SSE path), `DELETE`/`PUT`/`PATCH` return `405`, and each JSON-RPC message is answered with a single `application/json` response. Requests after `initialize` must carry the negotiated `MCP-Protocol-Version` header (unknown versions get `400`), and a mismatched `Origin` header is rejected with `403` against DNS rebinding. `initialize`, `tools/list`, and `ping` are public discovery methods (protocol negotiation, tool schemas, liveness — no extraction), so gateway health-checkers, marketplace audits, and Claude Web — none of which can send headers during onboarding — complete instantly; `tools/call` and every other method require `X-API-Key` or `Authorization: Bearer` with the scoped `MCP_API_KEY` or the master `API_KEY`, and a missing or invalid credential on an execution call answers `401` with `{"code": "invalid_api_key", "message": "A premium subscription or valid X-API-Key is required to execute scrapes."}` while all billable work stays behind auth.
 
 - Direct — Claude web or Desktop: custom connector URL `https://bintu-api.onrender.com/mcp` with request header `X-API-Key: <MCP_API_KEY>`.
-- Direct — Claude Code: `claude mcp add --transport http bintu [https://bintu-api.onrender.com/mcp](https://bintu-api.onrender.com/mcp) --header "X-API-Key: <MCP_API_KEY>"`.
+- Direct — Claude Code: `claude mcp add --transport http bintu https://bintu-api.onrender.com/mcp --header "X-API-Key: <MCP_API_KEY>"`.
 - MCPize (subscribers): connect to `https://bintu-web-reader.mcpize.run` with your MCPize `sk_…` key — the gateway injects the upstream token. No RapidAPI subscription needed; billing lives on the MCPize listing.
 
 `MCP_API_KEY` is the optional scoped key set in the Render dashboard. It is accepted only on the MCP surfaces (`/mcp`, `/mcp/tools`, `/mcp/tools/call`) and never on the REST routes or `/metrics`, so it can be shared with connector users and rotated without touching the master `API_KEY`. While `MCP_API_KEY` is unset, the master `API_KEY` keeps working on `/mcp` exactly as before.
@@ -402,7 +467,7 @@ $readerBaseUrl = "http://127.0.0.1:8000"
 $headers = @{ "X-API-Key" = $env:BINTU_API_KEY }
 
 $body = @{
-    url = "[https://www.iana.org/domains/reserved](https://www.iana.org/domains/reserved)"
+    url = "https://www.iana.org/domains/reserved"
     max_tokens = 1000
     include_nav = $false
     include_header = $false
