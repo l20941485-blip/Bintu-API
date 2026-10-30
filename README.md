@@ -625,3 +625,7 @@ Chunking is covered by offline unit tests for token budgets, word boundaries, an
 The synthetic golden fixtures in `tests/fixtures/extraction_quality/` cover article, navigation-heavy, and table-heavy HTML without relying on third-party sites. Update a fixture and its expected `.txt` output only after reviewing an intentional extraction change.
 
 GitHub Actions runs the offline test suite for pushes and pull requests. Render is configured to deploy linked commits only after CI checks pass. After deploying, verify real upstream fetching with `python smoke_check.py` (set `BINTU_BASE_URL` and `BINTU_API_KEY`); mocked tests cannot catch upstream HTTP regressions on their own.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup, tests, live smoke checks, and contribution expectations.
