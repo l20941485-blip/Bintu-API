@@ -46,12 +46,10 @@ _JS_MARKERS = (
 )
 
 HINT_JAVASCRIPT = (
-    "Very little text was extracted from a large page that appears to be rendered by JavaScript. "
-    "JavaScript rendering is not available here; try a server-rendered, print, AMP or RSS version of the URL."
+    "This page returned little readable text because it appears to require JavaScript."
 )
 HINT_LITTLE_TEXT = (
-    "Very little text was extracted from a large page. It may need JavaScript, require a login, "
-    "or consist mostly of images and scripts."
+    "This page returned little readable text. It may require JavaScript or a login."
 )
 
 
