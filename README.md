@@ -637,3 +637,7 @@ See [docs/OPERATIONS.md](./docs/OPERATIONS.md) for deployment checks, monitoring
 ## Support
 
 See [docs/SUPPORT.md](./docs/SUPPORT.md) for troubleshooting authentication, URL restrictions, rate limits, truncation, low-yield pages, and upstream failures.
+
+## API reference
+
+See [docs/API_REFERENCE.md](./docs/API_REFERENCE.md) for the consolidated REST and MCP endpoint reference, request fields, response fields, limits, and error codes.
