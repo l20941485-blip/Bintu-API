@@ -201,6 +201,23 @@ The response contains ordered chunks:
 
 Like the text endpoint, chunk mode retains up to 200,000 extracted characters. If that ceiling is reached, the response is truncated before chunking and returns `truncated: true` with `limiting_factor: "char_cap"`.
 
+### Response fields
+
+| Field | Meaning |
+|---|---|
+| `url` | Requested or resolved source URL. |
+| `text` | Readable extracted text or Markdown. |
+| `approx_tokens` | Approximate token count of `text`; calculated as `ceil(characters / 4)`. |
+| `tokens` | Deprecated alias for `approx_tokens`; retained for backward compatibility. |
+| `tokens_saved_estimate` | Approximate tokens saved relative to the fetched HTML; an estimate, not a billing figure. |
+| `truncated` | `true` when a character or token limit shortened the returned content. |
+| `limiting_factor` | Which limit applied: `char_cap`, `token_budget`, or `none`. |
+| `cache_hit` | `true` when the response came from either cache layer. |
+| `cache_layer` | `none`, `memory`, or `persistent`. |
+| `low_yield` | `true` when a large page produced very little readable text. |
+| `yield_hint` | Short explanation when `low_yield` is true. |
+| `provenance` | Optional request, fetch, and cache metadata. |
+
 ### Common errors
 
 Errors use a JSON `detail` object with `code`, `message`, and, when applicable, `hint`. For example, a missing or invalid key returns HTTP 401:
