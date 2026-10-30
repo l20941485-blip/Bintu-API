@@ -47,6 +47,7 @@ PARITY_URL = "https://example.com/parity"
 
 MCP_ENVELOPE_FIELDS = {
     "deduplicated_count",
+    "low_yield",
     "mode",
     "tokens",
     "approx_tokens",
