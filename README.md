@@ -629,3 +629,7 @@ GitHub Actions runs the offline test suite for pushes and pull requests. Render 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup, tests, live smoke checks, and contribution expectations.
+
+## Operations
+
+See [docs/OPERATIONS.md](./docs/OPERATIONS.md) for deployment checks, monitoring, incident response, and credential rotation.
