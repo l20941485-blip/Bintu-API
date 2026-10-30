@@ -39,6 +39,16 @@ from bintu_api.context import (
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
+from bintu_api.mcp_descriptions import (
+    CACHE_DESCRIPTION,
+    MAX_TOKENS_DESCRIPTION,
+    MODE_DESCRIPTION,
+    OUTPUT_SCHEMA_EXTRA_PROPERTIES,
+    PERSIST_DESCRIPTION,
+    RENDER_JS_DESCRIPTION,
+    TOOL_DESCRIPTION as NEW_TOOL_DESCRIPTION,
+    URL_DESCRIPTION,
+)
 
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
@@ -48,31 +58,7 @@ logger = logging.getLogger("bintu_api.mcp")
 TOOL_NAME = "bintu_scrape_text"
 TOOL_TITLE = "Bintu Scrape Text"
 
-TOOL_DESCRIPTION = (
-    "Fetch one public absolute HTTP or HTTPS URL and extract readable text. "
-    "Only HTML/XHTML is supported, with a 1 MiB decoded-body limit and "
-    "extracted text capped at 6,000 characters. Article/main content is "
-    "preferred and common page furniture is omitted. "
-    "Default mode=scrape returns the extraction envelope. "
-    "Use mode=chunk (accepted alias: chunked) for approximately budgeted "
-    "chunks, or mode=summarize for sentence-based truncation. "
-    "Chunking preserves words, URLs, and recognized table rows; an intact "
-    "URL, word, or table row may exceed max_tokens. Whitespace can be "
-    "normalized during chunking. "
-    "tokens and approx_tokens are character-based sizing estimates, not "
-    "tokenizer counts or exact billing measurements. "
-    "tokens_saved_estimate compares source HTML and delivered text estimates "
-    "when the baseline is available; cached results may preserve the original "
-    "extraction economics. Savings are not limited to summarize mode. "
-    "truncated reports content truncation; split reports multiple chunks. "
-    "The character cap applies before mode transformation. max_tokens is "
-    "ignored in scrape mode. "
-    "Set cache=false to bypass cache reads; successful fresh results may "
-    "still be written to cache. "
-    "JavaScript rendering is available only when enabled by the operator. "
-    "If render_js_disabled is returned, retry with render_js=false. "
-    "Execution failures are reported in-band with isError=true."
-)
+TOOL_DESCRIPTION = NEW_TOOL_DESCRIPTION
 
 TOOL_ANNOTATIONS = {
     "title": TOOL_TITLE,
@@ -259,6 +245,14 @@ TOOL_INPUT_SCHEMA = {
     "required": ["url"],
     "additionalProperties": False,
 }
+
+TOOL_INPUT_SCHEMA["properties"]["url"]["description"] = URL_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["mode"]["description"] = MODE_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["max_tokens"]["description"] = MAX_TOKENS_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["cache"]["description"] = CACHE_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["persist"]["description"] = PERSIST_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["render_js"]["description"] = RENDER_JS_DESCRIPTION
+TOOL_OUTPUT_SCHEMA["properties"].update(OUTPUT_SCHEMA_EXTRA_PROPERTIES)
 
 
 class ToolCallRequest(BaseModel):

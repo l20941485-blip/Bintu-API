@@ -38,6 +38,7 @@ from bintu_api.observability import (
     record_cache_tokens_saved,
 )
 from bintu_api.scraper import FetchedHTML, extract_text_result
+from bintu_api.yield_check import assess_yield
 from bintu_api.settings import Settings
 from bintu_api.schemas import CacheInfo
 
@@ -137,6 +138,8 @@ class ContextResult:
     tokens_saved_estimate: int = 0
     truncated: bool = False
     deduplicated_count: int = 0
+    low_yield: bool = False
+    yield_hint: str | None = None
     split: bool = False
     # Provenance (added in Phase D): additive for both REST and MCP surfaces.
     request_id: str | None = None
@@ -325,6 +328,12 @@ async def extract_context(
     raw_text = strip_noise_lines(raw_text)
     raw_text = normalize_markdown(raw_text)
     raw_text, deduplicated_count = dedupe_blocks(raw_text)
+
+    assessment = assess_yield(
+        count_tokens(raw_text),
+        html_tokens,
+        html_source_text,
+    )
     
     # --- Mode transformation -----------------------------------------------
     raw_tokens = count_tokens(raw_text)
@@ -428,6 +437,8 @@ async def extract_context(
         html_tokens=html_tokens,
         token_method=TOKEN_METHOD,
         deduplicated_count=deduplicated_count,
+        low_yield=assessment.low_yield,
+        yield_hint=assessment.hint,
         limiting_factor=resolved_limiting_factor,
         tokens=approx_tokens,
         chunk_count=len(chunks),
