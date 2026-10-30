@@ -360,7 +360,11 @@ async def call_tool(
     if payload.name != TOOL_NAME:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown MCP tool: {payload.name}",
+            detail={
+                "code": "unknown_tool",
+                "message": f"Unknown MCP tool: {payload.name}.",
+                "hint": f"Use the supported tool: {TOOL_NAME}.",
+            },
         )
 
     try:
@@ -368,7 +372,12 @@ async def call_tool(
     except ValidationError as error:
         raise HTTPException(
             status_code=400,
-            detail=error.errors(),
+            detail={
+                "code": "invalid_tool_arguments",
+                "message": "The tool arguments are invalid.",
+                "hint": "Check the tool input schema and retry.",
+                "errors": error.errors(),
+            },
         ) from error
 
     if arguments.render_js and not settings.render_js_enabled:
