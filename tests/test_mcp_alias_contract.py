@@ -132,3 +132,17 @@ def test_canonical_max_tokens_wins_over_alias(client: TestClient):
 
     data = envelope(result)
     assert data["mode"] == "chunk"
+
+
+def test_input_schema_advertises_chunked_alias():
+    from bintu_api.mcp import TOOL_INPUT_SCHEMA
+
+    mode = TOOL_INPUT_SCHEMA["properties"]["mode"]
+
+    assert mode["enum"] == [
+        "scrape",
+        "chunk",
+        "summarize",
+        "chunked",
+    ]
+    assert "chunk_token_budget" in TOOL_INPUT_SCHEMA["properties"]

@@ -168,7 +168,7 @@ class TokenMeteringTests(unittest.TestCase):
         # Strict enum stays canonical so validators don't reject installed clients.
         self.assertEqual(
             TOOL_INPUT_SCHEMA["properties"]["mode"]["enum"],
-            ["scrape", "chunk", "summarize"],
+            ["scrape", "chunk", "summarize", "chunked"],
         )
 
     def test_scrape_returns_unified_envelope(self) -> None:
