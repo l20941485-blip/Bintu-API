@@ -12,6 +12,24 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 ### Added
 
+- REST `/api/v1/scrape/text` responses now include `cache_hit`,
+  matching the cache signal already exposed by MCP responses.
+- Ready-to-run REST examples for Python and Node.js, plus a Python MCP
+  `tools/call` example, under `examples/`.
+- Deployment smoke test at `scripts/smoke_test.ps1` for health, REST
+  extraction, and MCP tool discovery.
+- Contributor onboarding guide in `CONTRIBUTING.md`.
+- README quickstart, usage examples, response-field reference, and
+  contributor documentation.
+
+### Changed
+
+- Simplified low-yield hints so they are shorter and more suitable for
+  direct display to API and agent users.
+- Legacy MCP unknown-tool and invalid-argument failures now return the
+  standard structured error contract with `code`, `message`, and `hint`.
+- Documented `unknown_tool` and `invalid_tool_arguments` MCP error codes.
+
 - `persist=false` opt-out for REST, mobile, and MCP scrape requests,
   preventing a fresh successful result from being written to the
   persistent cache.
