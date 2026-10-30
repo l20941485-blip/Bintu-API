@@ -633,3 +633,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup, tests, live smoke chec
 ## Operations
 
 See [docs/OPERATIONS.md](./docs/OPERATIONS.md) for deployment checks, monitoring, incident response, and credential rotation.
+
+## Support
+
+See [docs/SUPPORT.md](./docs/SUPPORT.md) for troubleshooting authentication, URL restrictions, rate limits, truncation, low-yield pages, and upstream failures.
