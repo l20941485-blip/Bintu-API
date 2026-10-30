@@ -685,6 +685,12 @@ async def _tools_call_result(
         "extracted_at": context.extracted_at,
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "deduplicated_count": context.deduplicated_count,
+        "low_yield": context.low_yield,
+        **(
+            {"yield_hint": context.yield_hint}
+            if context.low_yield
+            else {}
+        ),
         "truncated": context.truncated,
         "split": context.split,
         "chunks": context.chunks,
