@@ -8,6 +8,8 @@ import ipaddress
 import logging
 import math
 import re
+
+from bintu_api.final_fixes import close_up_punctuation, drop_empty_fences
 import socket
 import ssl
 import zlib
@@ -1217,7 +1219,7 @@ def _truncate_extracted_text(
     if last_boundary > 0:
         truncated_text = truncated_text[:last_boundary].rstrip()
 
-    truncated_text = close_open_fence(truncated_text)
+    truncated_text = drop_empty_fences(close_open_fence(truncated_text))
 
     return ExtractedText(
         text=truncated_text,
@@ -1260,7 +1262,7 @@ def _trafilatura_fallback(
     for line in text.splitlines():
         line = re.sub(r"[\u200b\u2060\ufeff]", " ", line)
         line = re.sub(r"\s+", " ", line).strip()
-        line = re.sub(r"\s+([,.;:!?])", r"\1", line)
+        line = close_up_punctuation(line)
         if line:
             lines.append(line)
 
@@ -1593,7 +1595,7 @@ def extract_text_result(
             line,
         )
         line = re.sub(r"\s+", " ", line).strip()
-        line = re.sub(r"\s+([,.;:!?])", r"\1", line)
+        line = close_up_punctuation(line)
 
 
         if line:
