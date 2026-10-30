@@ -397,6 +397,29 @@ every chunk valid, self-contained Markdown.
 
 Legacy scrape endpoint limits: 1 MiB upstream body, HTML/XHTML only, 6,000-char text cap (`truncated` flag), 5 redirects, `render_js=true` → 400 `render_js_disabled` (keep `RENDER_JS_ENABLED=false` until browser security hardening is complete; paid infrastructure does not resolve the risk). Error codes: see [Common errors](#common-errors).
 
+## Usage examples
+
+Ready-to-run clients are in [`examples/`](./examples):
+
+- [`rest_python.py`](./examples/rest_python.py) ? REST extraction with Python
+- [`rest_javascript.js`](./examples/rest_javascript.js) ? REST extraction with Node.js
+- [`mcp_python.py`](./examples/mcp_python.py) ? MCP `tools/call` with Python
+
+Set your credentials first:
+
+```powershell
+$env:BINTU_BASE_URL = "[https://bintu-api.onrender.com](https://bintu-api.onrender.com)"
+$env:BINTU_API_KEY = Read-Host "Paste API key"
+```
+
+Then run:
+
+```powershell
+python .\examples\rest_python.py [https://example.com](https://example.com)
+node .\examples\rest_javascript.js [https://example.com](https://example.com)
+python .\examples\mcp_python.py [https://example.com](https://example.com)
+```
+
 ## RapidAPI Publishing
 
 RapidAPI handles subscriber authentication and billing at its gateway. In the RapidAPI provider dashboard, point the API base URL at the Render service and configure the provider proxy secret. Set Render's `RAPIDAPI_PROXY_SECRET` to the same value. Requests authenticated with `X-RapidAPI-Proxy-Secret` are accepted; their `X-RapidAPI-User` identity receives an independent 60-request-per-minute bucket. Keep `API_KEY` for owner/direct access, and never expose either secret in client examples.
