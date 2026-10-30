@@ -1,4 +1,5 @@
-# Performs one live health check, REST scrape, and MCP discovery request.`nparam(
+﻿# Performs one live health check, REST scrape, and MCP discovery request.
+param(
   [string]$BaseUrl = "https://bintu-api.onrender.com",
   [string]$ApiKey = $env:BINTU_API_KEY
 )

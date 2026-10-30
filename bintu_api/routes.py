@@ -179,6 +179,7 @@ def _build_response(
         url=url,
         text=result.markdown,
         truncated=result.truncated,
+        cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
         approx_tokens=approx_tokens,
         token_method=TOKEN_METHOD,

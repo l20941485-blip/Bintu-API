@@ -148,6 +148,12 @@ class ScrapeTextResponse(BaseModel):
             "'memory' or 'persistent'."
         ),
     )
+    cache_hit: bool = Field(
+        default=False,
+        description=(
+            "True when the response came from the memory or persistent cache."
+        ),
+    )
     approx_tokens: int = Field(
         default=0,
         description=(
