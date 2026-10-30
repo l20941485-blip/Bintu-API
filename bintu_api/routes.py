@@ -31,6 +31,7 @@ from bintu_api.database import (
     increment_developer_usage,
     upsert_cached_markdown,
 )
+from bintu_api.final_fixes import has_credential_params
 from bintu_api.observability import (
     log_cache_event,
     log_extraction_completed,
@@ -746,6 +747,8 @@ async def _fetch_and_extract(
     persistent_cache_enabled = (
         settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
     )
+    # Never persist URLs whose query string may carry a caller credential.
+    cacheable = not has_credential_params(url)
     database_client = getattr(request.app.state, "supabase_client", None)
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
@@ -758,6 +761,7 @@ async def _fetch_and_extract(
     if (
         database_client is not None
         and persistent_cache_enabled
+        and cacheable
         and not skip_cache
     ):
         try:
@@ -866,13 +870,14 @@ async def _fetch_and_extract(
     if (
         database_client is not None
         and persistent_cache_enabled
+        and cacheable
         and persist
     ):
         try:
             await asyncio.wait_for(
                 upsert_cached_markdown(
                     database_client,
-                    redact_cache_url(url),
+                    url,
                     render_js,
                     include_nav,
                     include_header,

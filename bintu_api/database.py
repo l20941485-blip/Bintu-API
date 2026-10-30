@@ -33,7 +33,7 @@ else:
 
 logger = logging.getLogger("bintu_api.database")
 # Bump when extracted Markdown or its stored metadata changes.
-EXTRACTOR_VERSION = "2026-10-29.1"
+EXTRACTOR_VERSION = "2026-10-30.1"
 CACHE_TTL = timedelta(hours=24)
 DATABASE_TIMEOUT_SECONDS = 2.0
 

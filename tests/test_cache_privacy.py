@@ -108,20 +108,22 @@ class PersistenceOptOutTests(unittest.TestCase):
         self.assertEqual(response.cache_layer, "none")
         self.assertIn(cache_key(), cache.data)
 
-    def test_persist_true_writes_redacted_url(self):
+    def test_persist_true_does_not_write_credential_url(self):
         url = "https://example.com/page?token=secret-token&id=42"
         cache = FakeCache()
         request = make_request(cache, db_client=object())
         fetch, get_cached, upsert, proxy = self.patches()
 
-        with fetch as fetch_m, get_cached, upsert as upsert_m, proxy:
+        with (
+            fetch as fetch_m,
+            get_cached as get_cached_m,
+            upsert as upsert_m,
+            proxy,
+        ):
             response = self.run_scrape(request, url, persist=True)
 
-        upsert_m.assert_called_once()
-        self.assertEqual(
-            upsert_m.call_args.args[1],
-            "https://example.com/page?token=%5BREDACTED%5D&id=42",
-        )
+        get_cached_m.assert_not_called()
+        upsert_m.assert_not_called()
         self.assertEqual(response.cache_layer, "none")
 
 
