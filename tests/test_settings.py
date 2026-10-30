@@ -100,7 +100,7 @@ class SettingsFromEnvTests(unittest.TestCase):
     def test_service_version_is_1_2_0(self) -> None:
         """Release 1.2.0: privacy-safe extraction and cache observability."""
         settings = self._from_env({})
-        self.assertEqual(settings.service_version, "1.2.0")
+        self.assertEqual(settings.service_version, "1.2.1")
 
 
 
