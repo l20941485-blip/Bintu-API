@@ -12,6 +12,10 @@ All notable changes to the Bintu Data Extraction API will be documented here.
 
 ### Added
 
+## [1.2.1] ? 2026-10-30
+
+### Added
+
 - REST `/api/v1/scrape/text` responses now include `cache_hit`,
   matching the cache signal already exposed by MCP responses.
 - Ready-to-run REST examples for Python and Node.js, plus a Python MCP
