@@ -52,6 +52,9 @@ def truncate_to_token_budget(text: str, max_tokens: int | None) -> tuple[str, bo
     if _open_fence(window):
         window = window + "\n```"
 
+    from bintu_api.final_fixes import drop_empty_fences
+    window = drop_empty_fences(window)
+
     assert estimate_tokens(window) <= max_tokens
     return window, True
 

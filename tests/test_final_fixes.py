@@ -80,3 +80,23 @@ def test_whitespace_only_body_is_kept_as_is():
 
 def test_text_without_fences_is_unchanged():
     assert drop_empty_fences("plain\ntext") == "plain\ntext"
+
+
+def test_truncate_to_token_budget_returns_input_unchanged_within_budget():
+    from bintu_api.extraction_quality import truncate_to_token_budget
+
+    text = "Intro\n\n```md\nconsole.log('ok')\n```\n\n```md\n```"
+    cleaned, truncated = truncate_to_token_budget(text, 1000)
+
+    assert truncated is False
+    assert cleaned == text
+
+
+def test_truncated_fence_cleanup_removes_empty_trailing_fence():
+    from bintu_api.extraction_quality import truncate_to_token_budget
+
+    text = "Intro\n\n```md\n" + ("x" * 500) + "\n```"
+    cleaned, truncated = truncate_to_token_budget(text, 20)
+
+    assert truncated is True
+    assert not cleaned.rstrip().endswith("```")
