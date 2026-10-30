@@ -202,7 +202,7 @@ class MCPOutputContractTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     structured["tokens_saved_estimate"],
-                    200,
+                    532,
                 )
 
     def test_both_surfaces_forward_cache_false_as_skip_cache(self):

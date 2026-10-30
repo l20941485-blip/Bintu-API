@@ -32,6 +32,7 @@ from fastapi import Request
 from bintu_api.auth import rate_limit_identity
 from bintu_api.context_chunking import split_into_chunks, summarize_text
 from bintu_api.cache import TTLCache
+from bintu_api.final_fixes import delivered_savings
 from bintu_api.observability import (
     log_cache_lookup_completed,
     record_cache_tokens_saved,
@@ -277,9 +278,6 @@ async def extract_context(
     # is no longer available.
     if cache_hit and cache_economics is not None:
         html_tokens = cache_economics.html_tokens
-        tokens_saved_estimate: int | None = (
-            cache_economics.tokens_saved_estimate
-        )
         resolved_extracted_at = cache_economics.extracted_at
     else:
         html_tokens = count_tokens(html_source_text)
@@ -392,8 +390,10 @@ async def extract_context(
         raise ValueError(f"Unknown context mode: {mode}")
 
 
-    if tokens_saved_estimate is None:
-        tokens_saved_estimate = max(0, html_tokens - approx_tokens)
+    tokens_saved_estimate = delivered_savings(
+        html_tokens,
+        approx_tokens,
+    )
 
 
     record_cache_tokens_saved(

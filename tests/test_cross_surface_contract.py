@@ -276,7 +276,7 @@ class CrossSurfaceContractTests(unittest.TestCase):
         self.assertEqual(envelope["cache_hit"], True)
         self.assertEqual(envelope["cache_layer"], "persistent")
         self.assertEqual(envelope["html_tokens"], 2737)
-        self.assertEqual(envelope["tokens_saved_estimate"], 2183)
+        self.assertEqual(envelope["tokens_saved_estimate"], 2728)
         self.assertEqual(
             envelope["extracted_at"],
             "2026-10-25T18:39:35.350374+00:00",
