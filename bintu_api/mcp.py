@@ -201,13 +201,21 @@ TOOL_INPUT_SCHEMA = {
         },
         "mode": {
             "type": "string",
-            "enum": ["scrape", "chunk", "summarize"],
+            "enum": ["scrape", "chunk", "summarize", "chunked"],
             "default": "scrape",
             "description": (
                 "scrape returns extracted text in the envelope; chunk "
                 "creates approximately budgeted chunks; summarize "
                 "selects leading sentences within an approximate budget. "
                 "The accepted chunked alias normalizes to chunk."
+            ),
+        },
+        "chunk_token_budget": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 50000,
+            "description": (
+                "Accepted alias for max_tokens; max_tokens wins on conflict."
             ),
         },
         "max_tokens": {
