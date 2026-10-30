@@ -126,6 +126,19 @@ class ScrapeTextResponse(BaseModel):
         default=0,
         description="Number of duplicate blocks removed during extraction quality normalization.",
     )
+    low_yield: bool = Field(
+        default=False,
+        description=(
+            "True when a large source page produced very little readable text, "
+            "often because it requires JavaScript or authentication."
+        ),
+    )
+    yield_hint: str | None = Field(
+        default=None,
+        description=(
+            "Optional operator-facing explanation when low_yield is true."
+        ),
+    )
 
 
     cache_layer: Literal["none", "memory", "persistent"] = Field(

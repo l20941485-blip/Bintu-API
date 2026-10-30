@@ -231,6 +231,12 @@ class CrossSurfaceContractTests(unittest.TestCase):
             streamable["tokens_saved_estimate"],
         )
 
+        self.assertEqual(rest["low_yield"], legacy["low_yield"])
+        self.assertEqual(rest["low_yield"], streamable["low_yield"])
+        if rest["low_yield"]:
+            self.assertEqual(rest["yield_hint"], legacy["yield_hint"])
+            self.assertEqual(rest["yield_hint"], streamable["yield_hint"])
+
     def test_persistent_cache_preserves_extraction_economics(self) -> None:
         self.app.state.supabase_client = object()
         cached = CachedMarkdown(

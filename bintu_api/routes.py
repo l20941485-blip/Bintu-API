@@ -65,6 +65,7 @@ from bintu_api.scraper import (
     fetch_html_document,
     fetch_rendered_html_document,
 )
+from bintu_api.yield_check import assess_yield
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from bintu_api.settings import Settings
@@ -172,6 +173,8 @@ def _build_response(
     else:
         saved = 0
 
+    assessment = assess_yield(approx_tokens, result.html_tokens)
+
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -181,6 +184,8 @@ def _build_response(
         token_method=TOKEN_METHOD,
         tokens=approx_tokens,
         tokens_saved_estimate=saved,
+        low_yield=assessment.low_yield,
+        yield_hint=assessment.hint,
         provenance=_build_provenance(
             url,
             result.markdown,
