@@ -203,12 +203,71 @@ def _split_fence(segment: str, max_tokens: int) -> list[str]:
     return [f"{opener}\n{part}\n```" for part in split_code_body(body, body_budget)]
 
 
+def _split_oversized_table_like_block(
+    block: str, max_tokens: int
+) -> list[str] | None:
+    """Split extracted tables whose header/separator omit Markdown pipes.
+
+    The extractor can emit:
+
+        Country
+        ---
+        cell | cell | cell
+
+    Treat the first line as the header, the second as its separator, and
+    split oversized pipe-joined rows by cells while repeating the header.
+    """
+    lines = [line for line in block.splitlines() if line.strip()]
+    if len(lines) < 3 or not _TABLE_SEPARATOR.match(lines[1]):
+        return None
+
+    header = f"{lines[0]}\n{lines[1]}"
+    header_tokens = count_tokens(header) + 1
+    if header_tokens >= max_tokens:
+        return None
+
+    pieces: list[str] = []
+    current: list[str] = []
+
+    for row in lines[2:]:
+        cells = [row]
+        if count_tokens(f"{header}\n{row}") > max_tokens and " | " in row:
+            cells = row.split(" | ")
+
+        if any(count_tokens(cell) + header_tokens > max_tokens for cell in cells):
+            return None
+
+        for cell in cells:
+            candidate = current + [cell]
+            candidate_text = header + "\n" + " | ".join(candidate)
+            if current and count_tokens(candidate_text) > max_tokens:
+                pieces.append(header + "\n" + " | ".join(current))
+                current = [cell]
+            else:
+                current = candidate
+
+    if current:
+        pieces.append(header + "\n" + " | ".join(current))
+
+    return pieces
+
+
 def split_block(block: str, max_tokens: int) -> list[str]:
     """Separate table runs from prose, then split each with its own rules."""
     if count_tokens(block) <= max_tokens:
         return [block]
+
     if _is_table_block(block):
         return _split_oversized_table(block, max_tokens)
+
+    # Handle the extractor's pipe-less header/separator shape:
+    #   Country
+    #   ---
+    #   cell | cell | cell
+    # Normal Markdown pipe tables remain on the existing row-splitting path.
+    table_like = _split_oversized_table_like_block(block, max_tokens)
+    if table_like is not None:
+        return table_like
 
     sections: list[tuple[bool, str]] = []
     current_lines: list[str] = []
