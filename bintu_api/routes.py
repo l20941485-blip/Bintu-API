@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import hashlib
 import logging
 import os
@@ -51,6 +51,7 @@ from bintu_api.schemas import (
     VersionResponse,
 )
 from bintu_api.scraper import (
+    RedirectedToPrivateNetwork,
     FetchedHTML,
     PayloadTooLarge,
     TargetURLRejected,
@@ -512,6 +513,20 @@ async def _scrape_chunks(
 
     except HTTPException:
         raise
+    except RedirectedToPrivateNetwork as error:
+        log_upstream_error(
+            error_type="redirect_to_private_network",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "redirect_to_private_network",
+                "message": "A redirect attempted to access a private network address",
+                "hint": "Use a public HTTPS URL",
+            },
+        ) from error
     except TargetURLRejected as error:
         log_upstream_error(
             error_type="invalid_or_unsafe_url",
@@ -1026,6 +1041,20 @@ async def _scrape_text(
 
     except HTTPException:
         raise
+    except RedirectedToPrivateNetwork as error:
+        log_upstream_error(
+            error_type="redirect_to_private_network",
+            url=url,
+            request_id=request_id,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "redirect_to_private_network",
+                "message": "A redirect attempted to access a private network address",
+                "hint": "Use a public HTTPS URL",
+            },
+        ) from error
     except TargetURLRejected as error:
         log_upstream_error(
             error_type="invalid_or_unsafe_url",
@@ -1205,4 +1234,5 @@ async def _scrape_text(
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).
 scrape_text = _scrape_text
+
 

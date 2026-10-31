@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 
 import asyncio
@@ -131,6 +131,14 @@ def _compute_tokens_saved_estimate(
 
 class TargetURLRejected(ValueError):
     pass
+
+
+class PrivateNetworkRejected(TargetURLRejected):
+    """The resolved destination is private, reserved, multicast, or otherwise non-public."""
+
+
+class RedirectedToPrivateNetwork(TargetURLRejected):
+    """A redirect attempted to pivot the request into a private network."""
 
 
 
@@ -267,7 +275,7 @@ def resolve_public_addresses(
             or parsed_address.is_multicast
             or _is_nat64_or_6to4_address(str(parsed_address))
         ):
-            raise TargetURLRejected(
+            raise PrivateNetworkRejected(
                 "The target hostname resolves to a non-public address"
             )
 
@@ -541,6 +549,7 @@ def fetch_html_document(
     """Fetch a public HTML page, following redirects and re-validating every hop."""
     current_url = url
     current_scheme = urlsplit(url).scheme
+    is_redirect_hop = False
 
 
     for _ in range(settings.max_redirects + 1):
@@ -583,10 +592,17 @@ def fetch_html_document(
             current_scheme = parsed.scheme
 
 
-        addresses = resolve_public_addresses(
-            host,
-            port,
-        )
+        try:
+            addresses = resolve_public_addresses(
+                host,
+                port,
+            )
+        except PrivateNetworkRejected as error:
+            if is_redirect_hop:
+                raise RedirectedToPrivateNetwork(
+                    "A redirect attempted to access a private network address"
+                ) from error
+            raise
         connection = None
         response = None
         last_error = None
@@ -652,6 +668,7 @@ def fetch_html_document(
                     current_url,
                     location,
                 )
+                is_redirect_hop = True
                 continue
 
 
@@ -1640,3 +1657,6 @@ def extract_text_result(
         text,
         max_characters,
     )
+
+
+
