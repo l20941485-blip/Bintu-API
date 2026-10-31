@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import math
 import threading
@@ -97,6 +98,12 @@ class RedisRateLimiter:
             pipe.incr(key)
             pipe.ttl(key)
             count, ttl = pipe.execute()[:2]
+            logger.info(
+                "rate_limit_check identity_hash=%s count=%s ttl=%s",
+                hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12],
+                count,
+                ttl,
+            )
             if ttl is None or ttl < 0:
                 self._redis.expire(key, self._window)
                 ttl = self._window
