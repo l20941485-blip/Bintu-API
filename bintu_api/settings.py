@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -108,7 +108,7 @@ class Settings:
     # render_js_enabled, keeping tests that patch os.environ deterministic.
     require_auth: bool = False
     service_title: str = "Bintu Data Extraction API"
-    service_version: str = "1.3.0"
+    service_version: str = "1.4.0"
     # BintuBot identity (RFC 9309 / honest User-Agent). Leave empty until a real
     # info page and contact exist; the User-Agent then simply omits them.
     # Set BOT_INFO_URL and CONTACT_EMAIL in the environment.
