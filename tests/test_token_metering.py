@@ -498,3 +498,25 @@ class TokenMeteringTests(unittest.TestCase):
         # Even with nonsensical input, should not be negative
         saved = _compute_tokens_saved_estimate(b"<<>>", "")
         self.assertGreaterEqual(saved, 0)
+
+
+def test_rest_rejects_max_tokens_below_minimum():
+    from fastapi.testclient import TestClient
+    from main import create_app
+    from bintu_api.settings import Settings
+
+    settings = Settings(
+        api_key="test-master-key",
+        rapidapi_proxy_secret="",
+        require_auth=True,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.get(
+        "/api/v1/scrape/text",
+        params={"url": "https://example.com", "max_tokens": 5},
+        headers={"X-API-Key": "test-master-key"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_max_tokens"

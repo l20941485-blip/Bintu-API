@@ -332,6 +332,15 @@ async def scrape_text(
     settings = request.app.state.settings
     verify_api_access(request, settings)
 
+    if max_tokens < 100 or max_tokens > 50000:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_max_tokens",
+                "message": "max_tokens must be between 100 and 50000.",
+            },
+        )
+
     if render_js and not settings.render_js_enabled:
         raise HTTPException(
             status_code=400,
