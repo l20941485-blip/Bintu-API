@@ -1,0 +1,83 @@
+name: bintu-post-deploy
+
+# Kept separate from bintu-ci on purpose. If Render is set to "After CI Checks
+# Pass", a job that waits for the deploy must not be part of the checks it is
+# waiting on, or the two would wait on each other forever.
+#
+# Required secret:   RENDER_API_KEY   (Render dashboard > Account Settings > API Keys)
+# Optional secret:   BINTU_TOKEN      (only if tools/call needs a bearer token)
+# Optional variables: RENDER_JS_ENABLED ("1" once enabled), PDF_TEST_URL, PRIVATE_REDIRECT_URL
+
+on:
+  workflow_run:
+    workflows: [bintu-ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: bintu-post-deploy
+  cancel-in-progress: true
+
+env:
+  RENDER_SERVICE_ID: srv-dauont0jo6nc73e0hfg0
+  BINTU_URL: https://bintu-api.onrender.com
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Wait for the Render deploy of this commit
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            json=$(curl -fsS -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=10")
+            status=$(echo "$json" | jq -r --arg sha "$SHA" \
+              '[.[] | (.deploy // .) | select(.commit.id == $sha)] | .[0].status // "not_started"')
+            echo "attempt $attempt: deploy status for $SHA = $status"
+            case "$status" in
+              live) exit 0 ;;
+              deactivated) echo "Superseded by a newer deploy; skipping."; exit 0 ;;
+              build_failed|update_failed|pre_deploy_failed|canceled)
+                echo "::error::Render deploy ended with status $status"; exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "::error::Timed out waiting for the deploy"; exit 1
+
+      - name: Warm up the service (free-tier instances sleep when idle)
+        run: curl -fsS --retry 10 --retry-delay 10 --retry-all-errors "$BINTU_URL/docs" > /dev/null
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install pytest httpx
+
+      - name: Regression suite against production
+        env:
+          BINTU_TOKEN: ${{ secrets.BINTU_TOKEN }}
+          RENDER_JS_ENABLED: ${{ vars.RENDER_JS_ENABLED }}
+          PDF_TEST_URL: ${{ vars.PDF_TEST_URL }}
+          PRIVATE_REDIRECT_URL: ${{ vars.PRIVATE_REDIRECT_URL }}
+        run: pytest tests/regression -v -rxXs
+
+      - name: Rollback hint
+        if: failure()
+        run: |
+          echo "::error::Post-deploy checks failed for $SHA."
+          echo "Roll back from the Render dashboard (service > Deploys > previous deploy > Rollback):"
+          echo "https://dashboard.render.com/web/$RENDER_SERVICE_ID/deploys"
