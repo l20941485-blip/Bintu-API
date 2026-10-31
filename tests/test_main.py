@@ -657,10 +657,7 @@ class ScraperApiTests(unittest.TestCase):
             paths["/api/v1/scrape/text"]["get"]["security"],
             [{"ApiKeyAuth": []}],
         )
-        self.assertEqual(
-            paths["/mcp/tools"]["get"]["security"],
-            [{"ApiKeyAuth": []}],
-        )
+        self.assertNotIn("security", paths["/mcp/tools"]["get"])
         self.assertEqual(
             paths["/mcp/tools/call"]["post"]["security"],
             [{"ApiKeyAuth": []}],

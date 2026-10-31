@@ -97,10 +97,10 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertFalse(self._from_env({"REQUIRE_AUTH": "false"}).require_auth)
 
 
-    def test_service_version_is_1_2_0(self) -> None:
-        """Release 1.2.0: privacy-safe extraction and cache observability."""
+    def test_service_version_is_1_3_0(self) -> None:
+        """Release 1.3.0: restore public legacy MCP tool discovery."""
         settings = self._from_env({})
-        self.assertEqual(settings.service_version, "1.2.1")
+        self.assertEqual(settings.service_version, "1.3.0")
 
 
 

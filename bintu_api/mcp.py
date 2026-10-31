@@ -334,12 +334,8 @@ def _mcp_error_response(
     }
 
 
-@router.get(
-    "/tools",
-    dependencies=[Security(api_key_scheme, scopes=[])],
-)
+@router.get("/tools")
 async def list_tools(request: Request) -> dict[str, Any]:
-    verify_mcp_api_access(request, request.app.state.settings)
     return {
         "tools": [
             {
