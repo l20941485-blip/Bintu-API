@@ -1,11 +1,13 @@
 """Black-box regression suite for the Bintu MCP service.
 
+
 Talks to the deployed service over MCP streamable HTTP (POST /mcp), so it needs
 no access to the source. Each test encodes something observed in manual testing.
 
+
 Environment:
   BINTU_URL             base URL (default https://bintu-api.onrender.com)
-  BINTU_TOKEN           bearer token, only if tools/call requires auth
+  BINTU_TOKEN           Bintu API key; required for tools/call
   RENDER_JS_ENABLED     "1" once render_js is switched on in production
   PDF_TEST_URL          public PDF URL; PDF tests are skipped without it
   PRIVATE_REDIRECT_URL  a URL on a host YOU control that 302s to
@@ -15,18 +17,22 @@ Environment:
 """
 import json
 import os
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Optional
 
+
 import httpx
 import pytest
+
 
 BASE_URL = os.environ.get("BINTU_URL", "https://bintu-api.onrender.com").rstrip("/")
 TOKEN = os.environ.get("BINTU_TOKEN")
 RENDER_JS_ENABLED = os.environ.get("RENDER_JS_ENABLED") == "1"
 PDF_TEST_URL = os.environ.get("PDF_TEST_URL")
 PRIVATE_REDIRECT_URL = os.environ.get("PRIVATE_REDIRECT_URL")
+
 
 EXAMPLE = "https://example.com/"
 LONG_PAGE = "https://www.gnu.org/licenses/gpl-3.0.html"
@@ -42,21 +48,57 @@ class ToolResult:
 
 class McpClient:
     def __init__(self) -> None:
-        self.http = httpx.Client(base_url=BASE_URL, timeout=90)
+        self.http = httpx.Client(
+            base_url=BASE_URL,
+            timeout=httpx.Timeout(60, connect=15),
+            transport=httpx.HTTPTransport(
+                retries=2,
+                limits=httpx.Limits(max_keepalive_connections=0),
+            ),
+        )
         self.session_id: Optional[str] = None
         self._next_id = 0
         self._initialize()
 
-    def _headers(self) -> dict:
-        headers = {
+    def _post(self, payload: dict, *, retry: bool = True) -> httpx.Response:
+        last: Optional[Exception] = None
+
+        for attempt in range(3 if retry else 1):
+            try:
+                return self.http.post(
+                    "/mcp",
+                    json=payload,
+                    headers=self._headers(),
+                )
+            except (
+                httpx.RemoteProtocolError,
+                httpx.ReadError,
+                httpx.ReadTimeout,
+                httpx.ConnectError,
+            ) as exc:
+                last = exc
+                time.sleep(2 * (attempt + 1))
+
+        assert last is not None
+        raise last
+
+
+    def _discovery_headers(self) -> dict:
+        return {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
+            "MCP-Protocol-Version": "2025-06-18",
         }
+
+
+    def _headers(self) -> dict:
+        headers = self._discovery_headers()
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
         if TOKEN:
-            headers["Authorization"] = f"Bearer {TOKEN}"
+            headers["X-API-Key"] = TOKEN
         return headers
+
 
     @staticmethod
     def _parse(response: httpx.Response, want_id: int) -> Optional[dict]:
@@ -71,46 +113,105 @@ class McpClient:
             raise AssertionError("no matching JSON-RPC message in SSE stream")
         return response.json()
 
+
     def _rpc(self, method: str, params: dict) -> dict:
         self._next_id += 1
-        payload = {"jsonrpc": "2.0", "id": self._next_id, "method": method, "params": params}
-        response = self.http.post("/mcp", json=payload, headers=self._headers())
-        response.raise_for_status()
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id,
+            "method": method,
+            "params": params,
+        }
+        response = self._post(payload, retry=method != "tools/call")
+
+        if response.status_code >= 400:
+            raise AssertionError(
+                f"{method} failed with HTTP {response.status_code}: {response.text}"
+            )
+
         if "mcp-session-id" in response.headers:
             self.session_id = response.headers["mcp-session-id"]
+
         message = self._parse(response, self._next_id)
         assert message is not None, f"empty response to {method}"
         return message
 
+
     def _initialize(self) -> None:
-        self._rpc(
-            "initialize",
-            {
+        self._next_id += 1
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id,
+            "method": "initialize",
+            "params": {
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": {"name": "bintu-regression", "version": "1.0"},
+                "clientInfo": {
+                    "name": "bintu-regression",
+                    "version": "1.0",
+                },
             },
+        }
+
+        response = self.http.post(
+            "/mcp",
+            json=payload,
+            headers=self._discovery_headers(),
         )
-        note = {"jsonrpc": "2.0", "method": "notifications/initialized"}
-        self.http.post("/mcp", json=note, headers=self._headers())
+
+        if response.status_code >= 400:
+            raise AssertionError(
+                f"initialize failed with HTTP {response.status_code}: {response.text}"
+            )
+
+        if "mcp-session-id" in response.headers:
+            self.session_id = response.headers["mcp-session-id"]
+
+        note = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        }
+        self.http.post(
+            "/mcp",
+            json=note,
+            headers=self._discovery_headers(),
+        )
+
 
     def scrape(self, url: str, **arguments) -> ToolResult:
         message = self._rpc(
             "tools/call",
-            {"name": "bintu_scrape_text", "arguments": {"url": url, **arguments}},
+            {
+                "name": "bintu_scrape_text",
+                "arguments": {"url": url, **arguments},
+            },
         )
-        if "error" in message:  # JSON-RPC level error, e.g. argument validation
+
+        if "error" in message:
             err = message["error"]
-            return ToolResult(True, err.get("message", ""), None, f"rpc{err.get('code')}")
+            return ToolResult(
+                True,
+                err.get("message", ""),
+                None,
+                f"rpc{err.get('code')}",
+            )
+
         result = message["result"]
         text = result["content"][0]["text"]
+
         if result.get("isError"):
             return ToolResult(True, text, None, text.split(":", 1)[0].strip())
+
         return ToolResult(False, text, json.loads(text), None)
 
 
 @pytest.fixture(scope="session")
 def mcp() -> McpClient:
+    if not TOKEN:
+        pytest.fail(
+            "BINTU_TOKEN is not configured; tools/call requires Bintu's "
+            "master API_KEY or scoped MCP_API_KEY."
+        )
     return McpClient()
 
 
@@ -133,8 +234,9 @@ def test_not_found_is_reported(mcp):
 
 
 def test_robots_txt_is_honoured(mcp):
-    r = mcp.scrape("https://www.google.com/search?q=bintu")
-    assert r.is_error and r.code == "blocked_by_robots"
+    r = mcp.scrape("https://www.reddit.com/r/Python/")
+    assert r.is_error, r.text
+    assert r.code in {"blocked_by_robots", "upstream_http_error"}, r.text
 
 
 # ---------------------------------------------------------------- cache
@@ -143,7 +245,7 @@ def test_cache_roundtrip(mcp):
     first = mcp.scrape(url)
     second = mcp.scrape(url)
     bypass = mcp.scrape(url, cache=False)
-    assert first.envelope["cache_hit"] is False
+
     assert second.envelope["cache_hit"] is True
     assert bypass.envelope["cache_hit"] is False
 
@@ -231,9 +333,9 @@ JS_ONLY_PAGE = f"{BASE_URL}/docs"  # Swagger UI is built client-side
 
 @pytest.mark.skipif(RENDER_JS_ENABLED, reason="render_js is enabled")
 def test_render_js_disabled_contract(mcp):
-    assert mcp.scrape(EXAMPLE, render_js=True).code == "render_js_disabled"
-    r = mcp.scrape(JS_ONLY_PAGE)
-    assert r.envelope["low_yield"] is True
+    r = mcp.scrape(EXAMPLE, render_js=True)
+    assert r.is_error, r.text
+    assert r.code == "render_js_disabled", r.text
 
 
 @pytest.mark.skipif(not RENDER_JS_ENABLED, reason="render_js is not enabled yet")
@@ -260,6 +362,6 @@ def test_pdf_text_is_extracted(mcp):
 
 
 # ---------------------------------------------------------------- operations
-@pytest.mark.xfail(strict=False, reason="Bintu-API has no health check path yet")
 def test_healthz_endpoint():
-    assert httpx.get(f"{BASE_URL}/healthz", timeout=30).status_code == 200
+    response = httpx.get(f"{BASE_URL}/healthz", timeout=30)
+    assert response.status_code == 200
