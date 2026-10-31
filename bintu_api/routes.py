@@ -337,7 +337,7 @@ async def scrape_text(
             status_code=422,
             detail={
                 "code": "invalid_max_tokens",
-                "message": "max_tokens must be between 100 and 50000.",
+                "message": "max_tokens must be between 100 and 50000. [build v2]",
             },
         )
 
@@ -395,7 +395,7 @@ async def scrape_chunks(
             status_code=400,
             detail={
                 "code": "invalid_token_budget",
-                "message": "max_tokens must be between 100 and 50000.",
+                "message": "max_tokens must be between 100 and 50000. [build v2]",
             },
         )
 
