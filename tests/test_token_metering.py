@@ -430,8 +430,8 @@ class TokenMeteringTests(unittest.TestCase):
         self.assertNotEqual(with_key, ip_only)
         self.assertNotIn("scoped-key", with_key, "never echo the raw credential")
 
-    def test_rest_identity_is_unchanged_by_mcp_helper(self) -> None:
-        """REST keeps the plain-IP behaviour; only MCP separates by key."""
+    def test_rest_identity_is_stable_for_same_credential(self) -> None:
+        """Authenticated REST callers share one rate-limit bucket across proxy IPs."""
         settings = Settings(api_key="master", rapidapi_proxy_secret="")
 
         def build(headers: dict | None = None):
@@ -440,7 +440,17 @@ class TokenMeteringTests(unittest.TestCase):
                      "query_string": b"", "client": ("203.0.113.9", 1234)}
             return Request(scope)
 
-        self.assertEqual(rate_limit_identity(build({"X-API-Key": "master"}), settings), "203.0.113.9")
+        first = rate_limit_identity(
+            build({"X-API-Key": "master"}),
+            settings,
+        )
+        second = rate_limit_identity(
+            build({"X-API-Key": "master"}),
+            settings,
+        )
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.startswith("credential:"))
 
     def test_metering_header_present(self) -> None:
         with patch(

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import hashlib
 import logging
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -282,6 +283,12 @@ def rate_limit_identity(request: Request, settings: Settings) -> str:
         rapidapi_user = request.headers.get("X-RapidAPI-User")
         if rapidapi_user:
             return f"rapidapi:{rapidapi_user}"
+
+    credential = _presented_credential(request)
+    if credential:
+        fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()[:16]
+        return f"credential:{fingerprint}"
+
     return request.client.host if request.client else "unknown"
 
 
