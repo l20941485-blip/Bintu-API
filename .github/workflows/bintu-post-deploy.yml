@@ -21,8 +21,8 @@ concurrency:
 
 env:
   RENDER_SERVICE_ID: srv-dauont0jo6nc73e0hfg0
+  BINTU_BASE_URL: https://bintu-api.onrender.com
   BINTU_URL: https://bintu-api.onrender.com
-
 jobs:
   verify:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
@@ -65,8 +65,7 @@ jobs:
           cache: pip
 
       - name: Install test dependencies
-        run: pip install pytest httpx
-
+        run: pip install pytest requests httpx
       - name: Regression suite against production
         env:
           BINTU_TOKEN: ${{ secrets.BINTU_TOKEN }}
