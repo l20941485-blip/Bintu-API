@@ -1,7 +1,7 @@
 from bintu_api.scraper import extract_text_result
 
 
-def test_links_false_separates_adjacent_links():
+def test_links_false_separates_link_and_span():
     html = b"""
     <html><body>
       <p>
