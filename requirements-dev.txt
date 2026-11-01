@@ -1,4 +1,4 @@
-# Development and test dependencies
+﻿# Development and test dependencies
 jsonschema==4.26.0
 pytest-timeout
 requests
