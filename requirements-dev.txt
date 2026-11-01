@@ -1,6 +1,6 @@
 -r requirements.txt
 httpx==0.28.1
-jsonschema==4.23.0
+jsonschema==4.26.0
 pytest
 pytest-timeout
 requestsruff
