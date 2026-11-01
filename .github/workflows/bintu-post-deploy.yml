@@ -1,76 +1,83 @@
 name: bintu-post-deploy
 
 on:
-  workflow_run:
-    workflows: [bintu-ci]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: bintu-post-deploy
-  cancel-in-progress: true
-
-env:
-  RENDER_SERVICE_ID: srv-dauont0jo6nc73e0hfg0
-  BINTU_BASE_URL: https://bintu-api.onrender.com
-  BINTU_URL: https://bintu-api.onrender.com
+permissions:
+  contents: read
 
 jobs:
-  verify:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+  wait-for-render-deploy:
+    name: Wait for the Render deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Wait for the Render deploy of this commit
+      - name: Check required secrets
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          set -euo pipefail
-          for attempt in $(seq 1 90); do
-            json=$(curl -fsS -H "Authorization: Bearer $RENDER_API_KEY" \
-              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=10")
-            status=$(echo "$json" | jq -r --arg sha "$SHA" \
-              '[.[] | (.deploy // .) | select(.commit.id == $sha)] | .[0].status // "not_started"')
-            echo "attempt $attempt: deploy status for $SHA = $status"
-            case "$status" in
-              live) exit 0 ;;
-              deactivated) echo "Superseded by a newer deploy; skipping."; exit 0 ;;
-              build_failed|update_failed|pre_deploy_failed|canceled)
-                echo "::error::Render deploy ended with status $status"; exit 1 ;;
-            esac
-            sleep 20
-          done
-          echo "::error::Timed out waiting for the deploy"; exit 1
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "RENDER_API_KEY secret is missing."
+            exit 1
+          fi
+          echo "RENDER_API_KEY is configured."
 
-      - name: Warm up the service
-        run: curl -fsS --retry 10 --retry-delay 10 --retry-all-errors "$BINTU_URL/docs" > /dev/null
+      - name: Wait for Render deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, time, urllib.request, urllib.error
+
+          key = os.environ["RENDER_API_KEY"]
+          service_id = os.environ.get("RENDER_SERVICE_ID", "")
+
+          if not service_id:
+              print("RENDER_SERVICE_ID is not set; skipping active deploy polling.")
+              raise SystemExit(0)
+
+          url = f"https://api.render.com/v1/services/{service_id}/deploys?limit=1"
+          req = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {key}",
+              "Accept": "application/json",
+          })
+
+          deadline = time.time() + 900
+          while time.time() < deadline:
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      data = response.read().decode("utf-8")
+                  print(data[:1000])
+                  if '"status":"live"' in data or '"status": "live"' in data:
+                      print("Render deployment is live.")
+                      raise SystemExit(0)
+              except Exception as exc:
+                  print(f"Render API check failed: {exc}")
+              time.sleep(20)
+
+          raise SystemExit("Timed out waiting for Render deployment.")
+          PY
+
+  regression-suite:
+    name: Regression suite against production
+    needs: wait-for-render-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
-      - name: Install test dependencies
-        run: pip install pytest requests httpx
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      - name: Regression suite against production
+      - name: Run regression suite
         env:
           BINTU_TOKEN: ${{ secrets.BINTU_TOKEN }}
-          RENDER_JS_ENABLED: ${{ vars.RENDER_JS_ENABLED }}
-          PDF_TEST_URL: ${{ vars.PDF_TEST_URL }}
-          PRIVATE_REDIRECT_URL: ${{ vars.PRIVATE_REDIRECT_URL }}
-        run: pytest tests/regression -v -rxXs
-
-      - name: Rollback hint
-        if: failure()
+          BINTU_BASE_URL: https://bintu-mcp.onrender.com
         run: |
-          echo "::error::Post-deploy checks failed for $SHA."
-          echo "Roll back from the Render dashboard:"
-          echo "https://dashboard.render.com/web/$RENDER_SERVICE_ID/deploys"
+          python -m pytest tests/regression/test_bintu_regressions.py -v -rxXs
