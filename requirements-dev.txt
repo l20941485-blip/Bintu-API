@@ -1,6 +1,5 @@
--r requirements.txt
-httpx==0.28.1
+# Development and test dependencies
 jsonschema==4.26.0
-pytest
 pytest-timeout
-requestsruff
+requests
+ruff
