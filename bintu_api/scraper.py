@@ -1420,8 +1420,9 @@ def extract_text_result(
                 anchor.append(NavigableString(f" ({destination})"))
                 _unwrap_inline_with_space(anchor)
             else:
-                _ensure_space_before(anchor)
-                anchor.replace_with(NavigableString(f"{label} ({destination}) "))
+                anchor.replace_with(
+                    NavigableString(f" {label} ({destination}) ")
+                )
             continue
 
         _unwrap_inline_with_space(anchor)

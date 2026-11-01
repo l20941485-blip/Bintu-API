@@ -524,6 +524,25 @@ def test_wikipedia_edit_links_are_removed():
     assert "edit" not in result.text
     assert "Sourdough history text." in result.text
 
+def test_wikipedia_infobox_ingredient_links_do_not_run_together():
+    html = (
+        b"<table><tr><th>Main ingredients</th>"
+        b"<td>"
+        b"<a href='/wiki/Flour'>Flour</a>"
+        b"<a href='/wiki/Water'>water</a>"
+        b"<span>sourdough culture</span>"
+        b"<a href='/wiki/Salt'>salt</a>"
+        b"</td></tr></table>"
+    )
+    result = extract_text_result(
+        html,
+        max_characters=2000,
+        base_url="https://en.wikipedia.org/wiki/Sourdough",
+    )
+
+    assert "sourdough culture salt" in result.text
+    assert "sourdough culturesalt" not in result.text
+
 
 def test_links_false_removes_urls():
     html = b"<p>Read <a href='https://example.com/page'>the guide</a>.</p>"
