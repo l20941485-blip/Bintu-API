@@ -9,6 +9,12 @@ from bintu_api.routes import _scrape_chunks
 from bintu_api.scraper import RedirectedToPrivateNetwork
 
 
+def _raise_redirect_to_private_network(*args, **kwargs):
+    raise RedirectedToPrivateNetwork(
+        "A redirect attempted to access a private network address"
+    )
+
+
 class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_redirect_to_private_network_has_dedicated_code(self):
         request = type("Request", (), {})()
@@ -16,7 +22,7 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
         request.app = type("App", (), {})()
 
         rate_limiter = MagicMock()
-        rate_limiter.check = AsyncMock(return_value=None)
+        rate_limiter.check = MagicMock(return_value=None)
 
         request.app.state = type(
             "State",
@@ -25,13 +31,8 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
                 "settings": type(
                     "Settings",
                     (),
-                    {
-                        "max_text_characters": 6000,
-                        "render_js_enabled": False,
-                    },
+                    {"robots_mode": "off"},
                 )(),
-                "supabase_client": None,
-                "cache": None,
                 "rate_limiter": rate_limiter,
             },
         )()
@@ -40,18 +41,23 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
             patch(
                 "bintu_api.routes._fetch_and_extract",
                 new=AsyncMock(
-                    side_effect=RedirectedToPrivateNetwork("A redirect attempted to access a private network address")
+                    side_effect=_raise_redirect_to_private_network
                 ),
             ),
             self.assertRaises(HTTPException) as caught,
         ):
             await _scrape_chunks(
-                request=request,
-                url="https://example.com/",
-                include_nav=False,
-                include_header=False,
-                include_footer=False,
-                identity="test",
+                request,
+                "https://example.com/",
+                False,
+                False,
+                False,
+                "test-id",
+                False,
+                links="inline",
+                skip_cache=False,
+                persist=True,
+                max_tokens=6000,
             )
 
         self.assertEqual(caught.exception.status_code, 400)
