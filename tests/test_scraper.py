@@ -4,6 +4,8 @@ import socket
 import unittest
 from unittest.mock import MagicMock, patch
 
+from bintu_api.scraper import extract_text_result
+
 from bintu_api.scraper import (
     PayloadTooLarge,
     TargetURLRejected,
@@ -417,6 +419,63 @@ class ScraperNetworkTests(unittest.TestCase):
         first.close.assert_called_once()
         self.assertTrue(second_connection.request_args)
         self.assertTrue(second_connection.closed)
+
+def test_adjacent_links_do_not_run_together():
+    html = b"<p><a href='/a'>culture</a><a href='/b'>salt</a></p>"
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+    )
+    assert "culture salt" in result.text
+    assert "culturesalt" not in result.text
+
+
+def test_links_false_removes_urls():
+    html = b"<p>Read <a href='https://example.com/page'>the guide</a>.</p>"
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+        links="false",
+    )
+    assert "the guide" in result.text
+    assert "https://example.com/page" not in result.text
+
+
+def test_links_footnotes_collects_references():
+    html = b"<p>Read <a href='https://example.com/page'>the guide</a>.</p>"
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+        links="footnotes",
+    )
+    assert "the guide [1]" in result.text
+    assert "## Links" in result.text
+    assert "1. https://example.com/page" in result.text
+
+
+def test_invalid_links_mode_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError):
+        extract_text_result(
+            b"<p>text</p>",
+            max_characters=100,
+            base_url="https://example.com/",
+            links="bogus",
+        )
+
+
+def test_headings_are_converted_to_markdown():
+    html = b"<article><h2>Section title</h2><p>Body text.</p></article>"
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+    )
+    assert "## Section title" in result.text
 
 
 if __name__ == "__main__":
