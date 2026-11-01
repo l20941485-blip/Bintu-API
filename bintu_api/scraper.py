@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 import asyncio
 import codecs
 import http.client
@@ -15,15 +14,12 @@ from dataclasses import dataclass
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
-
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
-
 
 from bintu_api.final_fixes import close_up_punctuation, drop_empty_fences
 from bintu_api.page_noise import same_document, should_drop_title, strip_permalinks
 from bintu_api.settings import Settings
-
 
 logger = logging.getLogger(__name__)
 READ_CHUNK_BYTES = 4096
@@ -1391,7 +1387,7 @@ def extract_text_result(
                 anchor.append(NavigableString(f" ({destination})"))
                 _unwrap_inline_with_space(anchor)
             else:
-                anchor.replace_with(NavigableString(f"{label} ({destination})"))
+                anchor.replace_with(NavigableString(f"{label} ({destination}) "))
             continue
 
         _unwrap_inline_with_space(anchor)
