@@ -1,31 +1,23 @@
-﻿"""Phase 2 cross-surface contract tests.
+"""Phase 2 cross-surface contract tests.
 
 REST, legacy MCP, and Streamable MCP intentionally expose different transport
 shapes, but they must agree on the shared extraction semantics: text, URL,
 token accounting, cache state, truncation, and savings.
 """
 
-
 import json
 import unittest
+from unittest import mock
 from unittest.mock import AsyncMock, patch
-
 
 from fastapi.testclient import TestClient
 
-
 from bintu_api.database import CachedMarkdown
 from bintu_api.mcp import TOOL_NAME
+from bintu_api.robots import RobotsDecision
 from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
-
-
-from unittest import mock
-
-
-from bintu_api.robots import RobotsDecision
-
 
 _robots_patch = mock.patch(
     "bintu_api.routes.robots_decision",
@@ -180,9 +172,7 @@ class CrossSurfaceContractTests(unittest.TestCase):
         self.assertEqual(envelope["source_url"], "https://example.com/legacy-mcp-contract")
 
     def test_streamable_mcp_returns_valid_unified_envelope(self) -> None:
-        envelope = self._streamable_mcp_envelope(
-            "https://example.com/streamable-mcp-contract"
-        )
+        envelope = self._streamable_mcp_envelope("https://example.com/streamable-mcp-contract")
         self._assert_valid_mcp_scrape_envelope(envelope)
         self.assertEqual(envelope["cache_hit"], False)
         self.assertEqual(envelope["cache_layer"], "none")

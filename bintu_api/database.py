@@ -1,21 +1,13 @@
 """Asynchronous Supabase access for persistent scrape caching and usage counts."""
 
-
-
 from __future__ import annotations
-
-
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-
-
 from bintu_api.settings import Settings
-
-
 
 if TYPE_CHECKING:
     from supabase import AsyncClient  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
@@ -29,8 +21,6 @@ else:
     AsyncClient: TypeAlias = Any
 
 
-
-
 logger = logging.getLogger("bintu_api.database")
 # Bump when extracted Markdown or its stored metadata changes.
 EXTRACTOR_VERSION = "2026-10-30.1"
@@ -38,12 +28,8 @@ CACHE_TTL = timedelta(hours=24)
 DATABASE_TIMEOUT_SECONDS = 2.0
 
 
-
-
 class CacheWriteFailed(RuntimeError):
     """Supabase accepted the request but did not return a persisted cache row."""
-
-
 
 
 @dataclass(frozen=True)
@@ -56,14 +42,10 @@ class CachedMarkdown:
     extracted_at: str = ""
 
 
-
-
 async def create_supabase_client(settings: Settings) -> AsyncClient | None:
     """Create a server-side client only when the private database key is configured."""
     if not settings.supabase_url or not settings.supabase_service_role_key:
         return None
-
-
 
     try:
         from supabase import create_async_client  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
@@ -72,17 +54,11 @@ async def create_supabase_client(settings: Settings) -> AsyncClient | None:
             "supabase package is not installed. Install it with `pip install supabase==2.15.0`."
         ) from exc
 
-
-
     return await create_async_client(settings.supabase_url, settings.supabase_service_role_key)
-
-
 
 
 async def close_supabase_client(client: AsyncClient) -> None:
     await client.aclose()
-
-
 
 
 async def get_cached_markdown(
@@ -94,7 +70,7 @@ async def get_cached_markdown(
     include_footer: bool,
 ) -> CachedMarkdown | None:
     """Return a cache entry only if it was successfully extracted in the last 24 hours."""
-    cutoff = (datetime.now(timezone.utc) - CACHE_TTL).isoformat()
+    cutoff = (datetime.now(UTC) - CACHE_TTL).isoformat()
     # Plain select + limit(1) instead of maybe_single(): maybe_single() sends
     # `Accept: application/vnd.pgrst.object+json`, which PostgREST answers with
     # 406 Not Acceptable whenever zero rows match (observed live 2026-10-17),
@@ -105,10 +81,7 @@ async def get_cached_markdown(
     # at most one row per cache key.
     response = await (
         client.table("scrape_cache")
-        .select(
-            "markdown,truncated,html_tokens,tokens_saved_estimate,"
-            "limiting_factor,extracted_at"
-        )
+        .select("markdown,truncated,html_tokens,tokens_saved_estimate,limiting_factor,extracted_at")
         .eq("url", url)
         .eq("render_js", render_js)
         .eq("include_nav", include_nav)
@@ -131,33 +104,19 @@ async def get_cached_markdown(
         logger.warning("supabase_cache_invalid_row")
         return None
 
-
-
     html_tokens = _safe_int(row.get("html_tokens"), default=0)
     tokens_saved_estimate = _safe_int(row.get("tokens_saved_estimate"), default=0)
     limiting_factor = row.get("limiting_factor")
     extracted_at = row.get("extracted_at")
-
-
 
     return CachedMarkdown(
         markdown=markdown,
         truncated=truncated,
         html_tokens=html_tokens,
         tokens_saved_estimate=tokens_saved_estimate,
-        limiting_factor=(
-            limiting_factor
-            if isinstance(limiting_factor, str) and limiting_factor
-            else "none"
-        ),
-        extracted_at=(
-            extracted_at
-            if isinstance(extracted_at, str) and extracted_at
-            else ""
-        ),
+        limiting_factor=(limiting_factor if isinstance(limiting_factor, str) and limiting_factor else "none"),
+        extracted_at=(extracted_at if isinstance(extracted_at, str) and extracted_at else ""),
     )
-
-
 
 
 async def upsert_cached_markdown(
@@ -188,9 +147,7 @@ async def upsert_cached_markdown(
         raise ValueError("refusing to cache empty extraction")
 
     if extracted_at is None:
-        extracted_at = datetime.now(timezone.utc).isoformat()
-
-
+        extracted_at = datetime.now(UTC).isoformat()
 
     response = await (
         client.table("scrape_cache")
@@ -208,7 +165,7 @@ async def upsert_cached_markdown(
                 "tokens_saved_estimate": max(0, int(tokens_saved_estimate)),
                 "limiting_factor": limiting_factor,
                 "extracted_at": extracted_at,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             },
             on_conflict="url,render_js,include_nav,include_header,include_footer",
         )
@@ -225,15 +182,11 @@ async def upsert_cached_markdown(
         raise CacheWriteFailed("supabase did not return a persisted cache row")
 
 
-
-
 def _safe_int(value: Any, *, default: int = 0) -> int:
     """Coerce a database value to a non-negative integer without raising."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return default
     return max(0, int(value))
-
-
 
 
 async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> None:
@@ -244,11 +197,7 @@ async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> 
     ).execute()
 
 
-
-
-async def increment_token_usage(
-    client: AsyncClient, rapidapi_user: str, tokens: int = 1, mode: str = "scrape"
-) -> None:
+async def increment_token_usage(client: AsyncClient, rapidapi_user: str, tokens: int = 1, mode: str = "scrape") -> None:
     """Count one billable MCP execution with its token volume.
 
 
@@ -259,5 +208,9 @@ async def increment_token_usage(
     """
     await client.rpc(
         "increment_developer_usage",
-        {"p_rapidapi_user": rapidapi_user, "p_tokens": max(0, int(tokens)), "p_mode": mode},
+        {
+            "p_rapidapi_user": rapidapi_user,
+            "p_tokens": max(0, int(tokens)),
+            "p_mode": mode,
+        },
     ).execute()

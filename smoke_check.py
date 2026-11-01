@@ -14,7 +14,6 @@ BINTU_MCP_API_KEY is optional when BINTU_API_KEY is available.
 REST scrape and metrics checks still use BINTU_API_KEY.
 """
 
-
 from __future__ import annotations
 
 import json
@@ -104,10 +103,7 @@ def _check_metrics(base_url: str, api_key: str) -> None:
     )
 
     if status == 401:
-        _fail(
-            "/metrics returned 401. Set BINTU_API_KEY to the "
-            "service API_KEY value."
-        )
+        _fail("/metrics returned 401. Set BINTU_API_KEY to the service API_KEY value.")
 
     if status != 200:
         _fail(f"/metrics returned HTTP {status}.")
@@ -131,9 +127,7 @@ def _check_metrics(base_url: str, api_key: str) -> None:
         _fail("/metrics returned invalid numeric data.")
 
     cache_lookups = cache_hits + cache_misses
-    cache_hit_rate = (
-        cache_hits / cache_lookups if cache_lookups else 0.0
-    )
+    cache_hit_rate = cache_hits / cache_lookups if cache_lookups else 0.0
 
     print("OK  /metrics")
     print(f"    cache hits: {cache_hits:.0f}")
@@ -151,10 +145,7 @@ def main() -> None:
     ).strip()
 
     if not base_url:
-        _fail(
-            "Set BINTU_BASE_URL to your deployed service root "
-            "(e.g. https://....onrender.com)."
-        )
+        _fail("Set BINTU_BASE_URL to your deployed service root (e.g. https://....onrender.com).")
 
     print(f"Checking health at {base_url}/healthz ...")
 
@@ -178,10 +169,7 @@ def main() -> None:
     if api_key:
         scrape_headers["X-API-Key"] = api_key
 
-    scrape_url = (
-        f"{base_url}/api/v1/scrape/text?"
-        f"{urllib.parse.urlencode({'url': target_url})}"
-    )
+    scrape_url = f"{base_url}/api/v1/scrape/text?{urllib.parse.urlencode({'url': target_url})}"
 
     print(f"Checking scrape against {target_url} ...")
 
@@ -191,10 +179,7 @@ def main() -> None:
     )
 
     if status == 401:
-        _fail(
-            "Scrape returned 401. Set BINTU_API_KEY to the "
-            "service API_KEY value."
-        )
+        _fail("Scrape returned 401. Set BINTU_API_KEY to the service API_KEY value.")
 
     if status != 200:
         _fail(f"Scrape returned HTTP {status}.")
@@ -217,19 +202,11 @@ def main() -> None:
     if not request_id:
         _fail("Scrape response missing X-Request-ID header")
 
-    print(
-        f"OK  /api/v1/scrape/text ({len(text)} characters)"
-    )
+    print(f"OK  /api/v1/scrape/text ({len(text)} characters)")
 
-    unsafe_url = (
-        f"{base_url}/api/v1/scrape/text?"
-        f"{urllib.parse.urlencode({'url': UNSAFE_TARGET_URL})}"
-    )
+    unsafe_url = f"{base_url}/api/v1/scrape/text?{urllib.parse.urlencode({'url': UNSAFE_TARGET_URL})}"
 
-    print(
-        "Checking unsafe URL rejection for "
-        f"{UNSAFE_TARGET_URL} ..."
-    )
+    print(f"Checking unsafe URL rejection for {UNSAFE_TARGET_URL} ...")
 
     status, headers, body = _request(
         unsafe_url,
@@ -237,9 +214,7 @@ def main() -> None:
     )
 
     if status != 400:
-        _fail(
-            f"Unsafe URL returned HTTP {status}; expected 400."
-        )
+        _fail(f"Unsafe URL returned HTTP {status}; expected 400.")
 
     try:
         unsafe_payload = json.loads(body.decode("utf-8"))
@@ -255,10 +230,7 @@ def main() -> None:
         _fail("Unsafe URL response detail is not an object.")
 
     if detail.get("code") != "invalid_or_unsafe_url":
-        _fail(
-            "Unsafe URL response does not use "
-            "invalid_or_unsafe_url."
-        )
+        _fail("Unsafe URL response does not use invalid_or_unsafe_url.")
 
     if UNSAFE_TARGET_URL in body.decode(
         "utf-8",
@@ -277,19 +249,13 @@ def main() -> None:
         check_discovery(base_url)
     except Exception as error:
         # Avoid dumping upstream bodies, URLs, or credentials on failure.
-        _fail(
-            f"Discovery check failed ({type(error).__name__}). "
-            "Inspect the public discovery endpoints."
-        )
+        _fail(f"Discovery check failed ({type(error).__name__}). Inspect the public discovery endpoints.")
 
     if os.getenv("BINTU_SMOKE_MCP_CACHE", "").strip() == "1":
         mcp_key = os.getenv("BINTU_MCP_API_KEY", "").strip() or api_key
 
         if not mcp_key:
-            _fail(
-                "MCP cache check requires BINTU_MCP_API_KEY "
-                "or BINTU_API_KEY."
-            )
+            _fail("MCP cache check requires BINTU_MCP_API_KEY or BINTU_API_KEY.")
 
         try:
             check_mcp_cache(base_url, mcp_key, target_url)

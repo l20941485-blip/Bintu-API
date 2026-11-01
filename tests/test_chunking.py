@@ -2,18 +2,11 @@ from bintu_api.scraper import extract_text_result
 
 
 def _assert_table_chunks_preserve_content(chunks, expected_lines, header, separator):
-    output_lines = [
-        line.strip()
-        for chunk in chunks
-        for line in chunk.splitlines()
-        if line.strip()
-    ]
+    output_lines = [line.strip() for chunk in chunks for line in chunk.splitlines() if line.strip()]
     headers = {header, separator}
 
     # Only the two header lines may repeat; all other content stays exact.
-    assert [
-        line for line in output_lines if line not in headers
-    ] == [
+    assert [line for line in output_lines if line not in headers] == [
         line for line in expected_lines if line not in headers
     ]
 
@@ -21,11 +14,7 @@ def _assert_table_chunks_preserve_content(chunks, expected_lines, header, separa
     assert output_lines.count(header) == output_lines.count(separator)
 
     for chunk in chunks:
-        lines = [
-            line.strip()
-            for line in chunk.splitlines()
-            if line.strip()
-        ]
+        lines = [line.strip() for line in chunk.splitlines() if line.strip()]
         table_lines = [line for line in lines if "|" in line]
         if not table_lines:
             continue
@@ -36,7 +25,6 @@ def _assert_table_chunks_preserve_content(chunks, expected_lines, header, separa
 
         header_index = lines.index(header)
         assert lines[header_index + 1] == separator
-
 
 
 def test_chunk_mode_preserves_domains_and_urls():
@@ -75,18 +63,14 @@ def test_chunk_mode_preserves_table_rows():
 
 
 def test_chunk_mode_preserves_paragraph_spacing():
-    html = (
-        b"<main>"
-        b"<p>First paragraph.</p>"
-        b"<p>Second paragraph.</p>"
-        b"</main>"
-    )
+    html = b"<main><p>First paragraph.</p><p>Second paragraph.</p></main>"
 
     result = extract_text_result(html, 6000)
     lines = result.text.splitlines()
 
     assert "First paragraph." in lines
     assert "Second paragraph." in lines
+
 
 def test_actual_chunker_preserves_extracted_table_rows():
     from bintu_api.context import count_tokens, split_into_chunks
@@ -107,20 +91,9 @@ def test_actual_chunker_preserves_extracted_table_rows():
     chunks = split_into_chunks(extracted, budget)
 
     assert len(chunks) > 1
-    output_lines = [
-        line.strip()
-        for chunk in chunks
-        for line in chunk.splitlines()
-        if line.strip()
-    ]
-    expected_lines = [
-        line.strip()
-        for line in extracted.splitlines()
-        if line.strip()
-    ]
-    _assert_table_chunks_preserve_content(
-        chunks, expected_lines, expected_lines[0], expected_lines[1]
-    )
+    output_lines = [line.strip() for chunk in chunks for line in chunk.splitlines() if line.strip()]
+    expected_lines = [line.strip() for line in extracted.splitlines() if line.strip()]
+    _assert_table_chunks_preserve_content(chunks, expected_lines, expected_lines[0], expected_lines[1])
     assert all(count_tokens(chunk) <= budget for chunk in chunks)
 
 
@@ -128,11 +101,7 @@ def test_actual_chunker_preserves_url_when_splitting():
     from bintu_api.context import count_tokens, split_into_chunks
 
     url = "https://example.org/agreements.htm"
-    text = (
-        "Read the introduction carefully. "
-        f"Visit {url} for the agreement. "
-        "Keep a copy for your records."
-    )
+    text = f"Read the introduction carefully. Visit {url} for the agreement. Keep a copy for your records."
     budget = 16
 
     assert count_tokens(text) > budget
@@ -167,11 +136,7 @@ def test_actual_chunker_preserves_oversized_table_row():
 
     assert row in chunks
     assert count_tokens(row) > budget
-    assert [
-        line
-        for chunk in chunks
-        for line in chunk.splitlines()
-    ] == text.splitlines()
+    assert [line for chunk in chunks for line in chunk.splitlines()] == text.splitlines()
 
 
 def test_actual_chunker_preserves_table_embedded_in_prose():
@@ -186,9 +151,7 @@ def test_actual_chunker_preserves_table_embedded_in_prose():
     ]
     text = (
         "# Reserved domains\n"
-        "The following table lists example entries.\n"
-        + "\n".join(rows)
-        + "\n## Policy\n"
+        "The following table lists example entries.\n" + "\n".join(rows) + "\n## Policy\n"
         "These entries are reserved for documentation."
     )
     budget = 30
@@ -196,12 +159,7 @@ def test_actual_chunker_preserves_table_embedded_in_prose():
     chunks = split_into_chunks(text, budget)
 
     assert len(chunks) > 1
-    output_lines = [
-        line.strip()
-        for chunk in chunks
-        for line in chunk.splitlines()
-        if line.strip()
-    ]
+    output_lines = [line.strip() for chunk in chunks for line in chunk.splitlines() if line.strip()]
 
     _assert_table_chunks_preserve_content(
         chunks,
@@ -216,25 +174,17 @@ def test_actual_chunker_preserves_table_embedded_in_prose():
 def test_actual_chunker_keeps_wide_table_row_intact():
     from bintu_api.context import count_tokens, split_into_chunks
 
-    target_row = (
-        "\u03b4\u03bf\u03ba\u03b9\u03bc\u03ae | xn--jxalpdlp"
-        " | Greek, Modern (1453-) | Greek"
-    )
+    target_row = "\u03b4\u03bf\u03ba\u03b9\u03bc\u03ae | xn--jxalpdlp | Greek, Modern (1453-) | Greek"
     rows = [
         "Domain | Domain (A-label) | Language | Script",
         "--- | --- | --- | ---",
-        *[
-            f"domain-{index} | xn--example-{index} | Example language | Latin"
-            for index in range(8)
-        ],
+        *[f"domain-{index} | xn--example-{index} | Example language | Latin" for index in range(8)],
         target_row,
         "final-domain | xn--final | Another language | Latin",
     ]
     text = (
         "# IANA-managed Reserved Domains\n"
-        "The following table lists test domains.\n"
-        + "\n".join(rows)
-        + "\n## Policy-reserved domains\n"
+        "The following table lists test domains.\n" + "\n".join(rows) + "\n## Policy-reserved domains\n"
         "These entries are not available for registration."
     )
     budget = 100
@@ -245,12 +195,7 @@ def test_actual_chunker_keeps_wide_table_row_intact():
     chunks = split_into_chunks(text, budget)
 
     assert len(chunks) > 1
-    output_lines = [
-        line.strip()
-        for chunk in chunks
-        for line in chunk.splitlines()
-        if line.strip()
-    ]
+    output_lines = [line.strip() for chunk in chunks for line in chunk.splitlines() if line.strip()]
     table_lines = [line for line in output_lines if "|" in line]
 
     _assert_table_chunks_preserve_content(

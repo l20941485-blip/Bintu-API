@@ -1,4 +1,4 @@
-﻿from bintu_api.extraction_quality import (
+from bintu_api.extraction_quality import (
     dedupe_blocks,
     normalize_markdown,
     truncate_to_token_budget,

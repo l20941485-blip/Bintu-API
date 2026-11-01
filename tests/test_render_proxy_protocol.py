@@ -61,9 +61,8 @@ class ConnectAuthorityTests(unittest.TestCase):
             ("a" * 513) + ":443",
         )
         for authority in cases:
-            with self.subTest(authority=authority):
-                with self.assertRaises(ProxyRequestRejected):
-                    parse_connect_authority(authority)
+            with self.subTest(authority=authority), self.assertRaises(ProxyRequestRejected):
+                parse_connect_authority(authority)
 
     def test_parsing_does_not_authorize_destination(self) -> None:
         self.assertEqual(

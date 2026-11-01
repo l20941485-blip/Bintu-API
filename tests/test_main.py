@@ -1,24 +1,19 @@
 import io
 import json
 import unittest
+from unittest import mock
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
 from bintu_api.database import CachedMarkdown
 from bintu_api.mcp import (
-    TOOL_ANNOTATIONS,
-    TOOL_INPUT_SCHEMA,
     TOOL_NAME,
-    TOOL_OUTPUT_SCHEMA,
 )
+from bintu_api.robots import RobotsDecision
 from bintu_api.scraper import FetchedHTML, UpstreamHTTPError
 from bintu_api.settings import Settings
 from main import create_app
-
-from unittest import mock
-
-from bintu_api.robots import RobotsDecision
 
 _robots_patch = mock.patch(
     "bintu_api.routes.robots_decision",
@@ -116,9 +111,7 @@ class ScraperApiTests(unittest.TestCase):
             Settings(
                 api_key="",
                 rapidapi_proxy_secret="",
-                cors_allowed_origins=(
-                    "https://app.example, https://dev.example"
-                ),
+                cors_allowed_origins=("https://app.example, https://dev.example"),
             )
         )
         client = TestClient(app)
@@ -152,11 +145,7 @@ class ScraperApiTests(unittest.TestCase):
     def test_settings_read_cors_allowlist_from_env(self) -> None:
         with patch.dict(
             "os.environ",
-            {
-                "CORS_ALLOWED_ORIGINS": (
-                    "https://a.example, https://b.example"
-                )
-            },
+            {"CORS_ALLOWED_ORIGINS": ("https://a.example, https://b.example")},
         ):
             settings = Settings.from_env()
 
@@ -490,9 +479,7 @@ class ScraperApiTests(unittest.TestCase):
                     "url": "https://example.com/app",
                     "render_js": True,
                 },
-                headers={
-                    "Authorization": "Bearer user-access-token"
-                },
+                headers={"Authorization": "Bearer user-access-token"},
             )
 
         self.assertEqual(response.status_code, 400)
@@ -510,9 +497,7 @@ class ScraperApiTests(unittest.TestCase):
         with (
             patch(
                 "bintu_api.routes.get_cached_markdown",
-                new=AsyncMock(
-                    side_effect=RuntimeError("database unavailable")
-                ),
+                new=AsyncMock(side_effect=RuntimeError("database unavailable")),
             ),
             patch(
                 "bintu_api.routes.fetch_html_document",
@@ -546,9 +531,7 @@ class ScraperApiTests(unittest.TestCase):
                     )
                 ),
             ),
-            patch(
-                "bintu_api.routes.fetch_html_document"
-            ) as fetch,
+            patch("bintu_api.routes.fetch_html_document") as fetch,
         ):
             response = self.client.get(
                 "/api/v1/scrape/text",
@@ -605,16 +588,12 @@ class ScraperApiTests(unittest.TestCase):
         response = self.client.get("/openapi.json")
 
         self.assertEqual(response.status_code, 200)
-        operation = response.json()["paths"][
-            "/api/v1/scrape/text"
-        ]["get"]
+        operation = response.json()["paths"]["/api/v1/scrape/text"]["get"]
         self.assertEqual(
             operation["summary"],
             "Extract readable text from a public web page",
         )
-        response_schema = operation["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
+        response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
         schema_name = response_schema["$ref"].rsplit("/", 1)[-1]
         schema = response.json()["components"]["schemas"][schema_name]
         self.assertEqual(
@@ -674,27 +653,27 @@ class ScraperApiTests(unittest.TestCase):
     def test_application_logs_and_metrics_exclude_scraped_content_and_target_url(
         self,
     ) -> None:
-        target_url = (
-            "https://example.com/article?token=unique-target-secret"
-        )
+        target_url = "https://example.com/article?token=unique-target-secret"
         scraped_marker = "unique-scraped-content-marker"
         html = f"<main><p>{scraped_marker}</p></main>".encode()
-        with patch(
-            "bintu_api.routes.fetch_html_document",
-            return_value=FetchedHTML(
-                body=html,
-                charset=None,
-                final_url="https://example/article",
+        with (
+            patch(
+                "bintu_api.routes.fetch_html_document",
+                return_value=FetchedHTML(
+                    body=html,
+                    charset=None,
+                    final_url="https://example/article",
+                ),
             ),
-        ):
-            with self.assertLogs(
+            self.assertLogs(
                 "bintu_api.request",
                 level="INFO",
-            ) as captured:
-                response = self.client.get(
-                    "/api/v1/scrape/text",
-                    params={"url": target_url},
-                )
+            ) as captured,
+        ):
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={"url": target_url},
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(
@@ -881,9 +860,7 @@ class ScraperApiTests(unittest.TestCase):
             response = client.post(
                 "/api/v1/mobile/scrape/text",
                 json={"url": "https://example.com"},
-                headers={
-                    "Authorization": "Bearer user-access-token"
-                },
+                headers={"Authorization": "Bearer user-access-token"},
             )
 
         self.assertEqual(response.status_code, 200)
@@ -920,9 +897,7 @@ class ScraperApiTests(unittest.TestCase):
             response = client.post(
                 "/api/v1/mobile/scrape/text",
                 json={"url": "https://example.com"},
-                headers={
-                    "Authorization": "Bearer user-access-token"
-                },
+                headers={"Authorization": "Bearer user-access-token"},
             )
 
         self.assertEqual(response.status_code, 403)
@@ -938,9 +913,7 @@ class ScraperApiTests(unittest.TestCase):
         response = client.post(
             "/api/v1/mobile/scrape/text",
             json={"url": "https://example.com"},
-            headers={
-                "Authorization": "Bearer user-access-token"
-            },
+            headers={"Authorization": "Bearer user-access-token"},
         )
 
         self.assertEqual(response.status_code, 503)

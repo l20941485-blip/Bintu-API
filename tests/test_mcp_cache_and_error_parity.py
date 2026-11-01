@@ -82,9 +82,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
         with patch(
             "bintu_api.routes._fetch_and_extract",
-            new=AsyncMock(
-                return_value=(None, cached_row, "none")
-            ),
+            new=AsyncMock(return_value=(None, cached_row, "none")),
         ) as fetch:
             envelope = self._call_tool(
                 {
@@ -113,9 +111,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
         with patch(
             "bintu_api.routes._fetch_and_extract",
-            new=AsyncMock(
-                return_value=(None, cached_row, "persistent")
-            ),
+            new=AsyncMock(return_value=(None, cached_row, "persistent")),
         ) as fetch:
             self._call_tool(
                 {
@@ -129,13 +125,9 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
     def test_upstream_403_maps_to_access_denied(self) -> None:
         with patch(
             "bintu_api.routes._fetch_and_extract",
-            new=AsyncMock(
-                side_effect=UpstreamHTTPError(403, "Forbidden")
-            ),
+            new=AsyncMock(side_effect=UpstreamHTTPError(403, "Forbidden")),
         ):
-            response = self._post_tool_call(
-                {"url": "https://example.com/page"}
-            )
+            response = self._post_tool_call({"url": "https://example.com/page"})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -147,15 +139,9 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
     def test_upstream_429_maps_to_access_denied(self) -> None:
         with patch(
             "bintu_api.routes._fetch_and_extract",
-            new=AsyncMock(
-                side_effect=UpstreamHTTPError(
-                    429, "Too Many Requests"
-                )
-            ),
+            new=AsyncMock(side_effect=UpstreamHTTPError(429, "Too Many Requests")),
         ):
-            response = self._post_tool_call(
-                {"url": "https://example.com/page"}
-            )
+            response = self._post_tool_call({"url": "https://example.com/page"})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

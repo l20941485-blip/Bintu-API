@@ -17,19 +17,11 @@ from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
 
-
 URL = "https://example.com/contract"
 
-TEXT = " ".join(
-    f"Sentence {index} contains readable example content."
-    for index in range(40)
-)
+TEXT = " ".join(f"Sentence {index} contains readable example content." for index in range(40))
 
-HTML = (
-    "<html><body><main><p>"
-    + TEXT
-    + "</p></main></body></html>"
-).encode("utf-8")
+HTML = ("<html><body><main><p>" + TEXT + "</p></main></body></html>").encode("utf-8")
 
 
 class MCPOutputContractTests(unittest.TestCase):

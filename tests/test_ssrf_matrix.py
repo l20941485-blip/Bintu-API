@@ -208,12 +208,7 @@ NUMERIC_IP_LITERALS = [
 
 # Schemes/hosts that must be refused before any socket is opened.
 MATRIX_CASES = (
-    NON_HTTP_SCHEMES
-    + NOT_ABSOLUTE_URLS
-    + CREDENTIAL_URLS
-    + CONTROL_CHARACTER_URLS
-    + MALFORMED_URLS
-    + UNUSUAL_PORTS
+    NON_HTTP_SCHEMES + NOT_ABSOLUTE_URLS + CREDENTIAL_URLS + CONTROL_CHARACTER_URLS + MALFORMED_URLS + UNUSUAL_PORTS
 )
 
 
@@ -240,9 +235,8 @@ class SSRFMatrixTests(unittest.TestCase):
     def test_ssrf_matrix_url_rejections(self):
         """Every hostile URL shape is rejected at parse time."""
         for url in MATRIX_CASES:
-            with self.subTest(url=url):
-                with self.assertRaises(TargetURLRejected):
-                    _parse_target(url, settings=self.settings)
+            with self.subTest(url=url), self.assertRaises(TargetURLRejected):
+                _parse_target(url, settings=self.settings)
 
     def test_rejection_never_leaks_unexpected_exception_types(self):
         """Hostile input must fail as TargetURLRejected, never as a crash."""
@@ -287,51 +281,58 @@ class SSRFMatrixTests(unittest.TestCase):
     def test_non_public_dns_answers_are_rejected(self):
         """Private, reserved and multicast answers never become targets."""
         for address, family in NON_PUBLIC_ADDRESSES:
-            with self.subTest(address=address), patch(
-                "bintu_api.scraper.socket.getaddrinfo",
-                return_value=[dns_result(address, family)],
+            with (
+                self.subTest(address=address),
+                patch(
+                    "bintu_api.scraper.socket.getaddrinfo",
+                    return_value=[dns_result(address, family)],
+                ),
+                self.assertRaises(TargetURLRejected),
             ):
-                with self.assertRaises(TargetURLRejected):
-                    resolve_public_addresses("target.example", 80)
+                resolve_public_addresses("target.example", 80)
 
     def test_public_dns_answers_are_still_accepted(self):
         """The address filter must not break legitimate public targets."""
         for address, family in PUBLIC_ADDRESSES:
-            with self.subTest(address=address), patch(
-                "bintu_api.scraper.socket.getaddrinfo",
-                return_value=[dns_result(address, family)],
+            with (
+                self.subTest(address=address),
+                patch(
+                    "bintu_api.scraper.socket.getaddrinfo",
+                    return_value=[dns_result(address, family)],
+                ),
             ):
-                self.assertEqual(
-                    resolve_public_addresses("public.example", 80), (address,)
-                )
+                self.assertEqual(resolve_public_addresses("public.example", 80), (address,))
 
     def test_a_single_private_answer_poisons_the_whole_resolution(self):
         """A mixed public/private answer set is rejected as a whole."""
-        with patch(
-            "bintu_api.scraper.socket.getaddrinfo",
-            return_value=[
-                dns_result("93.184.216.34"),
-                dns_result("192.168.1.20"),
-            ],
+        with (
+            patch(
+                "bintu_api.scraper.socket.getaddrinfo",
+                return_value=[
+                    dns_result("93.184.216.34"),
+                    dns_result("192.168.1.20"),
+                ],
+            ),
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                resolve_public_addresses("mixed.example", 80)
+            resolve_public_addresses("mixed.example", 80)
 
     def test_numeric_ip_literal_targets_are_rejected(self):
         """A literal private IP in the URL is refused end-to-end."""
         for host in NUMERIC_IP_LITERALS:
-            with self.subTest(host=host):
-                with self.assertRaises(TargetURLRejected):
-                    resolve_public_addresses(host, 80)
+            with self.subTest(host=host), self.assertRaises(TargetURLRejected):
+                resolve_public_addresses(host, 80)
 
     def test_unresolvable_hostname_is_rejected(self):
         """A hostname that does not resolve is refused, not retried blindly."""
-        with patch(
-            "bintu_api.scraper.socket.getaddrinfo",
-            side_effect=socket.gaierror("name does not resolve"),
+        with (
+            patch(
+                "bintu_api.scraper.socket.getaddrinfo",
+                side_effect=socket.gaierror("name does not resolve"),
+            ),
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                resolve_public_addresses("nonexistent.invalid", 80)
+            resolve_public_addresses("nonexistent.invalid", 80)
 
     # ------------------------------------------------------------------
     # S8: port allow-list
@@ -340,15 +341,12 @@ class SSRFMatrixTests(unittest.TestCase):
     def test_unusual_ports_are_rejected_by_default(self):
         """Only 80/443 are reachable unless an operator opts in."""
         for url in UNUSUAL_PORTS:
-            with self.subTest(url=url):
-                with self.assertRaises(TargetURLRejected):
-                    _parse_target(url, settings=self.settings)
+            with self.subTest(url=url), self.assertRaises(TargetURLRejected):
+                _parse_target(url, settings=self.settings)
 
     def test_operator_can_opt_in_to_extra_ports(self):
         """ALLOWED_PORTS widens the allow-list but nothing else."""
-        settings = Settings(
-            api_key="", rapidapi_proxy_secret="", allowed_ports="80,443,8080"
-        )
+        settings = Settings(api_key="", rapidapi_proxy_secret="", allowed_ports="80,443,8080")
         _, host, port, _ = _parse_target("http://example.com:8080/", settings=settings)
         self.assertEqual((host, port), ("example.com", 8080))
         with self.assertRaises(TargetURLRejected):
@@ -356,13 +354,11 @@ class SSRFMatrixTests(unittest.TestCase):
 
     def test_invalid_allowed_ports_entries_are_ignored(self):
         """Garbage in ALLOWED_PORTS never widens the allow-list."""
-        settings = Settings(
-            api_key="", rapidapi_proxy_secret="", allowed_ports="abc,0,70000,,8080"
-        )
+        settings = Settings(api_key="", rapidapi_proxy_secret="", allowed_ports="abc,0,70000,,8080")
         self.assertEqual(settings.allowed_port_set(), frozenset({80, 443, 8080}))
 
     def test_explicit_port_zero_is_rejected_not_defaulted(self):
-        """":0" must not silently fall back to the scheme's default port."""
+        """ ":0" must not silently fall back to the scheme's default port."""
         with self.assertRaises(TargetURLRejected):
             _parse_target("http://example.com:0/", settings=self.settings)
         with self.assertRaises(TargetURLRejected):
@@ -371,9 +367,7 @@ class SSRFMatrixTests(unittest.TestCase):
     def test_absent_port_still_uses_the_scheme_default(self):
         """A URL without a port keeps the 80/443 default."""
         _, _, http_port, _ = _parse_target("http://example.com/", settings=self.settings)
-        _, _, https_port, _ = _parse_target(
-            "https://example.com/", settings=self.settings
-        )
+        _, _, https_port, _ = _parse_target("https://example.com/", settings=self.settings)
         self.assertEqual((http_port, https_port), (80, 443))
 
     # ------------------------------------------------------------------
@@ -382,24 +376,20 @@ class SSRFMatrixTests(unittest.TestCase):
 
     def test_https_downgrade_redirect_is_refused(self):
         """S10: an https page may not hand us down to cleartext."""
-        first = FakeConnection(
-            FakeResponse(status=302, headers={"Location": "http://example.com/"})
-        )
+        first = FakeConnection(FakeResponse(status=302, headers={"Location": "http://example.com/"}))
         with (
             patch(
                 "bintu_api.scraper.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
             patch("bintu_api.scraper._make_connection", return_value=first),
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                fetch_html("https://example.com/", self.settings)
+            fetch_html("https://example.com/", self.settings)
 
     def test_public_to_private_redirect_is_refused(self):
         """A redirect may not pivot the request into the private network."""
-        redirect = FakeResponse(
-            status=302, headers={"Location": "http://internal.example/admin"}
-        )
+        redirect = FakeResponse(status=302, headers={"Location": "http://internal.example/admin"})
         connection = FakeConnection(redirect)
         with (
             patch(
@@ -409,21 +399,17 @@ class SSRFMatrixTests(unittest.TestCase):
                     [dns_result("192.168.1.20")],
                 ],
             ),
-            patch(
-                "bintu_api.scraper._make_connection", return_value=connection
-            ) as make_connection,
+            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                fetch_html("http://public.example/", self.settings)
+            fetch_html("http://public.example/", self.settings)
 
         make_connection.assert_called_once()
         self.assertTrue(connection.closed)
 
     def test_dns_rebinding_is_caught_between_redirects(self):
         """Each hop resolves DNS again, so a rebound answer is refused."""
-        redirect = FakeResponse(
-            status=302, headers={"Location": "http://rebound.example/"}
-        )
+        redirect = FakeResponse(status=302, headers={"Location": "http://rebound.example/"})
         connection = FakeConnection(redirect)
         with (
             patch(
@@ -433,12 +419,10 @@ class SSRFMatrixTests(unittest.TestCase):
                     [dns_result("127.0.0.1")],
                 ],
             ),
-            patch(
-                "bintu_api.scraper._make_connection", return_value=connection
-            ) as make_connection,
+            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                fetch_html("http://public.example/", self.settings)
+            fetch_html("http://public.example/", self.settings)
 
         make_connection.assert_called_once()
 
@@ -457,9 +441,9 @@ class SSRFMatrixTests(unittest.TestCase):
                 return_value=[dns_result("93.184.216.34")],
             ),
             patch("bintu_api.scraper._make_connection", side_effect=capture),
+            self.assertRaises(RuntimeError),
         ):
-            with self.assertRaises(RuntimeError):
-                fetch_html("http://public.example/", self.settings)
+            fetch_html("http://public.example/", self.settings)
 
         self.assertEqual(captured["address"], "93.184.216.34")
         self.assertEqual(captured["host"], "public.example")
@@ -474,12 +458,10 @@ class SSRFMatrixTests(unittest.TestCase):
                 "bintu_api.scraper.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch(
-                "bintu_api.scraper._make_connection", return_value=connection
-            ) as make_connection,
+            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            self.assertRaises(TooManyRedirects),
         ):
-            with self.assertRaises(TooManyRedirects):
-                fetch_html("http://loop.example/", settings)
+            fetch_html("http://loop.example/", settings)
 
         self.assertEqual(make_connection.call_count, 3)
 
@@ -526,19 +508,12 @@ class SSRFMatrixTests(unittest.TestCase):
 
     def test_non_html_content_type_is_refused(self):
         """Only HTML/XHTML bodies are processed."""
-        response = FakeResponse(
-            headers={"Content-Type": "application/json"}, body=b"{}"
-        )
+        response = FakeResponse(headers={"Content-Type": "application/json"}, body=b"{}")
         with self.assertRaises(UnsupportedMediaType):
             _read_html_response(response, 1024)
 
     def test_unsupported_content_encoding_is_refused(self):
         """Only identity/gzip bodies are processed."""
-        response = FakeResponse(
-            headers={"Content-Type": "text/html", "Content-Encoding": "br"}, body=b"x"
-        )
+        response = FakeResponse(headers={"Content-Type": "text/html", "Content-Encoding": "br"}, body=b"x")
         with self.assertRaises(UnsupportedContentEncoding):
             _read_html_response(response, 1024)
-
-
-

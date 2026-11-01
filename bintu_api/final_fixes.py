@@ -1,10 +1,9 @@
-﻿"""Small fixes found in the Oct 29-30 production re-tests."""
+"""Small fixes found in the Oct 29-30 production re-tests."""
 
 from __future__ import annotations
 
 import re
 from urllib.parse import parse_qsl, urlsplit
-
 
 CREDENTIAL_QUERY_PARAMS = frozenset(
     {
@@ -33,10 +32,7 @@ def has_credential_params(url: str) -> bool:
         pairs = parse_qsl(urlsplit(url).query, keep_blank_values=True)
     except ValueError:
         return False
-    return any(
-        name.strip().lower() in CREDENTIAL_QUERY_PARAMS
-        for name, _ in pairs
-    )
+    return any(name.strip().lower() in CREDENTIAL_QUERY_PARAMS for name, _ in pairs)
 
 
 def delivered_savings(html_tokens: int, delivered_tokens: int) -> int:

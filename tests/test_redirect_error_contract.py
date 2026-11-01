@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -36,23 +36,23 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
             },
         )()
 
-        with patch(
-            "bintu_api.routes._fetch_and_extract",
-            new=AsyncMock(
-                side_effect=RedirectedToPrivateNetwork(
-                    "A redirect attempted to access a private network address"
-                )
+        with (
+            patch(
+                "bintu_api.routes._fetch_and_extract",
+                new=AsyncMock(
+                    side_effect=RedirectedToPrivateNetwork("A redirect attempted to access a private network address")
+                ),
             ),
+            self.assertRaises(HTTPException) as caught,
         ):
-            with self.assertRaises(HTTPException) as caught:
-                await _scrape_chunks(
-                    request=request,
-                    url="https://example.com/",
-                    include_nav=False,
-                    include_header=False,
-                    include_footer=False,
-                    identity="test",
-                )
+            await _scrape_chunks(
+                request=request,
+                url="https://example.com/",
+                include_nav=False,
+                include_header=False,
+                include_footer=False,
+                identity="test",
+            )
 
         self.assertEqual(caught.exception.status_code, 400)
         self.assertEqual(

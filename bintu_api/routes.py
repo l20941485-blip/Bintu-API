@@ -2,12 +2,18 @@
 import hashlib
 import logging
 import os
-import socket
 import uuid
-from datetime import datetime, timezone
-from urllib.parse import urlparse, urlunparse
+from datetime import UTC, datetime
+from urllib.parse import (
+    parse_qsl,
+    urlencode,
+    urlparse,
+    urlsplit,
+    urlunparse,
+    urlunsplit,
+)
 
-from fastapi import APIRouter, HTTPException, Request, Security, status
+from fastapi import APIRouter, HTTPException, Request, Security
 
 from bintu_api.auth import (
     api_key_scheme,
@@ -21,12 +27,11 @@ from bintu_api.context import (
     DEFAULT_MAX_TEXT_CHARACTERS,
     MAX_EXTRACTION_CHARACTERS,
     _decode_source_text,
-    resolve_effective_char_cap,
     split_into_chunks,
 )
 from bintu_api.database import (
-    CachedMarkdown,
     DATABASE_TIMEOUT_SECONDS,
+    CachedMarkdown,
     get_cached_markdown,
     increment_developer_usage,
     upsert_cached_markdown,
@@ -51,9 +56,9 @@ from bintu_api.schemas import (
     VersionResponse,
 )
 from bintu_api.scraper import (
-    RedirectedToPrivateNetwork,
     FetchedHTML,
     PayloadTooLarge,
+    RedirectedToPrivateNetwork,
     TargetURLRejected,
     TooManyRedirects,
     UnsupportedContentEncoding,
@@ -66,10 +71,8 @@ from bintu_api.scraper import (
     fetch_html_document,
     fetch_rendered_html_document,
 )
-from bintu_api.yield_check import assess_yield
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
 from bintu_api.settings import Settings
+from bintu_api.yield_check import assess_yield
 
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
@@ -101,10 +104,7 @@ def sanitize_url(url: str) -> str:
     """
     parsed = urlparse(url)
     safe_query = "&".join(
-        part
-        for part in parsed.query.split("&")
-        if part
-        and not _is_sensitive_query_parameter(part.split("=", 1)[0])
+        part for part in parsed.query.split("&") if part and not _is_sensitive_query_parameter(part.split("=", 1)[0])
     )
     return urlunparse(
         (
@@ -120,10 +120,7 @@ def sanitize_url(url: str) -> str:
 
 def _is_sensitive_query_parameter(name: str) -> bool:
     normalized = name.strip().lower()
-    return (
-        normalized in SENSITIVE_QUERY_PARAMETER_NAMES
-        or normalized.startswith("utm_")
-    )
+    return normalized in SENSITIVE_QUERY_PARAMETER_NAMES or normalized.startswith("utm_")
 
 
 def _build_provenance(
@@ -138,13 +135,11 @@ def _build_provenance(
     fetched = document is not None and cache_layer == "none"
     return Provenance(
         request_id=request_id,
-        fetched_at=datetime.now(timezone.utc).isoformat(),
+        fetched_at=datetime.now(UTC).isoformat(),
         requested_url=sanitize_url(url),
         final_url=document.final_url if fetched else None,
         bytes_fetched=len(document.body) if fetched else None,
-        content_sha256=(
-            hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None
-        ),
+        content_sha256=(hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None),
         cache=CacheInfo(
             hit=cache_layer != "none",
             layer=cache_layer,
@@ -199,9 +194,7 @@ def _build_response(
     )
 
 
-async def _enforce_robots(
-    url: str, settings: Settings, url_hash: str
-) -> None:
+async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     """Check robots.txt before any network fetch of the page.
 
     enforce: an explicit robots disallow blocks with 403. A robots.txt retrieval
@@ -231,10 +224,7 @@ async def _enforce_robots(
                 status_code=403,
                 detail={
                     "code": "robots_unreachable",
-                    "message": (
-                        "Fetching this page is not permitted: "
-                        f"{decision.reason.rstrip('.')}."
-                    ),
+                    "message": (f"Fetching this page is not permitted: {decision.reason.rstrip('.')}."),
                     "hint": (
                         "The target's robots.txt could not be retrieved. "
                         "Access is denied while robots enforcement is enabled."
@@ -246,13 +236,8 @@ async def _enforce_robots(
             status_code=403,
             detail={
                 "code": "blocked_by_robots",
-                "message": (
-                    "Fetching this page is not permitted: "
-                    f"{decision.reason.rstrip('.')}."
-                ),
-                "hint": (
-                    "Bintu respects robots.txt. The site owner controls this."
-                ),
+                "message": (f"Fetching this page is not permitted: {decision.reason.rstrip('.')}."),
+                "hint": ("Bintu respects robots.txt. The site owner controls this."),
             },
         )
 
@@ -313,10 +298,7 @@ def version_info(request: Request) -> VersionResponse:
         "The service checks the site's robots.txt first. "
         "JavaScript rendering is disabled unless the service enables it."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 413, 415, 429, 502, 504)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 413, 415, 429, 502, 504)},
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def scrape_text(
@@ -375,10 +357,7 @@ async def scrape_text(
         "returns fence-aware chunks sized to the requested token budget. "
         "The extraction character ceiling applies before chunking."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 413, 415, 429, 502, 504)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 413, 415, 429, 502, 504)},
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def scrape_chunks(
@@ -459,6 +438,7 @@ async def scrape_chunks(
         chunks=chunks,
     )
 
+
 async def _scrape_chunks(
     request: Request,
     url: str,
@@ -472,10 +452,7 @@ async def _scrape_chunks(
     max_tokens: int = 6000,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     settings = request.app.state.settings
-    request_id = (
-        getattr(getattr(request, "state", None), "request_id", None)
-        or uuid.uuid4().hex
-    )
+    request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
 
     try:
         await asyncio.to_thread(
@@ -598,7 +575,7 @@ async def _scrape_chunks(
                 "hint": "The page has too many redirects",
             },
         ) from error
-    except (TimeoutError, socket.timeout) as error:
+    except TimeoutError as error:
         log_upstream_error(
             error_type="upstream_timeout",
             url=url,
@@ -653,10 +630,7 @@ async def _scrape_chunks(
         "Requires an Authorization Bearer token from the configured Supabase project. "
         "Only users with verified email addresses can use this endpoint."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 413, 415, 429, 502, 503, 504)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 413, 415, 429, 502, 503, 504)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def mobile_scrape_text(
@@ -729,8 +703,7 @@ def redact_cache_url(url: str) -> str:
         return url
 
     redacted_pairs = [
-        (name, "[REDACTED]" if name.lower() in _CREDENTIAL_QUERY_PARAMS else value)
-        for name, value in pairs
+        (name, "[REDACTED]" if name.lower() in _CREDENTIAL_QUERY_PARAMS else value) for name, value in pairs
     ]
 
     return urlunsplit(
@@ -774,26 +747,17 @@ async def _fetch_and_extract(
     )
     # Persistent rows share one canonical extraction policy.
     # Custom operator caps use raw-HTML memory caching only.
-    persistent_cache_enabled = (
-        settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
-    )
+    persistent_cache_enabled = settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
     # Never persist URLs whose query string may carry a caller credential.
     cacheable = not has_credential_params(url)
     database_client = getattr(request.app.state, "supabase_client", None)
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
     cache_layer = "none"
-    request_id = getattr(
-        getattr(request, "state", None), "request_id", None
-    )
+    request_id = getattr(getattr(request, "state", None), "request_id", None)
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
-    if (
-        database_client is not None
-        and persistent_cache_enabled
-        and cacheable
-        and not skip_cache
-    ):
+    if database_client is not None and persistent_cache_enabled and cacheable and not skip_cache:
         try:
             result = await asyncio.wait_for(
                 get_cached_markdown(
@@ -812,9 +776,7 @@ async def _fetch_and_extract(
                 type(error).__name__,
             )
 
-    cache_key = hashlib.sha256(
-        f"{int(render_js)}:{url}".encode()
-    ).hexdigest()
+    cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
 
     if result is not None:
         cache_layer = "persistent"
@@ -865,7 +827,6 @@ async def _fetch_and_extract(
                 settings,
             )
 
-
     extracted = extract_text_result(
         document.body,
         extraction_cap,
@@ -886,7 +847,7 @@ async def _fetch_and_extract(
         document.body,
         extracted.text,
     )
-    extracted_at = datetime.now(timezone.utc).isoformat()
+    extracted_at = datetime.now(UTC).isoformat()
 
     result = CachedMarkdown(
         markdown=extracted.text,
@@ -897,12 +858,7 @@ async def _fetch_and_extract(
         extracted_at=extracted_at,
     )
 
-    if (
-        database_client is not None
-        and persistent_cache_enabled
-        and cacheable
-        and persist
-    ):
+    if database_client is not None and persistent_cache_enabled and cacheable and persist:
         try:
             await asyncio.wait_for(
                 upsert_cached_markdown(
@@ -938,6 +894,7 @@ async def _fetch_and_extract(
 
 from bintu_api.extraction_quality import truncate_to_token_budget
 
+
 async def _scrape_text(
     request: Request,
     url: str,
@@ -951,10 +908,7 @@ async def _scrape_text(
     max_tokens: int = 6000,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
-    request_id = (
-        getattr(getattr(request, "state", None), "request_id", None)
-        or uuid.uuid4().hex
-    )
+    request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
 
     try:
         await asyncio.to_thread(
@@ -974,18 +928,9 @@ async def _scrape_text(
             max_tokens=max_tokens,
         )
 
-        if (
-            request.app.state.supabase_client is not None
-            and has_valid_proxy_secret(request, settings)
-        ):
-            rapidapi_user = request.headers.get(
-                "X-RapidAPI-User", ""
-            ).strip()
-            if (
-                rapidapi_user
-                and len(rapidapi_user) <= 256
-                and rapidapi_user.isprintable()
-            ):
+        if request.app.state.supabase_client is not None and has_valid_proxy_secret(request, settings):
+            rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
+            if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
                 try:
                     await asyncio.wait_for(
                         increment_developer_usage(
@@ -1131,14 +1076,8 @@ async def _scrape_text(
                 status_code=502,
                 detail={
                     "code": "upstream_access_denied",
-                    "message": (
-                        "The target refused access "
-                        f"(HTTP {error.status_code})."
-                    ),
-                    "hint": (
-                        "Bintu does not retry, log in, solve CAPTCHAs or "
-                        "work around blocks."
-                    ),
+                    "message": (f"The target refused access (HTTP {error.status_code})."),
+                    "hint": ("Bintu does not retry, log in, solve CAPTCHAs or work around blocks."),
                     "upstream_status": error.status_code,
                 },
             ) from error
@@ -1147,9 +1086,7 @@ async def _scrape_text(
             status_code=502,
             detail={
                 "code": "upstream_http_error",
-                "message": (
-                    f"The target returned HTTP {error.status_code}."
-                ),
+                "message": (f"The target returned HTTP {error.status_code}."),
                 "hint": "The target server returned an error. Try again later.",
             },
         ) from error
@@ -1181,7 +1118,7 @@ async def _scrape_text(
                 "hint": "The target page could not be rendered.",
             },
         ) from error
-    except (TimeoutError, socket.timeout) as error:
+    except TimeoutError as error:
         log_upstream_error(
             error_type="upstream_timeout",
             url=url,
@@ -1233,6 +1170,4 @@ async def _scrape_text(
 
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).
-scrape_text = _scrape_text
-
-
+scrape_text = _scrape_text  # noqa: F811 -- intentional public alias for the route handler

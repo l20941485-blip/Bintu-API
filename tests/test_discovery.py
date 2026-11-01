@@ -12,18 +12,20 @@ from main import create_app
 
 class DiscoveryTests(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(create_app(Settings(
-            api_key="test-only-key",
-            rapidapi_proxy_secret="",
-            require_auth=True,
-        )))
+        self.client = TestClient(
+            create_app(
+                Settings(
+                    api_key="test-only-key",
+                    rapidapi_proxy_secret="",
+                    require_auth=True,
+                )
+            )
+        )
 
     def test_robots_is_public_plain_text(self):
         response = self.client.get("/robots.txt")
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(
-            response.headers["content-type"].startswith("text/plain")
-        )
+        self.assertTrue(response.headers["content-type"].startswith("text/plain"))
         self.assertIn("User-agent: *", response.text)
         self.assertIn("Allow: /", response.text)
         self.assertIn("/docs", response.text)
@@ -31,12 +33,14 @@ class DiscoveryTests(unittest.TestCase):
     def test_llms_is_public_and_documents_limits(self):
         response = self.client.get("/llms.txt")
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(
-            response.headers["content-type"].startswith("text/plain")
-        )
+        self.assertTrue(response.headers["content-type"].startswith("text/plain"))
         for expected in (
-            "1 MiB", "6,000", "HTML/XHTML", "bintu_scrape_text",
-            "cache=false", "skip_cache=true",
+            "1 MiB",
+            "6,000",
+            "HTML/XHTML",
+            "bintu_scrape_text",
+            "cache=false",
+            "skip_cache=true",
         ):
             self.assertIn(expected, response.text)
         self.assertNotIn("test-only-key", response.text)
@@ -48,8 +52,6 @@ class DiscoveryTests(unittest.TestCase):
             params={"url": "https://example.com/"},
         )
         self.assertEqual(response.status_code, 401)
-
-
 
     def test_llms_json_example_has_plain_target_url(self):
         response = self.client.get("/llms.txt")

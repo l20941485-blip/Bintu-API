@@ -98,6 +98,7 @@ def test_redis_failure_reports_fallback_mode_and_uses_local_guard():
     assert error.value.status_code == 429
     assert gauge_value() == 0
 
+
 @pytest.mark.parametrize("over_limit", [False, True])
 def test_redis_recovery_restores_redis_mode(over_limit):
     with patch(
@@ -138,7 +139,5 @@ def test_redis_recovery_restores_redis_mode(over_limit):
         else:
             limiter.check("caller")
 
-    assert recovered.values["rate_limit:caller"] == (
-        3 if over_limit else 1
-    )
+    assert recovered.values["rate_limit:caller"] == (3 if over_limit else 1)
     assert gauge_value() == 1

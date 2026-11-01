@@ -2,7 +2,6 @@
 
 from bintu_api.scraper import extract_text
 
-
 HTML = b"""
 <html>
   <body>

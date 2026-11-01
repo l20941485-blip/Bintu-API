@@ -19,7 +19,9 @@ def _fetch(url, payload=None):
         }
 
     request = urllib.request.Request(
-        url, data=data, headers=headers,
+        url,
+        data=data,
+        headers=headers,
         method="POST" if payload is not None else "GET",
     )
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
@@ -38,8 +40,10 @@ def _require(condition, message):
 def check_discovery(base_url):
     for path, markers in (
         ("/robots.txt", ("User-agent: *", "Allow: /", "/docs")),
-        ("/llms.txt", ("bintu_scrape_text", "1 MiB", "6,000",
-                       "cache=false", "skip_cache=true")),
+        (
+            "/llms.txt",
+            ("bintu_scrape_text", "1 MiB", "6,000", "cache=false", "skip_cache=true"),
+        ),
     ):
         status, content_type, text = _fetch(base_url + path)
         _require(status == 200, f"{path}: expected HTTP 200")
@@ -52,8 +56,7 @@ def check_discovery(base_url):
             _require(match is not None, "/llms.txt: missing JSON example")
             example = json.loads(match.group(1))
             _require(
-                example["params"]["arguments"]["url"]
-                == "https://" + "example.com/",
+                example["params"]["arguments"]["url"] == "https://" + "example.com/",
                 "/llms.txt: example target is not the intended plain URL",
             )
         print(f"OK  {path}")
@@ -74,8 +77,7 @@ def check_discovery(base_url):
     tools = result.get("tools")
     _require(isinstance(tools, list), "tools/list: missing tool list")
     tool = next(
-        (item for item in tools
-         if isinstance(item, dict) and item.get("name") == "bintu_scrape_text"),
+        (item for item in tools if isinstance(item, dict) and item.get("name") == "bintu_scrape_text"),
         None,
     )
     _require(tool is not None, "tools/list: bintu_scrape_text not advertised")

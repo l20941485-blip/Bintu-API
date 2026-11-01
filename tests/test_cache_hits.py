@@ -1,4 +1,4 @@
-﻿"""Persistent cache hit behavior and empty-row rejection."""
+"""Persistent cache hit behavior and empty-row rejection."""
 
 from __future__ import annotations
 
@@ -34,15 +34,19 @@ class PersistentCacheHitTests(unittest.IsolatedAsyncioTestCase):
             extracted_at="2026-10-25T00:00:00+00:00",
         )
 
-        with patch(
-            "bintu_api.routes.get_cached_markdown",
-            new=AsyncMock(return_value=cached),
-        ), patch(
-            "bintu_api.routes.fetch_html_document",
-            side_effect=AssertionError("persistent cache hit must not fetch"),
-        ), patch(
-            "bintu_api.routes.fetch_rendered_html_document",
-            side_effect=AssertionError("persistent cache hit must not render"),
+        with (
+            patch(
+                "bintu_api.routes.get_cached_markdown",
+                new=AsyncMock(return_value=cached),
+            ),
+            patch(
+                "bintu_api.routes.fetch_html_document",
+                side_effect=AssertionError("persistent cache hit must not fetch"),
+            ),
+            patch(
+                "bintu_api.routes.fetch_rendered_html_document",
+                side_effect=AssertionError("persistent cache hit must not render"),
+            ),
         ):
             document, result, cache_layer = await _fetch_and_extract(
                 request,
@@ -64,14 +68,16 @@ class PersistentCacheHitTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_empty_cached_markdown_row_is_rejected(self) -> None:
         response = MagicMock()
-        response.data = [{
-            "markdown": "",
-            "truncated": False,
-            "html_tokens": 0,
-            "tokens_saved_estimate": 0,
-            "limiting_factor": "none",
-            "extracted_at": "2026-10-25T00:00:00+00:00",
-        }]
+        response.data = [
+            {
+                "markdown": "",
+                "truncated": False,
+                "html_tokens": 0,
+                "tokens_saved_estimate": 0,
+                "limiting_factor": "none",
+                "extracted_at": "2026-10-25T00:00:00+00:00",
+            }
+        ]
 
         builder = MagicMock()
         builder.execute = AsyncMock(return_value=response)
@@ -98,4 +104,3 @@ class PersistentCacheHitTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-    

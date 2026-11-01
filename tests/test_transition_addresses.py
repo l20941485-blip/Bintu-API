@@ -67,9 +67,9 @@ class TransitionAddressTests(unittest.TestCase):
                 "bintu_api.scraper._make_connection",
                 return_value=connection,
             ) as make_connection,
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                fetch_html("http://wrapped.example/", self.settings)
+            fetch_html("http://wrapped.example/", self.settings)
 
         make_connection.assert_not_called()
         self.assertFalse(connection.closed)
@@ -153,6 +153,7 @@ class TransitionAddressTests(unittest.TestCase):
 
     def test_fetch_rejects_ipv4_translated_private_address_before_connection(self):
         self.assert_rejects_wrapped_address("::ffff:0:0a00:1")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

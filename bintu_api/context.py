@@ -13,35 +13,27 @@ Markdown, the server reports token counts, chunk boundaries, and cache hits so
 agents and callers can budget LLM context precisely.
 """
 
-
 from __future__ import annotations
 
-
-import asyncio
 import logging
 import re
-import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
-
 
 from fastapi import Request
 
-
 from bintu_api.auth import rate_limit_identity
 from bintu_api.context_chunking import split_into_chunks, summarize_text
-from bintu_api.cache import TTLCache
 from bintu_api.final_fixes import delivered_savings
 from bintu_api.observability import (
     log_cache_lookup_completed,
     record_cache_tokens_saved,
 )
-from bintu_api.scraper import FetchedHTML, extract_text_result
-from bintu_api.yield_check import assess_yield
-from bintu_api.settings import Settings
 from bintu_api.schemas import CacheInfo
-
+from bintu_api.scraper import FetchedHTML
+from bintu_api.settings import Settings
+from bintu_api.yield_check import assess_yield
 
 logger = logging.getLogger("bintu_api.context")
 
@@ -73,6 +65,7 @@ def resolve_effective_char_cap(
     effective_cap = max(configured_char_cap, token_derived_cap)
     return min(effective_cap, MAX_EXTRACTION_CHARACTERS)
 
+
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
 # while the canonical protocol stays "chunk" / "max_tokens" so existing
 # Claude connectors never break. Normalization is case/whitespace tolerant.
@@ -84,7 +77,6 @@ from bintu_api.extraction_quality import (
 )
 
 MODE_ALIASES = {"chunked": "chunk"}
-
 
 
 def normalize_mode(value: Any) -> str:
@@ -103,19 +95,15 @@ def normalize_mode(value: Any) -> str:
     return canonical
 
 
-
 # Approximate token method: ceil(characters/4) - dependency-free token counting
 TOKEN_METHOD = "ceil(characters/4)"
-
 
 
 def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
     from bintu_api.scraper import _compute_approx_tokens
 
-
     return _compute_approx_tokens(text)
-
 
 
 @dataclass(frozen=True)
@@ -153,18 +141,15 @@ class ContextResult:
     extractor_version: str | None = None
 
 
-
 @dataclass(frozen=True)
 class CacheEconomics:
     """Extraction economics preserved across persistent-cache hits."""
-
 
     html_tokens: int
     tokens_saved_estimate: int
     limiting_factor: str
     truncated: bool
     extracted_at: str
-
 
 
 def _decode_source_text(document: FetchedHTML) -> str:
@@ -183,7 +168,6 @@ def _decode_source_text(document: FetchedHTML) -> str:
         return ""
 
 
-
 def _sentences(text: str) -> list[str]:
     """Split prose into sentences while preserving terminal punctuation."""
     sentence_pattern = re.compile(
@@ -198,10 +182,8 @@ def _sentences(text: str) -> list[str]:
         re.VERBOSE,
     )
 
-
     sentences: list[str] = []
     position = 0
-
 
     for match in sentence_pattern.finditer(text):
         if match.start() > position:
@@ -211,22 +193,18 @@ def _sentences(text: str) -> list[str]:
         sentences.append(match.group("sentence").strip())
         position = match.end()
 
-
     if position < len(text):
         remainder = text[position:].strip()
         if remainder:
             sentences.append(remainder)
 
-
     return [sentence for sentence in sentences if sentence]
-
 
 
 def _is_table_block(block: str) -> bool:
     """Recognize pipe-delimited tables, with or without outer pipes."""
     lines = [line.strip() for line in block.splitlines() if line.strip()]
     return len(lines) >= 2 and all("|" in line for line in lines)
-
 
 
 async def extract_context(
@@ -262,7 +240,6 @@ async def extract_context(
     if identity is None:
         identity = rate_limit_identity(request, settings)
 
-
     # Canonicalize pitch-name aliases up front so downstream logic always
     # operates on canonical values. The caller supplies the extraction inputs;
     # this function must not overwrite them.
@@ -270,10 +247,8 @@ async def extract_context(
     if mode not in ("scrape", "chunk", "summarize"):
         raise ValueError(f"Unknown context mode: {mode}")
 
-
     raw_text = raw_text or ""
     html_source_text = html_source_text or ""
-
 
     # Preserve the original extraction economics when serving from a
     # persistent cache. Without this, a cache hit would incorrectly report
@@ -285,46 +260,35 @@ async def extract_context(
     else:
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
-        resolved_extracted_at = (
-            extracted_at or datetime.now(timezone.utc).isoformat()
-        )
-
+        resolved_extracted_at = extracted_at or datetime.now(UTC).isoformat()
 
     # Cache lookup observability (Phase 4): measure hit/miss distribution and
     # persistent-cache freshness without logging the raw target URL.
     cache_age_seconds: float | None = None
     if cache_hit and resolved_extracted_at:
         try:
-            extracted_time = datetime.fromisoformat(
-                resolved_extracted_at.replace("Z", "+00:00")
-            )
+            extracted_time = datetime.fromisoformat(resolved_extracted_at.replace("Z", "+00:00"))
             cache_age_seconds = max(
                 0.0,
-                (
-                    datetime.now(timezone.utc) - extracted_time
-                ).total_seconds(),
+                (datetime.now(UTC) - extracted_time).total_seconds(),
             )
         except (ValueError, TypeError):
             cache_age_seconds = None
 
-
     log_cache_lookup_completed(
-        request_id=getattr(
-            getattr(request, "state", None), "request_id", None
-        ),
+        request_id=getattr(getattr(request, "state", None), "request_id", None),
         url=url,
         cache_hit=cache_hit,
         cache_layer=cache_layer,
         age_seconds=cache_age_seconds,
     )
 
-
     # --- Extraction quality normalization ---------------------------------
-    
+
     deduplicated_count = 0
     token_truncated = False
     scrape_baseline_tokens = 0
-    
+
     raw_text = strip_noise_lines(raw_text)
     raw_text = normalize_markdown(raw_text)
     raw_text, deduplicated_count = dedupe_blocks(raw_text)
@@ -334,14 +298,13 @@ async def extract_context(
         html_tokens,
         html_source_text,
     )
-    
+
     # --- Mode transformation -----------------------------------------------
     raw_tokens = count_tokens(raw_text)
     split = False
     limiting_factor = "char_cap" if content_truncated else "none"
-    
-    transformation_truncated = False
 
+    transformation_truncated = False
 
     if mode == "scrape":
         final_text, token_truncated = truncate_to_token_budget(
@@ -363,7 +326,6 @@ async def extract_context(
         if token_truncated:
             limiting_factor = "token_budget"
 
-
     elif mode == "chunk":
         chunk_strings = split_into_chunks(raw_text, max_tokens)
         chunks = [
@@ -379,7 +341,6 @@ async def extract_context(
         approx_tokens = sum(chunk["tokens"] for chunk in chunks)
         split = len(chunk_strings) > 1
         transformation_truncated = content_truncated
-
 
     elif mode == "summarize":
         final_text, was_truncated = summarize_text(raw_text, max_tokens)
@@ -398,12 +359,10 @@ async def extract_context(
     else:
         raise ValueError(f"Unknown context mode: {mode}")
 
-
     tokens_saved_estimate = delivered_savings(
         html_tokens,
         approx_tokens,
     )
-
 
     record_cache_tokens_saved(
         mode=mode,
@@ -413,22 +372,18 @@ async def extract_context(
         tokens_saved_estimate=tokens_saved_estimate,
     )
 
-
     # Cache economics preserve upstream extraction facts, but they must not
     # erase a mode-specific transformation result. In particular, a cached
     # page served through summarize with a smaller max_tokens budget must
     # still report that this request truncated the content.
     if cache_hit and cache_economics is not None:
-        resolved_truncated = (
-            cache_economics.truncated or transformation_truncated
-        )
+        resolved_truncated = cache_economics.truncated or transformation_truncated
         resolved_limiting_factor = cache_economics.limiting_factor
         if limiting_factor != "none":
             resolved_limiting_factor = limiting_factor
     else:
         resolved_truncated = transformation_truncated
         resolved_limiting_factor = limiting_factor
-
 
     return ContextResult(
         mode=mode,
@@ -460,8 +415,3 @@ async def extract_context(
         cache=None,
         extractor_version=None,
     )
-
-
-
-
-

@@ -88,7 +88,10 @@ class IntegrationTests(unittest.TestCase):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
 
     # Skip this network server test when executing inside GitHub Actions CI environment
-    @unittest.skipIf(os.getenv("GITHUB_ACTIONS") == "true", "Skipping live loopback server tests inside GitHub Actions environment")
+    @unittest.skipIf(
+        os.getenv("GITHUB_ACTIONS") == "true",
+        "Skipping live loopback server tests inside GitHub Actions environment",
+    )
     def test_full_pipeline_fetches_and_extracts_text(self) -> None:
         """Verify the complete flow: HTTP fetch -> HTML parse -> text extraction."""
         with (
@@ -110,7 +113,10 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(text, "# Test\nUseful visible text")
 
     # Skip this redirect server test when executing inside GitHub Actions CI environment
-    @unittest.skipIf(os.getenv("GITHUB_ACTIONS") == "true", "Skipping live loopback redirect tests inside GitHub Actions environment")
+    @unittest.skipIf(
+        os.getenv("GITHUB_ACTIONS") == "true",
+        "Skipping live loopback redirect tests inside GitHub Actions environment",
+    )
     def test_redirect_followed_to_final_content(self) -> None:
         """Verify redirects are followed and final content is extracted."""
         with (
@@ -160,9 +166,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotIn("Header content", text_with_footer)
 
         # Include all
-        text_all = extract_text(
-            html, 6000, include_nav=True, include_header=True, include_footer=True
-        )
+        text_all = extract_text(html, 6000, include_nav=True, include_header=True, include_footer=True)
         self.assertIn("Header content", text_all)
         self.assertIn("Main content", text_all)
         self.assertIn("Footer content", text_all)
@@ -180,15 +184,11 @@ class IntegrationTests(unittest.TestCase):
 
         self.assertEqual(
             text,
-            "# Page title\nFirst paragraph!\nSecond paragraph\ncontinued here."
-            "\nFirst item\nSecond item",
+            "# Page title\nFirst paragraph!\nSecond paragraph\ncontinued here.\nFirst item\nSecond item",
         )
 
     def test_extract_text_deduplicates_matching_document_title(self) -> None:
-        html = (
-            b"<html><head><title>Page title</title></head>"
-            b"<body><h1>Page title</h1><p>Content.</p></body></html>"
-        )
+        html = b"<html><head><title>Page title</title></head><body><h1>Page title</h1><p>Content.</p></body></html>"
 
         text = extract_text(html, 6000)
 
@@ -269,16 +269,14 @@ class IntegrationTests(unittest.TestCase):
         self.assertTrue(extracted.truncated)
 
     def test_extract_text_uses_declared_charset_for_unicode(self) -> None:
-        html = '<meta charset="utf-8"><p>إختبار — café</p>'.encode("utf-8")
+        html = '<meta charset="utf-8"><p>إختبار — café</p>'.encode()
 
         text = extract_text(html, 6000)
 
         self.assertEqual(text, "إختبار — café")
 
     def test_extract_text_cleans_invisible_word_separators(self) -> None:
-        html = (
-            "<meta charset='utf-8'><main><p>kept \u200bin the cockpit</p></main>"
-        ).encode("utf-8")
+        html = ("<meta charset='utf-8'><main><p>kept \u200bin the cockpit</p></main>").encode("utf-8")
 
         text = extract_text(html, 6000)
 

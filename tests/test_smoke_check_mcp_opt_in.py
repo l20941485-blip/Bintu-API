@@ -32,9 +32,7 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
             (
                 400,
                 {},
-                json.dumps(
-                    {"detail": {"code": "invalid_or_unsafe_url"}}
-                ).encode("utf-8"),
+                json.dumps({"detail": {"code": "invalid_or_unsafe_url"}}).encode("utf-8"),
             ),
         ]
 
@@ -87,9 +85,7 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
     def test_non_one_flags_skip_helper(self):
         for flag in ("", "0", "true", "yes"):
             with self.subTest(flag=flag):
-                helper, stdout, stderr, exit_code = self.run_main(
-                    {"BINTU_SMOKE_MCP_CACHE": flag}
-                )
+                helper, stdout, stderr, exit_code = self.run_main({"BINTU_SMOKE_MCP_CACHE": flag})
 
                 helper.assert_not_called()
                 self.assertIn("SKIP MCP cache check", stdout)
@@ -97,9 +93,7 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
                 self.assertIsNone(exit_code)
 
     def test_enabled_flag_falls_back_to_service_key(self):
-        helper, stdout, stderr, exit_code = self.run_main(
-            {"BINTU_SMOKE_MCP_CACHE": "1"}
-        )
+        helper, stdout, stderr, exit_code = self.run_main({"BINTU_SMOKE_MCP_CACHE": "1"})
 
         helper.assert_called_once_with(
             "https://service.invalid",
@@ -160,9 +154,7 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
         self.assertNotIn("Smoke check passed.", stdout)
 
     def test_helper_failure_does_not_print_exception_message(self):
-        sensitive_message = (
-            "SENSITIVE upstream body with offline-scoped-key"
-        )
+        sensitive_message = "SENSITIVE upstream body with offline-scoped-key"
 
         helper, stdout, stderr, exit_code = self.run_main(
             {

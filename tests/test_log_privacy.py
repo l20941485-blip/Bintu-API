@@ -7,7 +7,6 @@ extraction metadata, but never raw target URLs or scraped page content.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import pytest
 

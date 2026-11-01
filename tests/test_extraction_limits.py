@@ -39,19 +39,13 @@ class ExtractionLimitTests(unittest.TestCase):
         self.assertFalse(result.truncated)
 
     def test_title_is_included_once(self) -> None:
-        html = (
-            b"<html><head><title>Page Title</title></head>"
-            b"<body><h1>Page Title</h1><p>Body</p></body></html>"
-        )
+        html = b"<html><head><title>Page Title</title></head><body><h1>Page Title</h1><p>Body</p></body></html>"
         result = extract_text_result(html, max_characters=100)
 
         self.assertEqual(result.text, "# Page Title\nBody")
 
     def test_title_and_different_heading_are_both_included(self) -> None:
-        html = (
-            b"<html><head><title>Page Title</title></head>"
-            b"<body><h1>Different Heading</h1><p>Body</p></body></html>"
-        )
+        html = b"<html><head><title>Page Title</title></head><body><h1>Different Heading</h1><p>Body</p></body></html>"
         result = extract_text_result(html, max_characters=100)
 
         self.assertIn("# Page Title", result.text)
@@ -74,10 +68,7 @@ class ExtractionLinkSafetyTests(unittest.TestCase):
         )
 
     def test_annotates_absolute_https_link(self) -> None:
-        html = (
-            b'<html><body><a href="https://example.org/page">'
-            b"External</a></body></html>"
-        )
+        html = b'<html><body><a href="https://example.org/page">External</a></body></html>'
         result = extract_text_result(
             html,
             max_characters=500,
@@ -90,10 +81,7 @@ class ExtractionLinkSafetyTests(unittest.TestCase):
         )
 
     def test_does_not_annotate_link_when_destination_equals_label(self) -> None:
-        html = (
-            b'<html><body><a href="https://example.com/page">'
-            b"https://example.com/page</a></body></html>"
-        )
+        html = b'<html><body><a href="https://example.com/page">https://example.com/page</a></body></html>'
         result = extract_text_result(
             html,
             max_characters=500,
@@ -103,10 +91,7 @@ class ExtractionLinkSafetyTests(unittest.TestCase):
         self.assertEqual(result.text, "https://example.com/page")
 
     def test_skips_javascript_links(self) -> None:
-        html = (
-            b'<html><body><a href="javascript:alert(1)">Click</a>'
-            b"</body></html>"
-        )
+        html = b'<html><body><a href="javascript:alert(1)">Click</a></body></html>'
         result = extract_text_result(
             html,
             max_characters=500,
@@ -116,10 +101,7 @@ class ExtractionLinkSafetyTests(unittest.TestCase):
         self.assertEqual(result.text, "Click")
 
     def test_skips_data_links(self) -> None:
-        html = (
-            b'<html><body><a href="data:text/plain,hello">Download</a>'
-            b"</body></html>"
-        )
+        html = b'<html><body><a href="data:text/plain,hello">Download</a></body></html>'
         result = extract_text_result(
             html,
             max_characters=500,
@@ -129,10 +111,7 @@ class ExtractionLinkSafetyTests(unittest.TestCase):
         self.assertEqual(result.text, "Download")
 
     def test_skips_links_with_credentials(self) -> None:
-        html = (
-            b'<html><body><a href="https://user:pass@example.com/page">'
-            b"Private</a></body></html>"
-        )
+        html = b'<html><body><a href="https://user:pass@example.com/page">Private</a></body></html>'
         result = extract_text_result(
             html,
             max_characters=500,
@@ -161,7 +140,7 @@ class ExtractionVisibilityTests(unittest.TestCase):
     def test_removes_hidden_elements(self) -> None:
         html = (
             b"<html><body>"
-            b'<p hidden>Hidden</p>'
+            b"<p hidden>Hidden</p>"
             b'<p aria-hidden="true">Also hidden</p>'
             b'<p style="display: none">CSS hidden</p>'
             b"<p>Visible</p>"
@@ -172,19 +151,13 @@ class ExtractionVisibilityTests(unittest.TestCase):
         self.assertEqual(result.text, "Visible")
 
     def test_removes_nav_by_default(self) -> None:
-        html = (
-            b"<html><body><nav>Menu</nav><main><p>Article</p></main>"
-            b"</body></html>"
-        )
+        html = b"<html><body><nav>Menu</nav><main><p>Article</p></main></body></html>"
         result = extract_text_result(html, max_characters=500)
 
         self.assertEqual(result.text, "Article")
 
     def test_can_include_nav_when_requested(self) -> None:
-        html = (
-            b"<html><body><nav>Menu</nav><main><p>Article</p></main>"
-            b"</body></html>"
-        )
+        html = b"<html><body><nav>Menu</nav><main><p>Article</p></main></body></html>"
         result = extract_text_result(
             html,
             max_characters=500,

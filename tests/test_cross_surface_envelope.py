@@ -13,7 +13,6 @@ from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
 
-
 MCP_CORE_ENVELOPE_FIELDS = {
     "mode",
     "tokens",
@@ -41,8 +40,7 @@ class CrossSurfaceEnvelopeTests(unittest.TestCase):
         self.document = FetchedHTML(
             final_url=self.url,
             body=(
-                b"<html><body><main><h1>Hello</h1>"
-                b"<p>This is a sufficiently long article body.</p></main></body></html>"
+                b"<html><body><main><h1>Hello</h1><p>This is a sufficiently long article body.</p></main></body></html>"
             ),
             charset="utf-8",
         )

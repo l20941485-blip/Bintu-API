@@ -28,6 +28,7 @@ def _request():
     )
     return SimpleNamespace(app=SimpleNamespace(state=state), headers={})
 
+
 def _upstream_error(status):
     error = UpstreamHTTPError.__new__(UpstreamHTTPError)
     error.status_code = status
@@ -37,11 +38,11 @@ def _upstream_error(status):
 
 class UpstreamAccessDeniedTests(unittest.TestCase):
     def _run(self, status):
-        with mock.patch.object(routes, "fetch_html_document", side_effect=_upstream_error(status)):
-            with self.assertRaises(HTTPException) as caught:
-                asyncio.run(
-                    routes._scrape_text(_request(), "https://example.com/", False, False, False, "id")
-                )
+        with (
+            mock.patch.object(routes, "fetch_html_document", side_effect=_upstream_error(status)),
+            self.assertRaises(HTTPException) as caught,
+        ):
+            asyncio.run(routes._scrape_text(_request(), "https://example.com/", False, False, False, "id"))
         return caught.exception
 
     def test_denied_statuses_map_to_upstream_access_denied(self):

@@ -11,7 +11,6 @@ import binascii
 from collections.abc import Mapping
 from typing import Any
 
-
 PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
 HEADER_MISMATCH = -32020
 
@@ -30,14 +29,7 @@ class HeaderMismatch(ValueError):
 
 
 def _plain_header_is_safe(value: str) -> bool:
-    return (
-        bool(value)
-        and value == value.strip()
-        and all(
-            char == "\t" or 0x20 <= ord(char) <= 0x7E
-            for char in value
-        )
-    )
+    return bool(value) and value == value.strip() and all(char == "\t" or 0x20 <= ord(char) <= 0x7E for char in value)
 
 
 def decode_name_header(value: str) -> str:
@@ -46,15 +38,11 @@ def decode_name_header(value: str) -> str:
         raise HeaderMismatch("Malformed Mcp-Name header.")
 
     if value.startswith("=?base64?") and value.endswith("?="):
-        encoded = value[len("=?base64?"):-2]
+        encoded = value[len("=?base64?") : -2]
         try:
-            return base64.b64decode(
-                encoded, validate=True
-            ).decode("utf-8", errors="strict")
+            return base64.b64decode(encoded, validate=True).decode("utf-8", errors="strict")
         except (binascii.Error, UnicodeDecodeError, ValueError) as error:
-            raise HeaderMismatch(
-                "Malformed encoded Mcp-Name header."
-            ) from error
+            raise HeaderMismatch("Malformed encoded Mcp-Name header.") from error
 
     return value
 
@@ -88,9 +76,7 @@ def validate_mirrored_headers(
         or not _plain_header_is_safe(declared_version)
         or declared_version != version
     ):
-        raise HeaderMismatch(
-            "MCP-Protocol-Version header does not match request metadata."
-        )
+        raise HeaderMismatch("MCP-Protocol-Version header does not match request metadata.")
 
     method = payload.get("method")
     declared_method = normalized.get("mcp-method")
@@ -102,9 +88,7 @@ def validate_mirrored_headers(
         or not _plain_header_is_safe(declared_method)
         or declared_method != method
     ):
-        raise HeaderMismatch(
-            "Mcp-Method header does not match request method."
-        )
+        raise HeaderMismatch("Mcp-Method header does not match request method.")
 
     name_field = _NAME_FIELDS.get(method)
     if name_field is None:
@@ -117,6 +101,4 @@ def validate_mirrored_headers(
         raise HeaderMismatch("Missing named-operation routing value.")
 
     if decode_name_header(declared_name) != body_name:
-        raise HeaderMismatch(
-            "Mcp-Name header does not match request parameters."
-        )
+        raise HeaderMismatch("Mcp-Name header does not match request parameters.")

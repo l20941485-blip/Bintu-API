@@ -15,17 +15,15 @@ Environment:
                         without it (httpbin refuses to redirect to private
                         addresses, so it cannot be used for this)
 """
+
 import json
 import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Optional
-
 
 import httpx
 import pytest
-
 
 BASE_URL = os.environ.get("BINTU_URL", "https://bintu-api.onrender.com").rstrip("/")
 TOKEN = os.environ.get("BINTU_TOKEN")
@@ -42,8 +40,8 @@ LONG_PAGE = "https://www.gnu.org/licenses/gpl-3.0.html"
 class ToolResult:
     is_error: bool
     text: str
-    envelope: Optional[dict]
-    code: Optional[str]  # failure code, e.g. "invalid_or_unsafe_url" or "rpc-32602"
+    envelope: dict | None
+    code: str | None  # failure code, e.g. "invalid_or_unsafe_url" or "rpc-32602"
 
 
 class McpClient:
@@ -56,12 +54,12 @@ class McpClient:
                 limits=httpx.Limits(max_keepalive_connections=0),
             ),
         )
-        self.session_id: Optional[str] = None
+        self.session_id: str | None = None
         self._next_id = 0
         self._initialize()
 
     def _post(self, payload: dict, *, retry: bool = True) -> httpx.Response:
-        last: Optional[Exception] = None
+        last: Exception | None = None
 
         for attempt in range(3 if retry else 1):
             try:
@@ -82,14 +80,12 @@ class McpClient:
         assert last is not None
         raise last
 
-
     def _discovery_headers(self) -> dict:
         return {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
             "MCP-Protocol-Version": "2025-06-18",
         }
-
 
     def _headers(self) -> dict:
         headers = self._discovery_headers()
@@ -99,9 +95,8 @@ class McpClient:
             headers["X-API-Key"] = TOKEN
         return headers
 
-
     @staticmethod
-    def _parse(response: httpx.Response, want_id: int) -> Optional[dict]:
+    def _parse(response: httpx.Response, want_id: int) -> dict | None:
         if response.status_code == 202 or not response.content:
             return None
         if "text/event-stream" in response.headers.get("content-type", ""):
@@ -112,7 +107,6 @@ class McpClient:
                         return msg
             raise AssertionError("no matching JSON-RPC message in SSE stream")
         return response.json()
-
 
     def _rpc(self, method: str, params: dict) -> dict:
         self._next_id += 1
@@ -125,9 +119,7 @@ class McpClient:
         response = self._post(payload, retry=method != "tools/call")
 
         if response.status_code >= 400:
-            raise AssertionError(
-                f"{method} failed with HTTP {response.status_code}: {response.text}"
-            )
+            raise AssertionError(f"{method} failed with HTTP {response.status_code}: {response.text}")
 
         if "mcp-session-id" in response.headers:
             self.session_id = response.headers["mcp-session-id"]
@@ -135,7 +127,6 @@ class McpClient:
         message = self._parse(response, self._next_id)
         assert message is not None, f"empty response to {method}"
         return message
-
 
     def _initialize(self) -> None:
         self._next_id += 1
@@ -160,9 +151,7 @@ class McpClient:
         )
 
         if response.status_code >= 400:
-            raise AssertionError(
-                f"initialize failed with HTTP {response.status_code}: {response.text}"
-            )
+            raise AssertionError(f"initialize failed with HTTP {response.status_code}: {response.text}")
 
         if "mcp-session-id" in response.headers:
             self.session_id = response.headers["mcp-session-id"]
@@ -176,7 +165,6 @@ class McpClient:
             json=note,
             headers=self._discovery_headers(),
         )
-
 
     def scrape(self, url: str, **arguments) -> ToolResult:
         message = self._rpc(
@@ -208,10 +196,7 @@ class McpClient:
 @pytest.fixture(scope="session")
 def mcp() -> McpClient:
     if not TOKEN:
-        pytest.fail(
-            "BINTU_TOKEN is not configured; tools/call requires Bintu's "
-            "master API_KEY or scoped MCP_API_KEY."
-        )
+        pytest.fail("BINTU_TOKEN is not configured; tools/call requires Bintu's master API_KEY or scoped MCP_API_KEY.")
     return McpClient()
 
 

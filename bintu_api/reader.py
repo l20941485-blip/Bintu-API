@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from bintu_api.context import TOKEN_METHOD, count_tokens
 
-
 DEFAULT_MAX_DOCUMENT_CHARACTERS = 200_000
 
 
@@ -25,9 +24,7 @@ class DocumentSnapshot:
         if not isinstance(self.text, str):
             raise ValueError("text must be a string.")
         if len(self.text) > DEFAULT_MAX_DOCUMENT_CHARACTERS:
-            raise ValueError(
-                "Document exceeds the retained-document character limit."
-            )
+            raise ValueError("Document exceeds the retained-document character limit.")
 
 
 @dataclass(frozen=True)
@@ -76,12 +73,7 @@ def read_page(
 
     page_text = text[offset:end]
     has_more = end < len(text)
-    boundary_split = (
-        has_more
-        and end > offset
-        and not text[end - 1].isspace()
-        and not text[end].isspace()
-    )
+    boundary_split = has_more and end > offset and not text[end - 1].isspace() and not text[end].isspace()
 
     return DocumentPage(
         text=page_text,

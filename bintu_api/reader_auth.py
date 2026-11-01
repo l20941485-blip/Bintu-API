@@ -29,24 +29,17 @@ def reader_owner(request: Request, settings: Settings) -> str:
             not subscriber
             or len(subscriber) > 256
             or not subscriber.isascii()
-            or any(
-                ord(character) < 33 or ord(character) > 126
-                for character in subscriber
-            )
+            or any(ord(character) < 33 or ord(character) > 126 for character in subscriber)
         ):
             raise HTTPException(
                 status_code=403,
                 detail={
                     "code": "reader_identity_required",
-                    "message": (
-                        "A valid gateway subscriber identity is required."
-                    ),
+                    "message": ("A valid gateway subscriber identity is required."),
                 },
             )
 
-        fingerprint = hashlib.sha256(
-            subscriber.encode("utf-8")
-        ).hexdigest()
+        fingerprint = hashlib.sha256(subscriber.encode("utf-8")).hexdigest()
         return f"reader:rapidapi:{fingerprint}"
 
     provided = request.headers.get("X-API-Key", "")
@@ -54,19 +47,14 @@ def reader_owner(request: Request, settings: Settings) -> str:
         provided.encode("utf-8"),
         settings.api_key.encode("utf-8"),
     ):
-        fingerprint = hashlib.sha256(
-            provided.encode("utf-8")
-        ).hexdigest()
+        fingerprint = hashlib.sha256(provided.encode("utf-8")).hexdigest()
         return f"reader:apikey:{fingerprint}"
 
     raise HTTPException(
         status_code=401,
         detail={
             "code": "reader_auth_required",
-            "message": (
-                "The document reader requires a configured API key "
-                "or verified gateway subscriber."
-            ),
+            "message": ("The document reader requires a configured API key or verified gateway subscriber."),
         },
         headers={"WWW-Authenticate": "ApiKey"},
     )

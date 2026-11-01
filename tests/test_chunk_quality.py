@@ -9,10 +9,7 @@ from bintu_api.context import split_into_chunks
 
 class ChunkQualityTests(unittest.TestCase):
     def test_preserves_sentence_punctuation(self) -> None:
-        text = (
-            "Alpha beta gamma. Delta epsilon zeta. "
-            "Eta theta iota. Kappa lambda mu."
-        )
+        text = "Alpha beta gamma. Delta epsilon zeta. Eta theta iota. Kappa lambda mu."
 
         chunks = split_into_chunks(text, 8)
 

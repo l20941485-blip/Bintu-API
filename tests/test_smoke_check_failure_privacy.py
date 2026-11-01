@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import smoke_check
 
-
 SENSITIVE = "PRIVATE_RESPONSE_BODY_DO_NOT_LOG"
 
 
@@ -48,9 +47,9 @@ class SmokeCheckFailurePrivacyTests(unittest.TestCase):
             patch("smoke_check.check_mcp_cache"),
             redirect_stdout(stdout),
             redirect_stderr(stderr),
+            self.assertRaises(SystemExit) as raised,
         ):
-            with self.assertRaises(SystemExit) as raised:
-                smoke_check.main()
+            smoke_check.main()
 
         self.assertEqual(raised.exception.code, 1)
         self.assertIn(expected_message, stderr.getvalue())
@@ -154,9 +153,7 @@ class SmokeCheckFailurePrivacyTests(unittest.TestCase):
         )
 
     def test_metrics_numeric_failure_is_private(self):
-        metrics_body = (
-            "bintu_cache_hits_total " + SENSITIVE
-        ).encode("utf-8")
+        metrics_body = ("bintu_cache_hits_total " + SENSITIVE).encode("utf-8")
 
         self.assert_private_failure(
             successful_prefix()

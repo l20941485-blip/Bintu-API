@@ -25,15 +25,15 @@ class RobotsDecisionTests(unittest.TestCase):
         self.assertTrue(self.decide("https://a.example/public", return_value=text).allowed)
 
     def test_unreachable_fails_closed(self):
-        decision = self.decide(
-            "https://a.example/page", side_effect=robots.RobotsUnreachable("HTTP 503")
-        )
+        decision = self.decide("https://a.example/page", side_effect=robots.RobotsUnreachable("HTTP 503"))
         self.assertFalse(decision.allowed)
         self.assertIn("could not be retrieved", decision.reason)
 
     def test_origins_do_not_share_cache(self):
         with mock.patch.object(
-            robots, "_fetch_robots_text", side_effect=["User-agent: *\nDisallow: /", None]
+            robots,
+            "_fetch_robots_text",
+            side_effect=["User-agent: *\nDisallow: /", None],
         ):
             first = robots.robots_decision("https://a.example/x", self.settings)
             second = robots.robots_decision("http://a.example/x", self.settings)

@@ -16,7 +16,10 @@ QUOTES_JS = """<html><head><title>Quotes to Scrape</title><script src="/static/b
     for (var i in data) { /* renders the quotes into #quotes */ }
 </script></body></html>""" + (" " * 4400)  # pad to the ~1,450-token size seen live
 
-REACT_SHELL = '<html><head><title>App</title></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' + (" " * 4400)
+REACT_SHELL = (
+    '<html><head><title>App</title></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>'
+    + (" " * 4400)
+)
 LOGIN_WALL = "<html><body><h1>Sign in</h1><form>" + "<input name='x'>" * 300 + "</form></body></html>"
 
 
@@ -78,8 +81,13 @@ STALE_PHRASES = [
     "Whitespace can be normalized",
 ]
 ALL_TEXTS = [
-    d.TOOL_DESCRIPTION, d.URL_DESCRIPTION, d.MODE_DESCRIPTION, d.MAX_TOKENS_DESCRIPTION,
-    d.CACHE_DESCRIPTION, d.PERSIST_DESCRIPTION, d.RENDER_JS_DESCRIPTION,
+    d.TOOL_DESCRIPTION,
+    d.URL_DESCRIPTION,
+    d.MODE_DESCRIPTION,
+    d.MAX_TOKENS_DESCRIPTION,
+    d.CACHE_DESCRIPTION,
+    d.PERSIST_DESCRIPTION,
+    d.RENDER_JS_DESCRIPTION,
 ]
 
 
@@ -92,10 +100,26 @@ def test_no_stale_claims_remain():
 def test_description_covers_the_verified_behaviour():
     text = d.TOOL_DESCRIPTION.lower()
     for needle in [
-        "scrape", "chunk", "summarize", "max_tokens", "200,000 characters", "char_cap", "token_budget",
-        "estimates", "tokens_saved_estimate", "low_yield", "cache=false", "persist=false",
-        "credential-like query parameters", "robots.txt", "render_js", "iserror=true",
-        "invalid_or_unsafe_url", "deduplicated_count", "fenced", "not an ai-written summary",
+        "scrape",
+        "chunk",
+        "summarize",
+        "max_tokens",
+        "200,000 characters",
+        "char_cap",
+        "token_budget",
+        "estimates",
+        "tokens_saved_estimate",
+        "low_yield",
+        "cache=false",
+        "persist=false",
+        "credential-like query parameters",
+        "robots.txt",
+        "render_js",
+        "iserror=true",
+        "invalid_or_unsafe_url",
+        "deduplicated_count",
+        "fenced",
+        "not an ai-written summary",
     ]:
         assert needle in text, needle
 

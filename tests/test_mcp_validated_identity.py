@@ -10,7 +10,6 @@ from bintu_api.auth import (
 )
 from bintu_api.settings import Settings
 
-
 IP = "203.0.113.9"
 SCOPED = "test-scoped-key"
 MASTER = "test-master-key"
@@ -26,17 +25,18 @@ def settings():
 
 
 def request(headers=None):
-    return Request({
-        "type": "http",
-        "method": "POST",
-        "path": "/mcp",
-        "headers": [
-            (name.lower().encode("ascii"), value.encode("ascii"))
-            for name, value in (headers or {}).items()
-        ],
-        "query_string": b"",
-        "client": (IP, 1234),
-    })
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "headers": [
+                (name.lower().encode("ascii"), value.encode("ascii")) for name, value in (headers or {}).items()
+            ],
+            "query_string": b"",
+            "client": (IP, 1234),
+        }
+    )
 
 
 def fingerprint(key):
@@ -48,10 +48,12 @@ def test_valid_bearer_ignores_rotating_invalid_api_key_headers():
     identities = set()
 
     for index in range(50):
-        req = request({
-            "Authorization": f"Bearer {SCOPED}",
-            "X-API-Key": f"invalid-key-{index}",
-        })
+        req = request(
+            {
+                "Authorization": f"Bearer {SCOPED}",
+                "X-API-Key": f"invalid-key-{index}",
+            }
+        )
         verify_mcp_execution_access(req, config)
         identities.add(mcp_rate_limit_identity(req, config))
 
@@ -89,13 +91,11 @@ def test_valid_bearer_identity_is_unchanged_by_invalid_api_key():
     config = settings()
 
     bearer_only = request({"Authorization": f"Bearer {SCOPED}"})
-    mixed = request({
-        "Authorization": f"Bearer {SCOPED}",
-        "X-API-Key": "invalid-key",
-    })
-
-    assert (
-        mcp_rate_limit_identity(bearer_only, config)
-        == mcp_rate_limit_identity(mixed, config)
-        == fingerprint(SCOPED)
+    mixed = request(
+        {
+            "Authorization": f"Bearer {SCOPED}",
+            "X-API-Key": "invalid-key",
+        }
     )
+
+    assert mcp_rate_limit_identity(bearer_only, config) == mcp_rate_limit_identity(mixed, config) == fingerprint(SCOPED)

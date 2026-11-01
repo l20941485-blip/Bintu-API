@@ -79,7 +79,6 @@ from bintu_api.observability import (
     log_extraction_failed,
     log_token_metering_failure,
 )
-from bintu_api.settings import Settings
 from bintu_api.scraper import (
     PayloadTooLarge,
     TargetURLRejected,
@@ -89,6 +88,7 @@ from bintu_api.scraper import (
     UpstreamHTTPError,
     UpstreamRenderError,
 )
+from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.mcp_streamable")
 
@@ -143,9 +143,7 @@ def _rpc_result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
-def _rpc_error(
-    request_id: Any, code: int, message: str, data: Any = None
-) -> dict[str, Any]:
+def _rpc_error(request_id: Any, code: int, message: str, data: Any = None) -> dict[str, Any]:
     error: dict[str, Any] = {"code": code, "message": message}
     if data is not None:
         error["data"] = data
@@ -197,9 +195,7 @@ def _accept_header_serves_json(request: Request) -> bool:
         return True
     offered = [part.split(";")[0].strip().lower() for part in raw.split(",")]
     offered = [part for part in offered if part]
-    return any(
-        part in {"application/json", "*/*", "application/*"} for part in offered
-    )
+    return any(part in {"application/json", "*/*", "application/*"} for part in offered)
 
 
 def _reject_unsupported_accept(request_id: Any) -> JSONResponse:
@@ -221,9 +217,7 @@ def _reject_forbidden_origin() -> JSONResponse:
             None,
             -32000,
             "Forbidden origin",
-            data={
-                "hint": "Origin must match the request scheme + host, or be omitted for non-browser clients."
-            },
+            data={"hint": "Origin must match the request scheme + host, or be omitted for non-browser clients."},
         ),
     )
 
@@ -258,9 +252,7 @@ def _origin_is_allowed(request: Request) -> bool:
     host = request.headers.get("host", "").strip().lower()
     if not host:
         return False
-    scheme = request.headers.get(
-        "x-forwarded-proto", request.url.scheme
-    ).split(",")[0].strip().lower()
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip().lower()
     return origin.strip().lower() == f"{scheme}://{host}"
 
 
@@ -269,11 +261,7 @@ def _http_detail_text(detail: Any) -> str:
     if isinstance(detail, dict):
         code = detail.get("code")
         message = detail.get("message")
-        prefix = (
-            f"{code}: {message}"
-            if code and message
-            else str(message or code or detail)
-        )
+        prefix = f"{code}: {message}" if code and message else str(message or code or detail)
         hint = detail.get("hint")
         if hint:
             return f"{prefix}. Hint: {hint}"
@@ -319,15 +307,9 @@ def _metering_identity(request: Request, settings: Settings) -> str:
     return f"mcp:{identity}"
 
 
-def _initialize_result(
-    settings: Settings, request_id: Any, params: dict[str, Any]
-) -> dict[str, Any]:
+def _initialize_result(settings: Settings, request_id: Any, params: dict[str, Any]) -> dict[str, Any]:
     requested = params.get("protocolVersion")
-    version = (
-        requested
-        if requested in SUPPORTED_PROTOCOL_VERSIONS
-        else LATEST_PROTOCOL_VERSION
-    )
+    version = requested if requested in SUPPORTED_PROTOCOL_VERSIONS else LATEST_PROTOCOL_VERSION
     return _rpc_result(
         request_id,
         {
@@ -390,22 +372,16 @@ async def _tools_call_result(
                 )
         if "chunk_token_budget" in raw_arguments:
             if "max_tokens" in raw_arguments:
-                logger.warning(
-                    "mcp_alias_conflict canonical=max_tokens wins over chunk_token_budget"
-                )
+                logger.warning("mcp_alias_conflict canonical=max_tokens wins over chunk_token_budget")
                 raw_arguments.pop("chunk_token_budget")
             else:
-                raw_arguments["max_tokens"] = raw_arguments.pop(
-                    "chunk_token_budget"
-                )
+                raw_arguments["max_tokens"] = raw_arguments.pop("chunk_token_budget")
 
     try:
         arguments = ToolArguments.model_validate(raw_arguments)
     except ValidationError as error:
         first = error.errors()[0]
-        location = ".".join(
-            str(part) for part in first.get("loc", ())
-        ) or "arguments"
+        location = ".".join(str(part) for part in first.get("loc", ())) or "arguments"
         return _rpc_error(
             request_id,
             INVALID_PARAMS,
@@ -414,9 +390,7 @@ async def _tools_call_result(
 
     if arguments.render_js and not settings.render_js_enabled:
         log_extraction_failed(
-            request_id=getattr(
-                getattr(request, "state", None), "request_id", None
-            ),
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
             failure_code="render_js_disabled",
@@ -456,9 +430,7 @@ async def _tools_call_result(
         )
     except TargetURLRejected as error:
         log_extraction_failed(
-            request_id=getattr(
-                getattr(request, "state", None), "request_id", None
-            ),
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
             failure_code="invalid_or_unsafe_url",
@@ -476,16 +448,10 @@ async def _tools_call_result(
         )
     except HTTPException as error:
         log_extraction_failed(
-            request_id=getattr(
-                getattr(request, "state", None), "request_id", None
-            ),
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
-            failure_code=(
-                error.detail.get("code", "http_error")
-                if isinstance(error.detail, dict)
-                else "http_error"
-            ),
+            failure_code=(error.detail.get("code", "http_error") if isinstance(error.detail, dict) else "http_error"),
             error_type=type(error).__name__,
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
             status_code=error.status_code,
@@ -503,14 +469,11 @@ async def _tools_call_result(
         TooManyRedirects,
         UpstreamRenderError,
         TimeoutError,
-        socket.timeout,
         OSError,
     ) as error:
         failure_code = _failure_code_for_error(error)
         log_extraction_failed(
-            request_id=getattr(
-                getattr(request, "state", None), "request_id", None
-            ),
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
             failure_code=failure_code,
@@ -534,29 +497,17 @@ async def _tools_call_result(
                     "an error. Try another public URL."
                 )
         elif isinstance(error, UnsupportedMediaType):
-            message = (
-                "unsupported_media_type: Only HTML and XHTML pages are supported. "
-                "Hint: Use a public HTML page."
-            )
+            message = "unsupported_media_type: Only HTML and XHTML pages are supported. Hint: Use a public HTML page."
         elif isinstance(error, UnsupportedContentEncoding):
-            message = (
-                "unsupported_content_encoding: The target returned an unsupported or "
-                "invalid compressed response."
-            )
+            message = "unsupported_content_encoding: The target returned an unsupported or invalid compressed response."
         elif isinstance(error, PayloadTooLarge):
             message = "payload_too_large: The page exceeds the 1 MiB size limit."
         elif isinstance(error, TooManyRedirects):
             message = "too_many_redirects: The page has too many redirects."
         elif isinstance(error, UpstreamRenderError):
-            message = (
-                "upstream_render_error: The target page could not be rendered. "
-                "Hint: Retry with render_js=false."
-            )
+            message = "upstream_render_error: The target page could not be rendered. Hint: Retry with render_js=false."
         elif isinstance(error, (TimeoutError, socket.timeout)):
-            message = (
-                "upstream_timeout: The target did not respond in time. "
-                "Hint: Try again later or use another URL."
-            )
+            message = "upstream_timeout: The target did not respond in time. Hint: Try again later or use another URL."
         else:
             message = (
                 "upstream_connection_error: Could not connect to the target. "
@@ -592,9 +543,7 @@ async def _tools_call_result(
             identity=mcp_rate_limit_identity(request, settings),
             raw_text=cached.markdown,
             content_truncated=cached.truncated,
-            html_source_text=(
-                _decode_source_text(document) if document is not None else ""
-            ),
+            html_source_text=(_decode_source_text(document) if document is not None else ""),
             cache_hit=cache_layer != "none",
             cache_layer=cache_layer,
             document=document,
@@ -604,15 +553,11 @@ async def _tools_call_result(
         )
     except HTTPException as error:
         log_extraction_failed(
-            request_id=getattr(
-                getattr(request, "state", None), "request_id", None
-            ),
+            request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
             failure_code=(
-                error.detail.get("code", "context_error")
-                if isinstance(error.detail, dict)
-                else "context_error"
+                error.detail.get("code", "context_error") if isinstance(error.detail, dict) else "context_error"
             ),
             error_type=type(error).__name__,
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
@@ -625,9 +570,7 @@ async def _tools_call_result(
         )
 
     log_extraction_completed(
-        request_id=getattr(
-            getattr(request, "state", None), "request_id", None
-        ),
+        request_id=getattr(getattr(request, "state", None), "request_id", None),
         url=arguments.url,
         mode=context.mode,
         cache_hit=context.cache_hit,
@@ -686,11 +629,7 @@ async def _tools_call_result(
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "deduplicated_count": context.deduplicated_count,
         "low_yield": context.low_yield,
-        **(
-            {"yield_hint": context.yield_hint}
-            if context.low_yield
-            else {}
-        ),
+        **({"yield_hint": context.yield_hint} if context.low_yield else {}),
         "truncated": context.truncated,
         "split": context.split,
         "chunks": context.chunks,
@@ -717,9 +656,7 @@ async def _tools_call_result(
     return _rpc_result(
         request_id,
         {
-            "content": [
-                {"type": "text", "text": json.dumps(envelope)}
-            ],
+            "content": [{"type": "text", "text": json.dumps(envelope)}],
             # MCP clients validate this against TOOL_OUTPUT_SCHEMA when the
             # tool declares an outputSchema. Keep the human-readable JSON in
             # content[0].text while exposing the same envelope structurally.
@@ -740,9 +677,7 @@ async def mcp_messages(request: Request):
         )
         return _reject_forbidden_origin()
 
-    content_type = request.headers.get("content-type", "").split(";")[
-        0
-    ].strip().lower()
+    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type != "application/json":
         # Transport-level failure: strict scanners expect HTTP 400 with the
         # standard JSON-RPC envelope (id unknown -> null), not a REST 415.
@@ -777,19 +712,11 @@ async def mcp_messages(request: Request):
             content=_rpc_error(None, PARSE_ERROR, "Parse error"),
         )
 
-    if (
-        not isinstance(payload, dict)
-        or payload.get("jsonrpc") != "2.0"
-        or not isinstance(payload.get("method"), str)
-    ):
-        request_id = (
-            payload.get("id") if isinstance(payload, dict) else None
-        )
+    if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0" or not isinstance(payload.get("method"), str):
+        request_id = payload.get("id") if isinstance(payload, dict) else None
         return JSONResponse(
             status_code=400,
-            content=_rpc_error(
-                request_id, INVALID_REQUEST, "Invalid Request"
-            ),
+            content=_rpc_error(request_id, INVALID_REQUEST, "Invalid Request"),
         )
 
     request_id = payload.get("id")
@@ -818,9 +745,7 @@ async def mcp_messages(request: Request):
                     "Invalid params: expected an object",
                 ),
             )
-        return JSONResponse(
-            _initialize_result(settings, request_id, params)
-        )
+        return JSONResponse(_initialize_result(settings, request_id, params))
 
     if method not in PUBLIC_MCP_METHODS:
         # Billable work (tools/call) and any other non-discovery method:
@@ -830,25 +755,16 @@ async def mcp_messages(request: Request):
         try:
             verify_mcp_execution_access(request, settings)
         except HTTPException as error:
-            detail = (
-                error.detail
-                if isinstance(error.detail, dict)
-                else {"message": str(error.detail)}
-            )
+            detail = error.detail if isinstance(error.detail, dict) else {"message": str(error.detail)}
             # 401 detail always carries the canonical upgrade_url so agents can
             # print a clickable subscribe link in-chat.
-            upgrade_url = detail.get("upgrade_url") or mcp_upgrade_url(
-                settings
-            )
+            upgrade_url = detail.get("upgrade_url") or mcp_upgrade_url(settings)
             return JSONResponse(
                 status_code=error.status_code,
                 content=_rpc_error(
                     request_id,
                     AUTH_REQUIRED,
-                    str(
-                        detail.get("message")
-                        or "Authentication required."
-                    ),
+                    str(detail.get("message") or "Authentication required."),
                     data={
                         "code": detail.get("code") or "premium_required",
                         "hint": detail.get("hint")
@@ -870,9 +786,7 @@ async def mcp_messages(request: Request):
             "mcp_unsupported_protocol_version version=%r",
             declared_version,
         )
-        return _reject_unknown_protocol_version(
-            request_id, declared_version
-        )
+        return _reject_unknown_protocol_version(request_id, declared_version)
 
     params = payload.get("params") or {}
     if not isinstance(params, dict):
@@ -890,30 +804,16 @@ async def mcp_messages(request: Request):
     if method == "tools/list":
         return JSONResponse(_tools_list_result(request_id))
     if method == "tools/call":
-        result = await _tools_call_result(
-            request, settings, request_id, params
-        )
+        result = await _tools_call_result(request, settings, request_id, params)
         # Metering header for marketplaces: approx_tokens/chunks/cache_hit per
         # execution without a second round-trip. Best-effort parse only.
         # `tokens` is mirrored as a deprecated alias for one release.
         response = JSONResponse(result)
         try:
-            text = (
-                result.get("result", {})
-                .get("content", [{}])[0]
-                .get("text", "")
-            )
-            envelope = (
-                json.loads(text)
-                if isinstance(text, str) and text.startswith("{")
-                else {}
-            )
-            approx = envelope.get(
-                "approx_tokens", envelope.get("tokens", 0)
-            )
-            if isinstance(envelope, dict) and (
-                "approx_tokens" in envelope or "tokens" in envelope
-            ):
+            text = result.get("result", {}).get("content", [{}])[0].get("text", "")
+            envelope = json.loads(text) if isinstance(text, str) and text.startswith("{") else {}
+            approx = envelope.get("approx_tokens", envelope.get("tokens", 0))
+            if isinstance(envelope, dict) and ("approx_tokens" in envelope or "tokens" in envelope):
                 response.headers["X-Token-Usage"] = (
                     f"approx_tokens={approx}, "
                     f"tokens={approx}, "

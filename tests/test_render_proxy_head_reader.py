@@ -1,4 +1,4 @@
-﻿"""Bounded CONNECT head-reader tests; no network access."""
+"""Bounded CONNECT head-reader tests; no network access."""
 
 from __future__ import annotations
 
@@ -12,11 +12,7 @@ from bintu_api.render_proxy_protocol import (
     ProxyRequestRejected,
 )
 
-
-HEAD = (
-    b"CONNECT example.com:443 HTTP/1.1\r\n"
-    b"Host: example.com:443\r\n\r\n"
-)
+HEAD = b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"
 
 
 class FakeSocket:
@@ -122,14 +118,9 @@ class ConnectHeadReaderTests(unittest.TestCase):
 
     def test_accepts_head_at_exact_size_limit(self):
         prefix = HEAD[:-2]
-        lines = b"".join(
-            f"X-{index}: ".encode("ascii") + b"a" * 3990 + b"\r\n"
-            for index in range(4)
-        )
+        lines = b"".join(f"X-{index}: ".encode("ascii") + b"a" * 3990 + b"\r\n" for index in range(4))
         padding = MAX_CONNECT_HEAD_BYTES - len(prefix + lines) - 9
-        data = (
-            prefix + lines + b"X-Z: " + b"a" * padding + b"\r\n\r\n"
-        )
+        data = prefix + lines + b"X-Z: " + b"a" * padding + b"\r\n\r\n"
         self.assertEqual(len(data), MAX_CONNECT_HEAD_BYTES)
         client = FakeSocket(data)
         head, trailing = self.read(client)
@@ -138,14 +129,9 @@ class ConnectHeadReaderTests(unittest.TestCase):
 
     def test_rejects_head_one_byte_over_size_limit(self):
         prefix = HEAD[:-2]
-        lines = b"".join(
-            f"X-{index}: ".encode("ascii") + b"a" * 3990 + b"\r\n"
-            for index in range(4)
-        )
+        lines = b"".join(f"X-{index}: ".encode("ascii") + b"a" * 3990 + b"\r\n" for index in range(4))
         padding = MAX_CONNECT_HEAD_BYTES - len(prefix + lines) - 8
-        data = (
-            prefix + lines + b"X-Z: " + b"a" * padding + b"\r\n\r\n"
-        )
+        data = prefix + lines + b"X-Z: " + b"a" * padding + b"\r\n\r\n"
         self.assertEqual(len(data), MAX_CONNECT_HEAD_BYTES + 1)
         client = FakeSocket(data)
         with self.assertRaisesRegex(ProxyRequestRejected, "too large"):
@@ -181,26 +167,30 @@ class ConnectHeadReaderTests(unittest.TestCase):
     def test_deadline_is_not_reset_between_reads(self):
         client = FakeSocket(HEAD, timeout=9.0)
         client.max_chunk = 1
-        with patch(
-            "bintu_api.render_proxy.time.monotonic",
-            side_effect=[100.0, 100.0, 101.0, 102.0, 105.0],
-        ):
-            with self.assertRaisesRegex(
+        with (
+            patch(
+                "bintu_api.render_proxy.time.monotonic",
+                side_effect=[100.0, 100.0, 101.0, 102.0, 105.0],
+            ),
+            self.assertRaisesRegex(
                 ProxyRequestRejected,
                 "deadline",
-            ):
-                read_connect_request_head(client, timeout_seconds=5.0)
+            ),
+        ):
+            read_connect_request_head(client, timeout_seconds=5.0)
         self.assertEqual(client.timeouts, [5.0, 3.0, 9.0])
         self.assertEqual(len(client.read_sizes), 2)
 
     def test_expired_deadline_prevents_first_read(self):
         client = FakeSocket(HEAD, timeout=9.0)
-        with patch(
-            "bintu_api.render_proxy.time.monotonic",
-            side_effect=[100.0, 105.0],
+        with (
+            patch(
+                "bintu_api.render_proxy.time.monotonic",
+                side_effect=[100.0, 105.0],
+            ),
+            self.assertRaises(ProxyRequestRejected),
         ):
-            with self.assertRaises(ProxyRequestRejected):
-                read_connect_request_head(client, timeout_seconds=5.0)
+            read_connect_request_head(client, timeout_seconds=5.0)
         self.assertEqual(client.read_sizes, [])
         self.assertEqual(client.timeout, 9.0)
 

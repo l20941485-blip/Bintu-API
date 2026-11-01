@@ -49,11 +49,7 @@ def parse_connect_authority(authority: str) -> ConnectTarget:
             raise ProxyRequestRejected("Hostname too long")
 
         labels = host.split(".")
-        if any(
-            re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
-            is None
-            for label in labels
-        ):
+        if any(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) is None for label in labels):
             raise ProxyRequestRejected("Invalid hostname")
 
     port = int(match.group(2))
@@ -91,11 +87,7 @@ def parse_connect_request_head(data: bytes) -> ConnectRequestHead:
     if any(len(line) > MAX_CONNECT_LINE_BYTES for line in lines):
         raise ProxyRequestRejected("Request line or header too long")
 
-    if any(
-        byte < 32 or byte > 126
-        for line in lines
-        for byte in line
-    ):
+    if any(byte < 32 or byte > 126 for line in lines for byte in line):
         raise ProxyRequestRejected("Unsupported request-head characters")
 
     request_line = lines[0].decode("ascii")
@@ -115,10 +107,14 @@ def parse_connect_request_head(data: bytes) -> ConnectRequestHead:
     for raw_line in lines[1:]:
         line = raw_line.decode("ascii")
         name, separator, value = line.partition(":")
-        if not separator or re.fullmatch(
-            r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+",
-            name,
-        ) is None:
+        if (
+            not separator
+            or re.fullmatch(
+                r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+",
+                name,
+            )
+            is None
+        ):
             raise ProxyRequestRejected("Invalid header field")
 
         name = name.lower()

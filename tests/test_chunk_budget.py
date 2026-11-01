@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from bintu_api.context_chunking import split_into_chunks
 from bintu_api.scraper import extract_text_result
@@ -9,10 +9,7 @@ def _tokens(text: str) -> int:
 
 
 def test_oversized_table_row_respects_budget_and_repeats_header():
-    row = " | ".join(
-        f"[Country {index}](https://example.com/country-{index})"
-        for index in range(250)
-    )
+    row = " | ".join(f"[Country {index}](https://example.com/country-{index})" for index in range(250))
     html = f"""
     <html><body>
       <table>
@@ -28,14 +25,10 @@ def test_oversized_table_row_respects_budget_and_repeats_header():
     assert len(chunks) > 1
 
     for index, chunk in enumerate(chunks):
-        assert _tokens(chunk) <= 500, (
-            f"Chunk {index} has {_tokens(chunk)} tokens; budget is 500"
-        )
+        assert _tokens(chunk) <= 500, f"Chunk {index} has {_tokens(chunk)} tokens; budget is 500"
 
     data_chunks = chunks[1:]
     assert data_chunks
 
     for index, chunk in enumerate(data_chunks, start=1):
-        assert "Country" in chunk and "---" in chunk, (
-            f"Data chunk {index} must repeat the table header"
-        )
+        assert "Country" in chunk and "---" in chunk, f"Data chunk {index} must repeat the table header"

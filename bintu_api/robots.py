@@ -12,7 +12,6 @@ blocking HTTP operations may finish after the budget has expired.
 from __future__ import annotations
 
 import http.client
-import socket
 import threading
 import time
 import zlib
@@ -29,7 +28,6 @@ from bintu_api.scraper import (
     resolve_public_addresses,
 )
 from bintu_api.settings import Settings
-
 
 PRODUCT_TOKEN = "bintubot"
 MAX_ROBOTS_BYTES = 512 * 1024
@@ -62,9 +60,7 @@ class RobotsRules:
         for allow, pattern in self.rules:
             if _rule_matches(pattern, target):
                 length = len(pattern)
-                if length > best_length or (
-                    length == best_length and allow
-                ):
+                if length > best_length or (length == best_length and allow):
                     best_length, best_allow = length, allow
 
         return best_allow
@@ -148,16 +144,8 @@ def parse_robots_rules(
     if agents:
         groups.append((agents, rules))
 
-    own = [
-        group_rules
-        for group_agents, group_rules in groups
-        if token in group_agents
-    ]
-    wildcard = [
-        group_rules
-        for group_agents, group_rules in groups
-        if "*" in group_agents
-    ]
+    own = [group_rules for group_agents, group_rules in groups if token in group_agents]
+    wildcard = [group_rules for group_agents, group_rules in groups if "*" in group_agents]
 
     if own:
         chosen, label = own, "own"
@@ -167,11 +155,7 @@ def parse_robots_rules(
         chosen, label = [], "none"
 
     return RobotsRules(
-        rules=tuple(
-            rule
-            for group_rules in chosen
-            for rule in group_rules
-        ),
+        rules=tuple(rule for group_rules in chosen for rule in group_rules),
         matched_group=label,
     )
 
@@ -183,18 +167,14 @@ def robots_target(url: str) -> str:
 
 
 def robots_mode(settings) -> str:
-    mode = str(
-        getattr(settings, "robots_mode", "enforce") or "enforce"
-    ).strip().lower()
+    mode = str(getattr(settings, "robots_mode", "enforce") or "enforce").strip().lower()
     return mode if mode in VALID_MODES else "enforce"
 
 
 def _remaining_budget(deadline: float) -> float:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise RobotsUnreachable(
-            "robots.txt retrieval budget exhausted (TimeoutError)"
-        )
+        raise RobotsUnreachable("robots.txt retrieval budget exhausted (TimeoutError)")
     return remaining
 
 
@@ -211,16 +191,12 @@ def _apply_remaining_timeout(connection, deadline: float) -> float:
 
 
 def _read_robots_body(response) -> str:
-    encoding = (
-        response.getheader("Content-Encoding") or "identity"
-    ).strip().lower()
+    encoding = (response.getheader("Content-Encoding") or "identity").strip().lower()
     raw = response.read(MAX_ROBOTS_BYTES + 1)
 
     if encoding in ("gzip", "x-gzip"):
         try:
-            raw = zlib.decompressobj(
-                16 + zlib.MAX_WBITS
-            ).decompress(
+            raw = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(
                 raw,
                 MAX_ROBOTS_BYTES + 1,
             )
@@ -256,9 +232,7 @@ def _fetch_robots_text(
         except TargetURLRejected as error:
             if hop == 0:
                 raise
-            raise RobotsUnreachable(
-                "a redirect led to a disallowed target"
-            ) from error
+            raise RobotsUnreachable("a redirect led to a disallowed target") from error
 
         remaining = _remaining_budget(deadline)
 
@@ -318,15 +292,8 @@ def _fetch_robots_text(
             _remaining_budget(deadline)
             return text
 
-        except (
-            OSError,
-            http.client.HTTPException,
-            socket.timeout,
-            TimeoutError,
-        ) as error:
-            raise RobotsUnreachable(
-                f"connection problem ({type(error).__name__})"
-            ) from error
+        except (OSError, http.client.HTTPException, TimeoutError) as error:
+            raise RobotsUnreachable(f"connection problem ({type(error).__name__})") from error
         finally:
             if connection is not None:
                 connection.close()
@@ -369,11 +336,7 @@ def _rules_for_origin(origin: str, settings: Settings):
 
     try:
         text = _fetch_robots_text(origin, settings)
-        rules = (
-            parse_robots_rules(text)
-            if text is not None
-            else RobotsRules(rules=(), matched_group="none")
-        )
+        rules = parse_robots_rules(text) if text is not None else RobotsRules(rules=(), matched_group="none")
         entry = (now + _cache_ttl(settings), rules, None)
     except RobotsUnreachable as error:
         entry = (
@@ -403,37 +366,25 @@ def robots_decision(
         )
 
     parsed, host, port, _ = _parse_target(url, settings)
-    origin = (
-        f"{parsed.scheme}://"
-        f"{_host_header(host, port, parsed.scheme)}"
-    )
+    origin = f"{parsed.scheme}://{_host_header(host, port, parsed.scheme)}"
     rules, problem = _rules_for_origin(origin, settings)
 
     if rules is None:
         return RobotsDecision(
             allowed=False,
-            reason=(
-                "robots.txt could not be retrieved "
-                f"({problem})"
-            ),
+            reason=(f"robots.txt could not be retrieved ({problem})"),
             unreachable=True,
         )
 
     if rules.is_allowed(robots_target(url)):
         return RobotsDecision(
             allowed=True,
-            reason=(
-                "allowed by robots.txt "
-                f"(group: {rules.matched_group})"
-            ),
+            reason=(f"allowed by robots.txt (group: {rules.matched_group})"),
             matched_group=rules.matched_group,
         )
 
     return RobotsDecision(
         allowed=False,
-        reason=(
-            "disallowed by robots.txt "
-            f"(group: {rules.matched_group})"
-        ),
+        reason=(f"disallowed by robots.txt (group: {rules.matched_group})"),
         matched_group=rules.matched_group,
     )

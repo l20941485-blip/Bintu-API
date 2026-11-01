@@ -143,13 +143,16 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
         url = "https://example.com/page"
         document = self._document()
 
-        with patch(
-            "bintu_api.routes.fetch_html_document",
-            return_value=document,
-        ), patch(
-            "bintu_api.routes._enforce_robots",
-            new=AsyncMock(),
-        ) as robots:
+        with (
+            patch(
+                "bintu_api.routes.fetch_html_document",
+                return_value=document,
+            ),
+            patch(
+                "bintu_api.routes._enforce_robots",
+                new=AsyncMock(),
+            ) as robots,
+        ):
             await _fetch_and_extract(
                 request,
                 url,

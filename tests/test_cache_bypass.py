@@ -45,9 +45,7 @@ def cache_key():
 
 
 def run(request, skip_cache=False):
-    return asyncio.run(
-        routes._scrape_text(request, URL, False, False, False, "test-id", False, skip_cache)
-    )
+    return asyncio.run(routes._scrape_text(request, URL, False, False, False, "test-id", False, skip_cache))
 
 
 class CacheBypassTests(unittest.TestCase):
@@ -57,9 +55,7 @@ class CacheBypassTests(unittest.TestCase):
             mock.patch.object(
                 routes,
                 "get_cached_markdown",
-                new=mock.AsyncMock(
-                    return_value=CachedMarkdown(markdown="from-persistent", truncated=False)
-                ),
+                new=mock.AsyncMock(return_value=CachedMarkdown(markdown="from-persistent", truncated=False)),
             ),
             mock.patch.object(routes, "upsert_cached_markdown", new=mock.AsyncMock()),
             mock.patch.object(routes, "has_valid_proxy_secret", return_value=False),

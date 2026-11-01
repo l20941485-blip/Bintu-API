@@ -1,9 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
 
 # ---------------------------------------------------------------------------
 # Token estimation and budget enforcement
@@ -53,6 +52,7 @@ def truncate_to_token_budget(text: str, max_tokens: int | None) -> tuple[str, bo
         window = window + "\n```"
 
     from bintu_api.final_fixes import drop_empty_fences
+
     window = drop_empty_fences(window)
 
     assert estimate_tokens(window) <= max_tokens
@@ -90,8 +90,7 @@ def normalize_url(url: str) -> str:
     query = [
         (key, value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
-        if not key.lower().startswith("utm_")
-        and key.lower() not in _TRACKING_PARAMS
+        if not key.lower().startswith("utm_") and key.lower() not in _TRACKING_PARAMS
     ]
 
     path = parts.path.rstrip("/") or "/"
@@ -143,14 +142,8 @@ def dedupe_blocks(text: str) -> tuple[str, int]:
         title = _normalize_title(heading_match.group(2)) if heading_match else ""
         body = "\n".join(block[1:])
 
-        urls = frozenset(
-            normalize_url(url) for url in _URL_RE.findall(body)
-        )
-        body_key = (
-            ""
-            if urls
-            else re.sub(r"\s+", " ", body).strip().casefold()
-        )
+        urls = frozenset(normalize_url(url) for url in _URL_RE.findall(body))
+        body_key = "" if urls else re.sub(r"\s+", " ", body).strip().casefold()
 
         key = (title, urls, body_key)
 
@@ -169,9 +162,7 @@ def dedupe_blocks(text: str) -> tuple[str, int]:
 # ---------------------------------------------------------------------------
 
 
-_INLINE_HEADING_RE = re.compile(
-    r"(?<=[.!?)\]\u201d\"']) +(?=#{1,6} \S)"
-)
+_INLINE_HEADING_RE = re.compile(r"(?<=[.!?)\]\u201d\"']) +(?=#{1,6} \S)")
 
 
 def normalize_markdown(text: str) -> str:
@@ -204,12 +195,7 @@ NOISE_LINE_PATTERNS = [
 def strip_noise_lines(text: str) -> str:
     """Remove known carousel counters, skip links, and video warnings."""
     kept = [
-        line
-        for line in text.split("\n")
-        if not any(
-            pattern.search(line.strip())
-            for pattern in NOISE_LINE_PATTERNS
-        )
+        line for line in text.split("\n") if not any(pattern.search(line.strip()) for pattern in NOISE_LINE_PATTERNS)
     ]
     return "\n".join(kept)
 
@@ -241,8 +227,4 @@ def split_sentences(text: str) -> list[str]:
         protected,
     )
 
-    return [
-        part.replace(_DOT, ".").strip()
-        for part in parts
-        if part.strip()
-    ]
+    return [part.replace(_DOT, ".").strip() for part in parts if part.strip()]

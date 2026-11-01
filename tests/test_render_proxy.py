@@ -17,9 +17,8 @@ class RenderProxyConnectionTests(unittest.TestCase):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
 
     def test_invalid_scheme_does_not_create_socket(self) -> None:
-        with patch("bintu_api.render_proxy.socket.socket") as factory:
-            with self.assertRaises(TargetURLRejected):
-                open_validated_socket("file:///etc/passwd", self.settings)
+        with patch("bintu_api.render_proxy.socket.socket") as factory, self.assertRaises(TargetURLRejected):
+            open_validated_socket("file:///etc/passwd", self.settings)
 
         factory.assert_not_called()
 
@@ -30,12 +29,12 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 side_effect=TargetURLRejected("Non-public destination"),
             ),
             patch("bintu_api.render_proxy.socket.socket") as factory,
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                open_validated_socket(
-                    "https://private.example/",
-                    self.settings,
-                )
+            open_validated_socket(
+                "https://private.example/",
+                self.settings,
+            )
 
         factory.assert_not_called()
 
@@ -59,9 +58,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         resolve.assert_called_once_with("public.example", 443)
         factory.assert_called_once_with(socket.AF_INET, socket.SOCK_STREAM)
-        candidate.settimeout.assert_called_once_with(
-            float(self.settings.request_timeout_seconds)
-        )
+        candidate.settimeout.assert_called_once_with(float(self.settings.request_timeout_seconds))
         candidate.connect.assert_called_once_with(("93.184.216.34", 443))
         candidate.close.assert_not_called()
         self.assertIs(result, candidate)
@@ -85,9 +82,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
             )
 
         factory.assert_called_once_with(socket.AF_INET6, socket.SOCK_STREAM)
-        candidate.connect.assert_called_once_with(
-            ("2606:4700::1111", 443, 0, 0)
-        )
+        candidate.connect.assert_called_once_with(("2606:4700::1111", 443, 0, 0))
         self.assertIs(result, candidate)
 
     def test_failed_socket_is_closed_before_next_address(self) -> None:
@@ -129,15 +124,14 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 "bintu_api.render_proxy.socket.socket",
                 return_value=candidate,
             ),
+            self.assertRaises(OSError),
         ):
-            with self.assertRaises(OSError):
-                open_validated_socket(
-                    "https://public.example/",
-                    self.settings,
-                )
+            open_validated_socket(
+                "https://public.example/",
+                self.settings,
+            )
 
         candidate.close.assert_called_once()
-
 
     def test_invalid_timeouts_stop_before_dns_or_socket(self) -> None:
         for timeout in (0, -1, float("nan"), float("inf"), float("-inf")):
@@ -148,12 +142,8 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 )
 
                 with (
-                    patch(
-                        "bintu_api.scraper.resolve_public_addresses"
-                    ) as resolve,
-                    patch(
-                        "bintu_api.render_proxy.socket.socket"
-                    ) as factory,
+                    patch("bintu_api.scraper.resolve_public_addresses") as resolve,
+                    patch("bintu_api.render_proxy.socket.socket") as factory,
                 ):
                     with self.assertRaises(ValueError):
                         open_validated_socket(
@@ -163,7 +153,6 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
                     resolve.assert_not_called()
                     factory.assert_not_called()
-
 
     def test_unexpected_setup_error_closes_socket_and_propagates(self) -> None:
         candidate = MagicMock()
@@ -179,12 +168,12 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 "bintu_api.render_proxy.socket.socket",
                 return_value=candidate,
             ),
+            self.assertRaises(RuntimeError) as raised,
         ):
-            with self.assertRaises(RuntimeError) as raised:
-                open_validated_socket(
-                    "https://public.example/",
-                    self.settings,
-                )
+            open_validated_socket(
+                "https://public.example/",
+                self.settings,
+            )
 
         self.assertIs(raised.exception, error)
         candidate.close.assert_called_once()

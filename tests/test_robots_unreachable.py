@@ -1,4 +1,4 @@
-﻿"""Tests distinguishing robots denials from robots retrieval failures."""
+"""Tests distinguishing robots denials from robots retrieval failures."""
 
 from __future__ import annotations
 
@@ -19,12 +19,15 @@ class RobotsUnreachableTests(unittest.TestCase):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
 
     def test_connection_failure_is_robots_unreachable(self) -> None:
-        with patch(
-            "bintu_api.robots.robots_mode",
-            return_value="enforce",
-        ), patch(
-            "bintu_api.robots._fetch_robots_text",
-            side_effect=RobotsUnreachable("connection problem (TimeoutError)"),
+        with (
+            patch(
+                "bintu_api.robots.robots_mode",
+                return_value="enforce",
+            ),
+            patch(
+                "bintu_api.robots._fetch_robots_text",
+                side_effect=RobotsUnreachable("connection problem (TimeoutError)"),
+            ),
         ):
             decision = robots_decision("https://example.com/page", self.settings)
 
@@ -33,12 +36,15 @@ class RobotsUnreachableTests(unittest.TestCase):
         self.assertIn("robots.txt could not be retrieved", decision.reason)
 
     def test_explicit_disallow_is_blocked_by_robots(self) -> None:
-        with patch(
-            "bintu_api.robots.robots_mode",
-            return_value="enforce",
-        ), patch(
-            "bintu_api.robots._fetch_robots_text",
-            return_value="User-agent: *\nDisallow: /private\n",
+        with (
+            patch(
+                "bintu_api.robots.robots_mode",
+                return_value="enforce",
+            ),
+            patch(
+                "bintu_api.robots._fetch_robots_text",
+                return_value="User-agent: *\nDisallow: /private\n",
+            ),
         ):
             decision = robots_decision("https://example.com/private/page", self.settings)
 
@@ -47,12 +53,15 @@ class RobotsUnreachableTests(unittest.TestCase):
         self.assertIn("disallowed by robots.txt", decision.reason)
 
     def test_allowed_page_is_allowed(self) -> None:
-        with patch(
-            "bintu_api.robots.robots_mode",
-            return_value="enforce",
-        ), patch(
-            "bintu_api.robots._fetch_robots_text",
-            return_value="User-agent: *\nAllow: /\n",
+        with (
+            patch(
+                "bintu_api.robots.robots_mode",
+                return_value="enforce",
+            ),
+            patch(
+                "bintu_api.robots._fetch_robots_text",
+                return_value="User-agent: *\nAllow: /\n",
+            ),
         ):
             decision = robots_decision("https://example.com/page", self.settings)
 

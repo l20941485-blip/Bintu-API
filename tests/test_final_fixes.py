@@ -1,4 +1,4 @@
-﻿from bintu_api.final_fixes import (
+from bintu_api.final_fixes import (
     close_up_punctuation,
     delivered_savings,
     drop_empty_fences,
@@ -44,9 +44,7 @@ def test_old_regex_had_the_bug():
 
     old = lambda value: re.sub(r"\s+([,.;:!?])", r"\1", value)
     assert old("for example: .foo.md or .bar/baz.md") == "for example:.foo.md or.bar/baz.md"
-    assert close_up_punctuation("for example: .foo.md or .bar/baz.md") == (
-        "for example: .foo.md or .bar/baz.md"
-    )
+    assert close_up_punctuation("for example: .foo.md or .bar/baz.md") == ("for example: .foo.md or .bar/baz.md")
 
 
 def test_decimal_urls_and_paths_are_untouched():

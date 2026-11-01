@@ -123,15 +123,16 @@ class UrlValidationRouteMappingTests(unittest.TestCase):
         self.url = "http://127.0.0.1/"
 
     def test_route_maps_target_rejection_to_400(self) -> None:
-        with patch(
-            "bintu_api.routes._enforce_robots",
-            new=AsyncMock(),
-        ) as robots, patch(
-            "bintu_api.routes.fetch_html_document",
-            side_effect=TargetURLRejected(
-                "The target hostname resolves to a non-public address"
-            ),
-        ) as fetch:
+        with (
+            patch(
+                "bintu_api.routes._enforce_robots",
+                new=AsyncMock(),
+            ) as robots,
+            patch(
+                "bintu_api.routes.fetch_html_document",
+                side_effect=TargetURLRejected("The target hostname resolves to a non-public address"),
+            ) as fetch,
+        ):
             response = self.client.get(
                 "/api/v1/scrape/text",
                 params={"url": self.url},

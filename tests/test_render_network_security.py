@@ -25,18 +25,14 @@ class RenderPreflightSecurityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_scheme_is_rejected_before_browser_start(self) -> None:
         with (
-            patch(
-                "bintu_api.scraper.resolve_public_addresses"
-            ) as resolve,
-            patch(
-                "playwright.async_api.async_playwright"
-            ) as start_playwright,
+            patch("bintu_api.scraper.resolve_public_addresses") as resolve,
+            patch("playwright.async_api.async_playwright") as start_playwright,
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                await fetch_rendered_html_document(
-                    "file:///etc/passwd",
-                    self.settings,
-                )
+            await fetch_rendered_html_document(
+                "file:///etc/passwd",
+                self.settings,
+            )
 
         resolve.assert_not_called()
         start_playwright.assert_not_called()
@@ -45,19 +41,15 @@ class RenderPreflightSecurityTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch(
                 "bintu_api.scraper.resolve_public_addresses",
-                side_effect=TargetURLRejected(
-                    "The target hostname resolves to a non-public address"
-                ),
+                side_effect=TargetURLRejected("The target hostname resolves to a non-public address"),
             ) as resolve,
-            patch(
-                "playwright.async_api.async_playwright"
-            ) as start_playwright,
+            patch("playwright.async_api.async_playwright") as start_playwright,
+            self.assertRaises(TargetURLRejected),
         ):
-            with self.assertRaises(TargetURLRejected):
-                await fetch_rendered_html_document(
-                    "https://private.example/",
-                    self.settings,
-                )
+            await fetch_rendered_html_document(
+                "https://private.example/",
+                self.settings,
+            )
 
         resolve.assert_called_once_with("private.example", 443)
         start_playwright.assert_not_called()

@@ -1,8 +1,9 @@
 """Phase D tests for Provenance model and CacheInfo."""
-import unittest
-from datetime import datetime, timezone
 
-from bintu_api.schemas import Provenance, CacheInfo
+import unittest
+from datetime import UTC, datetime
+
+from bintu_api.schemas import CacheInfo, Provenance
 
 
 class ProvenanceTests(unittest.TestCase):
@@ -10,7 +11,7 @@ class ProvenanceTests(unittest.TestCase):
         """Phase D: Provenance model creates successfully with all fields."""
         provenance = Provenance(
             request_id="req-123",
-            fetched_at=datetime.now(timezone.utc).isoformat(),
+            fetched_at=datetime.now(UTC).isoformat(),
             requested_url="https://example.com",
             final_url="https://example.com",
             canonical_url=None,
@@ -31,7 +32,7 @@ class ProvenanceTests(unittest.TestCase):
         """Phase D: Provenance with cache hit metadata."""
         provenance = Provenance(
             request_id="req-456",
-            fetched_at=datetime.now(timezone.utc).isoformat(),
+            fetched_at=datetime.now(UTC).isoformat(),
             requested_url="https://example.com",
             final_url="https://example.com",
             canonical_url=None,

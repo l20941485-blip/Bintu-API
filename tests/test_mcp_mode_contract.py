@@ -33,10 +33,7 @@ class McpModeContractTests(unittest.TestCase):
         self.document = FetchedHTML(
             final_url=self.url,
             body=(
-                b"<html><body><main>"
-                b"<h1>Bintu mode contract</h1>"
-                + (paragraph.encode() * 10)
-                + b"</main></body></html>"
+                b"<html><body><main><h1>Bintu mode contract</h1>" + (paragraph.encode() * 10) + b"</main></body></html>"
             ),
             charset="utf-8",
         )

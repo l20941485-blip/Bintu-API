@@ -1,4 +1,4 @@
-﻿"""Call Bintu's MCP tool using the Streamable HTTP endpoint."""
+"""Call Bintu's MCP tool using the Streamable HTTP endpoint."""
 
 import json
 import os

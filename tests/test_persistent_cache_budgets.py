@@ -1,20 +1,16 @@
 """Persistent extraction must not depend on the first caller's budget."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import asyncio
 
 from bintu_api import routes
 from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 
-
 URL = "https://example.com/cache-budget-test"
 HTML = (
-    "<html><body><main><h1>Budget test</h1><p>"
-    + "Useful documentation content. " * 2000
-    + "</p></main></body></html>"
+    "<html><body><main><h1>Budget test</h1><p>" + "Useful documentation content. " * 2000 + "</p></main></body></html>"
 ).encode("utf-8")
 
 
@@ -77,23 +73,16 @@ async def _check_small_first_request_does_not_shorten_persistent_extraction():
     )
 
     with (
-        patch.object(routes, "get_cached_markdown",
-                     new=AsyncMock(side_effect=lookup)) as read,
-        patch.object(routes, "upsert_cached_markdown",
-                     new=AsyncMock(side_effect=store)) as write,
+        patch.object(routes, "get_cached_markdown", new=AsyncMock(side_effect=lookup)) as read,
+        patch.object(routes, "upsert_cached_markdown", new=AsyncMock(side_effect=store)) as write,
         patch.object(routes, "_enforce_robots", new=AsyncMock()),
-        patch.object(routes, "fetch_html_document",
-                     return_value=document) as fetch,
-        patch.object(routes, "_decode_source_text",
-                     return_value=HTML.decode("utf-8")),
-        patch.object(routes, "extract_text_result",
-                     wraps=routes.extract_text_result) as extractor,
+        patch.object(routes, "fetch_html_document", return_value=document) as fetch,
+        patch.object(routes, "_decode_source_text", return_value=HTML.decode("utf-8")),
+        patch.object(routes, "extract_text_result", wraps=routes.extract_text_result) as extractor,
     ):
         _, first, first_layer = await extract(request, budget=450)
         _, larger, larger_layer = await extract(request, budget=2600)
-        _, chunk, chunk_layer = await extract(
-            request, mode="chunk", budget=10000
-        )
+        _, chunk, chunk_layer = await extract(request, mode="chunk", budget=10000)
 
     assert first_layer == "none"
     assert larger_layer == chunk_layer == "persistent"
@@ -116,22 +105,15 @@ async def _check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode()
     )
 
     with (
-        patch.object(routes, "get_cached_markdown",
-                     new=AsyncMock()) as read,
-        patch.object(routes, "upsert_cached_markdown",
-                     new=AsyncMock()) as write,
+        patch.object(routes, "get_cached_markdown", new=AsyncMock()) as read,
+        patch.object(routes, "upsert_cached_markdown", new=AsyncMock()) as write,
         patch.object(routes, "_enforce_robots", new=AsyncMock()),
-        patch.object(routes, "fetch_html_document",
-                     return_value=document) as fetch,
-        patch.object(routes, "_decode_source_text",
-                     return_value=HTML.decode("utf-8")),
-        patch.object(routes, "extract_text_result",
-                     wraps=routes.extract_text_result) as extractor,
+        patch.object(routes, "fetch_html_document", return_value=document) as fetch,
+        patch.object(routes, "_decode_source_text", return_value=HTML.decode("utf-8")),
+        patch.object(routes, "extract_text_result", wraps=routes.extract_text_result) as extractor,
     ):
         _, first, first_layer = await extract(request, budget=450)
-        _, chunk, chunk_layer = await extract(
-            request, mode="chunk", budget=10000
-        )
+        _, chunk, chunk_layer = await extract(request, mode="chunk", budget=10000)
 
     read.assert_not_awaited()
     write.assert_not_awaited()
@@ -146,12 +128,8 @@ async def _check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode()
 
 
 def test_small_first_request_does_not_shorten_persistent_extraction():
-    asyncio.run(
-        _check_small_first_request_does_not_shorten_persistent_extraction()
-    )
+    asyncio.run(_check_small_first_request_does_not_shorten_persistent_extraction())
 
 
 def test_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode():
-    asyncio.run(
-        _check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode()
-    )
+    asyncio.run(_check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode())

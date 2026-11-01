@@ -13,7 +13,6 @@ from bintu_api.scraper import (
     _read_html_response,
 )
 
-
 MAX_BYTES = 1024
 
 
@@ -43,7 +42,7 @@ class ContentTypeSafetyTests(unittest.TestCase):
 
     def test_accepts_xhtml(self) -> None:
         response = _response(
-            b"<html xmlns=\"http://www.w3.org/1999/xhtml\"><body>ok</body></html>",
+            b'<html xmlns="http://www.w3.org/1999/xhtml"><body>ok</body></html>',
             content_type="application/xhtml+xml; charset=utf-8",
         )
 
