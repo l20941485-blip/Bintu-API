@@ -111,8 +111,8 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(keys), 2)
         self.assertNotEqual(keys[0], keys[1])
 
-        expected_plain = hashlib.sha256(f"0:{url}".encode()).hexdigest()
-        expected_rendered = hashlib.sha256(f"1:{url}".encode()).hexdigest()
+        expected_plain = hashlib.sha256(f"0:inline:{url}".encode()).hexdigest()
+        expected_rendered = hashlib.sha256(f"1:inline:{url}".encode()).hexdigest()
         self.assertEqual(keys[0], expected_plain)
         self.assertEqual(keys[1], expected_rendered)
 

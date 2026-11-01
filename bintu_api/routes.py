@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 from urllib.parse import (
     parse_qsl,
     urlencode,
@@ -77,8 +78,14 @@ from bintu_api.yield_check import assess_yield
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
+
 TOKEN_METHOD = "ceil(characters/4)"
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
+UPSTREAM_RATE_LIMITED_STATUSES = ()
+
+
+LINK_MODES = ("inline", "footnotes", "false")
+
 
 SENSITIVE_QUERY_PARAMETER_NAMES = frozenset(
     {
@@ -95,8 +102,10 @@ SENSITIVE_QUERY_PARAMETER_NAMES = frozenset(
 )
 
 
+
 def sanitize_url(url: str) -> str:
     """Strip sensitive-looking query parameters.
+
 
     For logs and provenance only; never use the result to fetch or to replace
     the caller's URL. Parameter names are compared case-insensitively, and
@@ -118,9 +127,11 @@ def sanitize_url(url: str) -> str:
     )
 
 
+
 def _is_sensitive_query_parameter(name: str) -> bool:
     normalized = name.strip().lower()
     return normalized in SENSITIVE_QUERY_PARAMETER_NAMES or normalized.startswith("utm_")
+
 
 
 def _build_provenance(
@@ -149,6 +160,7 @@ def _build_provenance(
     )
 
 
+
 def _build_response(
     url: str,
     result: CachedMarkdown,
@@ -158,6 +170,7 @@ def _build_response(
     settings: Settings,
 ) -> ScrapeTextResponse:
     approx_tokens = _compute_approx_tokens(result.markdown)
+
 
     # Preserve the economics of the original extraction on cache hits. A
     # persistent-cache row no longer has the source HTML, so recomputing savings
@@ -169,7 +182,9 @@ def _build_response(
     else:
         saved = 0
 
+
     assessment = assess_yield(approx_tokens, result.html_tokens)
+
 
     return ScrapeTextResponse(
         url=url,
@@ -194,8 +209,10 @@ def _build_response(
     )
 
 
+
 async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     """Check robots.txt before any network fetch of the page.
+
 
     enforce: an explicit robots disallow blocks with 403. A robots.txt retrieval
     failure also blocks with 403, but is reported as ``robots_unreachable``.
@@ -206,9 +223,11 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
     if mode == "off":
         return
 
+
     decision = await asyncio.to_thread(robots_decision, url, settings)
     if decision.allowed:
         return
+
 
     logger.info(
         "robots_not_allowed url_hash=%s mode=%s unreachable=%s reason=%s",
@@ -217,6 +236,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
         decision.unreachable,
         decision.reason,
     )
+
 
     if mode == "enforce":
         if decision.unreachable:
@@ -232,6 +252,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
                 },
             )
 
+
         raise HTTPException(
             status_code=403,
             detail={
@@ -242,6 +263,7 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
         )
 
 
+
 @router.get("/", response_model=GatewayResponse)
 def gateway_check(request: Request) -> GatewayResponse:
     settings = request.app.state.settings
@@ -250,6 +272,7 @@ def gateway_check(request: Request) -> GatewayResponse:
         service=settings.service_title,
         docs="/docs",
     )
+
 
 
 @router.get(
@@ -263,12 +286,14 @@ def health_check(request: Request) -> HealthResponse:
     commit = os.getenv("RENDER_GIT_COMMIT", "").strip() or None
     environment = os.getenv("RENDER_SERVICE_NAME", "").strip() or None
 
+
     return HealthResponse(
         status="ok",
         version=settings.service_version,
         commit=commit,
         environment=environment,
     )
+
 
 
 @router.get("/version", response_model=VersionResponse)
@@ -285,6 +310,7 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
     )
+
 
 
 @router.get(
@@ -308,12 +334,14 @@ async def scrape_text(
     include_header: bool = False,
     include_footer: bool = False,
     render_js: bool = False,
+    links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
+
 
     if max_tokens < 100 or max_tokens > 50000:
         raise HTTPException(
@@ -323,6 +351,7 @@ async def scrape_text(
                 "message": "max_tokens must be between 100 and 50000.",
             },
         )
+
 
     if render_js and not settings.render_js_enabled:
         raise HTTPException(
@@ -334,6 +363,7 @@ async def scrape_text(
             },
         )
 
+
     return await _scrape_text(
         request,
         url,
@@ -342,10 +372,12 @@ async def scrape_text(
         include_footer,
         rate_limit_identity(request, settings),
         render_js,
+        links,
         skip_cache,
         persist,
         max_tokens,
     )
+
 
 
 @router.post(
@@ -364,11 +396,13 @@ async def scrape_chunks(
     request: Request,
     payload: MobileScrapeTextRequest,
     max_tokens: int = 6000,
+    links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
 ) -> ScrapeChunksResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
+
 
     if not 100 <= max_tokens <= 50000:
         raise HTTPException(
@@ -378,6 +412,7 @@ async def scrape_chunks(
                 "message": "max_tokens must be between 100 and 50000.",
             },
         )
+
 
     if payload.render_js and not settings.render_js_enabled:
         raise HTTPException(
@@ -389,6 +424,7 @@ async def scrape_chunks(
             },
         )
 
+
     document, result, cache_layer = await _scrape_chunks(
         request,
         payload.url,
@@ -397,10 +433,12 @@ async def scrape_chunks(
         payload.include_footer,
         rate_limit_identity(request, settings),
         payload.render_js,
+        links,
         skip_cache,
         persist,
         max_tokens,
     )
+
 
     chunk_strings = split_into_chunks(result.markdown, max_tokens)
     chunks = [
@@ -413,7 +451,9 @@ async def scrape_chunks(
         for index, chunk in enumerate(chunk_strings)
     ]
 
+
     approx_tokens = sum(chunk.approx_tokens for chunk in chunks)
+
 
     return ScrapeChunksResponse(
         url=payload.url,
@@ -439,6 +479,7 @@ async def scrape_chunks(
     )
 
 
+
 async def _scrape_chunks(
     request: Request,
     url: str,
@@ -447,6 +488,7 @@ async def _scrape_chunks(
     include_footer: bool,
     identity: str,
     render_js: bool = False,
+    links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
@@ -454,11 +496,13 @@ async def _scrape_chunks(
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
 
+
     try:
         await asyncio.to_thread(
             request.app.state.rate_limiter.check,
             identity,
         )
+
 
         document, result, cache_layer = await _fetch_and_extract(
             request,
@@ -467,11 +511,13 @@ async def _scrape_chunks(
             include_header=include_header,
             include_footer=include_footer,
             render_js=render_js,
+            links=links,
             skip_cache=skip_cache,
             persist=persist,
             mode="chunk",
             max_tokens=max_tokens,
         )
+
 
         log_extraction_completed(
             request_id=request_id,
@@ -486,7 +532,9 @@ async def _scrape_chunks(
             limiting_factor=result.limiting_factor,
         )
 
+
         return document, result, cache_layer
+
 
     except HTTPException:
         raise
@@ -622,6 +670,7 @@ async def _scrape_chunks(
         ) from error
 
 
+
 @router.post(
     "/api/v1/mobile/scrape/text",
     response_model=ScrapeTextResponse,
@@ -636,6 +685,7 @@ async def _scrape_chunks(
 async def mobile_scrape_text(
     request: Request,
     payload: MobileScrapeTextRequest,
+    links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
 ) -> ScrapeTextResponse:
@@ -645,6 +695,7 @@ async def mobile_scrape_text(
         request,
         request.app.state.settings,
     )
+
 
     if payload.render_js and not settings.render_js_enabled:
         raise HTTPException(
@@ -656,6 +707,7 @@ async def mobile_scrape_text(
             },
         )
 
+
     return await _scrape_text(
         request,
         payload.url,
@@ -664,9 +716,11 @@ async def mobile_scrape_text(
         payload.include_footer,
         f"supabase:{user_id}",
         payload.render_js,
+        links,
         skip_cache,
         persist,
     )
+
 
 
 _CREDENTIAL_QUERY_PARAMS = frozenset(
@@ -686,8 +740,10 @@ _CREDENTIAL_QUERY_PARAMS = frozenset(
 )
 
 
+
 def redact_cache_url(url: str) -> str:
     """Redact credential-like query values before persistent-cache storage.
+
 
     Cache lookups continue to use the original request URL. Only the URL
     written to Supabase is redacted, preventing bearer tokens, session IDs,
@@ -697,14 +753,17 @@ def redact_cache_url(url: str) -> str:
     if not parsed.query:
         return url
 
+
     try:
         pairs = parse_qsl(parsed.query, keep_blank_values=True)
     except ValueError:
         return url
 
+
     redacted_pairs = [
         (name, "[REDACTED]" if name.lower() in _CREDENTIAL_QUERY_PARAMS else value) for name, value in pairs
     ]
+
 
     return urlunsplit(
         (
@@ -717,6 +776,7 @@ def redact_cache_url(url: str) -> str:
     )
 
 
+
 async def _fetch_and_extract(
     request: Request,
     url: str,
@@ -725,20 +785,26 @@ async def _fetch_and_extract(
     include_header: bool,
     include_footer: bool,
     render_js: bool,
-    skip_cache: bool,
+    links: Literal["inline", "footnotes", "false"] = "inline",
+    skip_cache: bool = False,
     persist: bool = True,
     mode: str = "scrape",
     max_tokens: int = 6000,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
+
     Returns:
         document: FetchedHTML for a fresh fetch; None for a cache hit.
         result: extracted markdown, truncation flag, and extraction economics.
         cache_layer: "none", "memory", or "persistent".
 
+
     Raises the same HTTPException and scraper exceptions as the REST endpoint.
     """
+    if links not in LINK_MODES:
+        raise ValueError("links must be one of: inline, footnotes, false")
+
     settings = request.app.state.settings
     extraction_cap = (
         MAX_EXTRACTION_CHARACTERS
@@ -748,6 +814,10 @@ async def _fetch_and_extract(
     # Persistent rows share one canonical extraction policy.
     # Custom operator caps use raw-HTML memory caching only.
     persistent_cache_enabled = settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
+    # Link output changes the extracted Markdown, so only the default inline
+    # mode may use the existing persistent-cache policy until its schema is
+    # extended to store the link mode.
+    persistent_cache_enabled = persistent_cache_enabled and links == "inline"
     # Never persist URLs whose query string may carry a caller credential.
     cacheable = not has_credential_params(url)
     database_client = getattr(request.app.state, "supabase_client", None)
@@ -755,6 +825,7 @@ async def _fetch_and_extract(
     document: FetchedHTML | None = None
     cache_layer = "none"
     request_id = getattr(getattr(request, "state", None), "request_id", None)
+
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
     if database_client is not None and persistent_cache_enabled and cacheable and not skip_cache:
@@ -776,7 +847,11 @@ async def _fetch_and_extract(
                 type(error).__name__,
             )
 
-    cache_key = hashlib.sha256(f"{int(render_js)}:{url}".encode()).hexdigest()
+
+    cache_key = hashlib.sha256(
+        f"{int(render_js)}:{links}:{url}".encode()
+    ).hexdigest()
+
 
     if result is not None:
         cache_layer = "persistent"
@@ -787,13 +862,16 @@ async def _fetch_and_extract(
             layer=cache_layer,
         )
 
+
         # Persistent-cache rows contain already-extracted Markdown, not HTML.
         # Return it unchanged: running the HTML extractor again would parse
         # Markdown as HTML and destroy intentional newlines and table shape.
         return document, result, cache_layer
 
+
     cache = request.app.state.cache
     document = None if skip_cache else cache.get(cache_key)
+
 
     if document is not None:
         cache_layer = "memory"
@@ -811,9 +889,11 @@ async def _fetch_and_extract(
             layer="none",
         )
 
+
         # robots.txt is checked before any network fetch of the page.
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
+
 
         if render_js:
             document = await fetch_rendered_html_document(url, settings)
@@ -827,6 +907,7 @@ async def _fetch_and_extract(
                 settings,
             )
 
+
     extracted = extract_text_result(
         document.body,
         extraction_cap,
@@ -835,11 +916,14 @@ async def _fetch_and_extract(
         include_footer=include_footer,
         from_encoding=document.charset,
         base_url=document.final_url or url,
+        links=links,
     )
+
 
     # Replace raw HTML only after a successful, nonempty extraction.
     if cache_layer == "none" and extracted.text.strip():
         cache.set(cache_key, document)
+
 
     html_source_text = _decode_source_text(document)
     html_tokens = _compute_approx_tokens(html_source_text)
@@ -849,6 +933,7 @@ async def _fetch_and_extract(
     )
     extracted_at = datetime.now(UTC).isoformat()
 
+
     result = CachedMarkdown(
         markdown=extracted.text,
         truncated=extracted.truncated,
@@ -857,6 +942,7 @@ async def _fetch_and_extract(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at,
     )
+
 
     if database_client is not None and persistent_cache_enabled and cacheable and persist:
         try:
@@ -889,7 +975,9 @@ async def _fetch_and_extract(
                 type(error).__name__,
             )
 
+
     return document, result, cache_layer
+
 
 
 from bintu_api.extraction_quality import truncate_to_token_budget
@@ -903,6 +991,7 @@ async def _scrape_text(
     include_footer: bool,
     identity: str,
     render_js: bool = False,
+    links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
@@ -910,11 +999,13 @@ async def _scrape_text(
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
 
+
     try:
         await asyncio.to_thread(
             request.app.state.rate_limiter.check,
             identity,
         )
+
 
         document, result, cache_layer = await _fetch_and_extract(
             request,
@@ -923,10 +1014,12 @@ async def _scrape_text(
             include_header=include_header,
             include_footer=include_footer,
             render_js=render_js,
+            links=links,
             skip_cache=skip_cache,
             persist=persist,
             max_tokens=max_tokens,
         )
+
 
         if request.app.state.supabase_client is not None and has_valid_proxy_secret(request, settings):
             rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
@@ -945,6 +1038,7 @@ async def _scrape_text(
                         type(error).__name__,
                     )
 
+
         response = _build_response(
             url,
             result,
@@ -954,10 +1048,12 @@ async def _scrape_text(
             settings,
         )
 
+
         text, token_truncated = truncate_to_token_budget(
             response.text,
             max_tokens,
         )
+
 
         if token_truncated:
             response.text = text
@@ -982,7 +1078,9 @@ async def _scrape_text(
             limiting_factor=result.limiting_factor,
         )
 
+
         return response
+
 
     except HTTPException:
         raise
@@ -1069,6 +1167,7 @@ async def _scrape_text(
             error.reason,
         )
 
+
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             # Returned as 502 so a target's 401/403 is never mistaken for a problem
             # with the caller's own API key. No retries, no workarounds.
@@ -1081,6 +1180,7 @@ async def _scrape_text(
                     "upstream_status": error.status_code,
                 },
             ) from error
+
 
         raise HTTPException(
             status_code=502,
@@ -1167,6 +1267,7 @@ async def _scrape_text(
                 "message": "An internal extraction error occurred.",
             },
         ) from error
+
 
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).

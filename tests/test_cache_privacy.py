@@ -86,8 +86,8 @@ class PersistenceOptOutTests(unittest.TestCase):
                 False,
                 "test-id",
                 False,
-                False,
-                persist,
+                links="inline",
+                persist=persist,
             )
         )
 

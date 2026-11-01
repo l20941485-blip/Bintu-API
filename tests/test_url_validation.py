@@ -88,7 +88,7 @@ class UrlValidationTests(unittest.TestCase):
             "https://example.com/page?query=value",
         ):
             with self.subTest(url=url):
-                parsed, host, port, path = _parse_target(url, self.settings)
+                _parsed, host, port, _path = _parse_target(url, self.settings)
 
                 self.assertIn(host, {"example.com"})
                 self.assertIn(port, {80, 443})

@@ -1,19 +1,23 @@
 """MCP-compatible tool discovery and invocation helpers.
 
+
 Two surfaces intentionally share the same tool definitions:
+
 
 - /mcp/tools and /mcp/tools/call are legacy JSON helper endpoints.
 - /mcp is the standard stateless Streamable HTTP endpoint implemented in
   bintu_api.mcp_streamable.
 
+
 Successful tool calls expose the extraction envelope as structuredContent
 and preserve its JSON representation in content[0].text.
 """
 
+
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import (
@@ -54,12 +58,16 @@ from bintu_api.settings import Settings
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
 
+
 logger = logging.getLogger("bintu_api.mcp")
+
 
 TOOL_NAME = "bintu_scrape_text"
 TOOL_TITLE = "Bintu Scrape Text"
 
+
 TOOL_DESCRIPTION = NEW_TOOL_DESCRIPTION
+
 
 TOOL_ANNOTATIONS = {
     "title": TOOL_TITLE,
@@ -68,6 +76,7 @@ TOOL_ANNOTATIONS = {
     "idempotentHint": True,
     "openWorldHint": True,
 }
+
 
 TOOL_OUTPUT_SCHEMA = {
     "type": "object",
@@ -177,6 +186,7 @@ TOOL_OUTPUT_SCHEMA = {
     "additionalProperties": True,
 }
 
+
 TOOL_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -197,6 +207,17 @@ TOOL_INPUT_SCHEMA = {
                 "Render in Chromium before extraction when enabled by "
                 "the operator. If render_js_disabled is returned, retry "
                 "with false."
+            ),
+        },
+        "links": {
+            "type": "string",
+            "enum": ["inline", "footnotes", "false"],
+            "default": "inline",
+            "description": (
+                "How to represent hyperlinks in extracted text. "
+                "inline preserves readable link URLs; footnotes uses "
+                "numbered references and a link list; false removes "
+                "URLs for the lowest-token output."
             ),
         },
         "mode": {
@@ -252,6 +273,7 @@ TOOL_INPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+
 TOOL_INPUT_SCHEMA["properties"]["url"]["description"] = URL_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["mode"]["description"] = MODE_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["max_tokens"]["description"] = MAX_TOKENS_DESCRIPTION
@@ -261,9 +283,11 @@ TOOL_INPUT_SCHEMA["properties"]["render_js"]["description"] = RENDER_JS_DESCRIPT
 TOOL_OUTPUT_SCHEMA["properties"].update(OUTPUT_SCHEMA_EXTRA_PROPERTIES)
 
 
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any]
+
 
 
 class ToolArguments(BaseModel):
@@ -272,8 +296,10 @@ class ToolArguments(BaseModel):
         populate_by_name=True,
     )
 
+
     url: str
     render_js: bool = False
+    links: Literal["inline", "footnotes", "false"] = "inline"
     mode: str = "scrape"
     max_tokens: int = Field(
         default=6000,
@@ -283,6 +309,7 @@ class ToolArguments(BaseModel):
     cache: bool = True
     persist: bool = True
 
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_aliases(cls, data: Any) -> Any:
@@ -290,10 +317,13 @@ class ToolArguments(BaseModel):
         if not isinstance(data, dict):
             return data
 
+
         normalized = dict(data)
+
 
         if "mode" in normalized:
             normalized["mode"] = normalize_mode(normalized["mode"])
+
 
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
@@ -302,11 +332,14 @@ class ToolArguments(BaseModel):
             else:
                 normalized["max_tokens"] = normalized.pop("chunk_token_budget")
 
+
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
 
+
         return normalized
+
 
 
 def _mcp_error_response(
@@ -327,6 +360,7 @@ def _mcp_error_response(
     }
 
 
+
 @router.get("/tools")
 async def list_tools(request: Request) -> dict[str, Any]:
     return {
@@ -343,6 +377,7 @@ async def list_tools(request: Request) -> dict[str, Any]:
     }
 
 
+
 @router.post(
     "/tools/call",
     dependencies=[Security(api_key_scheme, scopes=[])],
@@ -354,6 +389,7 @@ async def call_tool(
     settings: Settings = request.app.state.settings
     verify_mcp_api_access(request, settings)
 
+
     if payload.name != TOOL_NAME:
         raise HTTPException(
             status_code=400,
@@ -363,6 +399,7 @@ async def call_tool(
                 "hint": f"Use the supported tool: {TOOL_NAME}.",
             },
         )
+
 
     try:
         arguments = ToolArguments.model_validate(payload.arguments)
@@ -377,6 +414,7 @@ async def call_tool(
             },
         ) from error
 
+
     if arguments.render_js and not settings.render_js_enabled:
         return _mcp_error_response(
             "render_js_disabled",
@@ -384,10 +422,12 @@ async def call_tool(
             "Retry with render_js=false for plain HTML extraction.",
         )
 
+
     await asyncio.to_thread(
         request.app.state.rate_limiter.check,
         mcp_rate_limit_identity(request, settings),
     )
+
 
     try:
         document, cached, cache_layer = await routes._fetch_and_extract(
@@ -400,6 +440,7 @@ async def call_tool(
             skip_cache=not arguments.cache,
             persist=arguments.persist,
             max_tokens=arguments.max_tokens,
+            links=arguments.links,
         )
     except TargetURLRejected as error:
         return _mcp_error_response(
@@ -420,6 +461,7 @@ async def call_tool(
             )
         raise
 
+
     cache_economics = None
     if cache_layer == "persistent":
         cache_economics = CacheEconomics(
@@ -429,6 +471,7 @@ async def call_tool(
             truncated=cached.truncated,
             extracted_at=cached.extracted_at,
         )
+
 
     context = await extract_context(
         request,
@@ -452,6 +495,7 @@ async def call_tool(
         extracted_at=cached.extracted_at,
     )
 
+
     log_extraction_completed(
         request_id=getattr(
             getattr(request, "state", None),
@@ -468,6 +512,7 @@ async def call_tool(
         truncated=context.truncated,
         limiting_factor=context.limiting_factor,
     )
+
 
     envelope = {
         "mode": context.mode,
@@ -489,6 +534,7 @@ async def call_tool(
         "split": context.split,
         "chunks": context.chunks,
     }
+
 
     return {
         "content": [
