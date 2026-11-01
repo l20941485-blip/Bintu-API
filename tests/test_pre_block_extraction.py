@@ -1,5 +1,4 @@
-﻿from bintu_api.scraper import extract_text_result
-
+from bintu_api.scraper import extract_text_result
 
 HTML = b"""
 <html><body><article>

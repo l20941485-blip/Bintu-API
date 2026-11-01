@@ -1,8 +1,10 @@
-﻿import asyncio
+import asyncio
 import unittest
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
+from bintu_api import routes
+from bintu_api.routes import redact_cache_url
 from tests.test_cache_bypass import (
     URL,
     FakeCache,
@@ -10,15 +12,11 @@ from tests.test_cache_bypass import (
     fake_document,
     make_request,
 )
-from bintu_api import routes
-from bintu_api.routes import redact_cache_url
 
 
 class RedactCacheUrlTests(unittest.TestCase):
     def test_redacts_credential_query_values(self):
-        redacted = redact_cache_url(
-            "https://example.com/page?token=secret-token&id=42"
-        )
+        redacted = redact_cache_url("https://example.com/page?token=secret-token&id=42")
 
         parsed = urlparse(redacted)
         query = parse_qs(parsed.query)
@@ -52,9 +50,7 @@ class RedactCacheUrlTests(unittest.TestCase):
             self.assertEqual(query[name], ["[REDACTED]"])
 
     def test_preserves_path_and_noncredential_query(self):
-        redacted = redact_cache_url(
-            "https://example.com/docs/page?utm_source=newsletter&page=2"
-        )
+        redacted = redact_cache_url("https://example.com/docs/page?utm_source=newsletter&page=2")
 
         self.assertIn("/docs/page", redacted)
         self.assertIn("utm_source=newsletter", redacted)
@@ -125,8 +121,6 @@ class PersistenceOptOutTests(unittest.TestCase):
         get_cached_m.assert_not_called()
         upsert_m.assert_not_called()
         self.assertEqual(response.cache_layer, "none")
-
-
 
 
 if __name__ == "__main__":

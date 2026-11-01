@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -27,8 +26,7 @@ class RenderJsContractTests(unittest.TestCase):
         self.document = FetchedHTML(
             final_url=self.url,
             body=(
-                b"<html><body><main><h1>Rendered</h1>"
-                b"<p>This page was fetched successfully.</p></main></body></html>"
+                b"<html><body><main><h1>Rendered</h1><p>This page was fetched successfully.</p></main></body></html>"
             ),
             charset="utf-8",
         )
@@ -81,7 +79,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_plain_extraction_never_renders(self) -> None:
         client = self._client(render_js_enabled=True)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             response = client.get(
                 "/api/v1/scrape/text",
                 params={"url": self.url, "render_js": "false"},
@@ -94,7 +95,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_enabled_render_uses_rendered_path(self) -> None:
         client = self._client(render_js_enabled=True)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             response = client.get(
                 "/api/v1/scrape/text",
                 params={"url": self.url, "render_js": "true"},
@@ -107,7 +111,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_disabled_render_returns_rest_error(self) -> None:
         client = self._client(render_js_enabled=False)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             response = client.get(
                 "/api/v1/scrape/text",
                 params={"url": self.url, "render_js": "true"},
@@ -122,7 +129,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_streamable_disabled_render_is_in_band(self) -> None:
         client = self._client(render_js_enabled=False)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             result = self._streamable_call(
                 client,
                 {"render_js": True},
@@ -139,7 +149,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_legacy_disabled_render_is_in_band(self) -> None:
         client = self._client(render_js_enabled=False)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             response = client.post(
                 "/mcp/tools/call",
                 json={
@@ -164,7 +177,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_streamable_enabled_render_uses_rendered_path(self) -> None:
         client = self._client(render_js_enabled=True)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             result = self._streamable_call(
                 client,
                 {"render_js": True},
@@ -177,7 +193,10 @@ class RenderJsContractTests(unittest.TestCase):
     def test_legacy_enabled_render_uses_rendered_path(self) -> None:
         client = self._client(render_js_enabled=True)
 
-        with self._patch_plain_fetch() as plain_fetch, self._patch_rendered_fetch() as rendered_fetch:
+        with (
+            self._patch_plain_fetch() as plain_fetch,
+            self._patch_rendered_fetch() as rendered_fetch,
+        ):
             response = client.post(
                 "/mcp/tools/call",
                 json={

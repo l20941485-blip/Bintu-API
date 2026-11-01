@@ -1,4 +1,4 @@
-﻿"""Tests for token-budgeted, fence-aware chunking."""
+"""Tests for token-budgeted, fence-aware chunking."""
 
 from __future__ import annotations
 
@@ -44,14 +44,7 @@ class SplitIntoChunksTests(unittest.TestCase):
                 self.assertEqual(word, "extraordinary")
 
     def test_fenced_code_block_is_preserved_when_it_fits(self) -> None:
-        text = (
-            "Before code.\n\n"
-            "```python\n"
-            "print('hello')\n"
-            "print('world')\n"
-            "```\n\n"
-            "After code."
-        )
+        text = "Before code.\n\n```python\nprint('hello')\nprint('world')\n```\n\nAfter code."
         chunks = split_into_chunks(text, 1000)
 
         self.assertEqual(len(chunks), 1)

@@ -5,8 +5,8 @@ import unittest
 from copy import deepcopy
 
 from bintu_api.mcp_modern import (
-    HeaderMismatch,
     PROTOCOL_VERSION_META_KEY,
+    HeaderMismatch,
     decode_name_header,
     validate_mirrored_headers,
 )
@@ -36,10 +36,7 @@ class ModernHeaderTests(unittest.TestCase):
         validate_mirrored_headers(self.headers, self.payload)
 
     def test_header_names_are_case_insensitive(self) -> None:
-        headers = {
-            name.swapcase(): value
-            for name, value in self.headers.items()
-        }
+        headers = {name.swapcase(): value for name, value in self.headers.items()}
         validate_mirrored_headers(headers, self.payload)
 
     def test_missing_headers_are_rejected(self) -> None:
@@ -74,9 +71,7 @@ class ModernHeaderTests(unittest.TestCase):
     def test_encoded_name_is_decoded_before_comparison(self) -> None:
         payload = deepcopy(self.payload)
         payload["params"]["name"] = "example_\u4e16\u754c"
-        encoded = base64.b64encode(
-            payload["params"]["name"].encode("utf-8")
-        ).decode("ascii")
+        encoded = base64.b64encode(payload["params"]["name"].encode("utf-8")).decode("ascii")
         headers = dict(self.headers)
         headers["Mcp-Name"] = f"=?base64?{encoded}?="
         validate_mirrored_headers(headers, payload)
@@ -107,9 +102,8 @@ class ModernHeaderTests(unittest.TestCase):
             "=?base64?***?=",
             "=?base64?/w==?=",
         ):
-            with self.subTest(value=repr(value)):
-                with self.assertRaises(HeaderMismatch):
-                    decode_name_header(value)
+            with self.subTest(value=repr(value)), self.assertRaises(HeaderMismatch):
+                decode_name_header(value)
 
     def test_error_contract(self) -> None:
         error = HeaderMismatch("Invalid routing headers.")

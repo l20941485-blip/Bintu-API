@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from typing import Any
@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 from main import create_app
-
 
 TEST_API_KEY = "test-mcp-key"
 
@@ -84,7 +83,6 @@ def patch_fetch():
         "bintu_api.routes._fetch_and_extract",
         new=AsyncMock(return_value=(document, cached, "persistent")),
     )
-
 
 
 def test_chunked_mode_alias_is_accepted(client: TestClient):

@@ -39,11 +39,7 @@ def open_validated_socket(url: str, settings: Settings) -> socket.socket:
     for address in addresses:
         numeric = ipaddress.ip_address(address)
         family = socket.AF_INET6 if numeric.version == 6 else socket.AF_INET
-        endpoint = (
-            (str(numeric), port, 0, 0)
-            if numeric.version == 6
-            else (str(numeric), port)
-        )
+        endpoint = (str(numeric), port, 0, 0) if numeric.version == 6 else (str(numeric), port)
         candidate = socket.socket(family, socket.SOCK_STREAM)
 
         try:
@@ -99,9 +95,7 @@ def read_connect_request_head(
             try:
                 chunk = client.recv(min(4096, capacity))
             except TimeoutError as error:
-                raise ProxyRequestRejected(
-                    "Request-head deadline exceeded"
-                ) from error
+                raise ProxyRequestRejected("Request-head deadline exceeded") from error
 
             if time.monotonic() >= deadline:
                 raise ProxyRequestRejected("Request-head deadline exceeded")

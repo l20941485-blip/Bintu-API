@@ -18,7 +18,7 @@ def collect_pages(text, budget):
         pages.append(page)
 
         assert page.start_offset == offset
-        assert page.text == text[offset:page.end_offset]
+        assert page.text == text[offset : page.end_offset]
         assert page.approx_tokens == count_tokens(page.text)
         assert page.approx_tokens <= budget
         assert len(page.text) <= budget * 4
@@ -125,18 +125,14 @@ def test_rejects_invalid_offsets(offset):
 
 
 def test_accepts_document_at_retention_limit():
-    snapshot = DocumentSnapshot(
-        "x" * DEFAULT_MAX_DOCUMENT_CHARACTERS
-    )
+    snapshot = DocumentSnapshot("x" * DEFAULT_MAX_DOCUMENT_CHARACTERS)
 
     assert len(snapshot.text) == DEFAULT_MAX_DOCUMENT_CHARACTERS
 
 
 def test_rejects_oversized_document_without_silent_truncation():
     with pytest.raises(ValueError, match="character limit"):
-        DocumentSnapshot(
-            "x" * (DEFAULT_MAX_DOCUMENT_CHARACTERS + 1)
-        )
+        DocumentSnapshot("x" * (DEFAULT_MAX_DOCUMENT_CHARACTERS + 1))
 
 
 @pytest.mark.parametrize("text", [None, 123, b"text"])

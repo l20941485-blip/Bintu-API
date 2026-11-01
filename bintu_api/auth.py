@@ -1,18 +1,17 @@
 import hashlib
 import hmac
 import json
-import hashlib
 import logging
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request as URLRequest, urlopen
+from urllib.request import Request as URLRequest
+from urllib.request import urlopen
 
 from fastapi import HTTPException
 from fastapi.security import APIKeyHeader, HTTPBearer
 from starlette.requests import Request
 
 from bintu_api.settings import Settings
-
 
 logger = logging.getLogger("bintu_api.auth")
 
@@ -23,7 +22,10 @@ logger = logging.getLogger("bintu_api.auth")
 # scheme_name controls the key FastAPI writes into components.securitySchemes,
 # which is what Swagger UI's Authorize dialog binds to.
 api_key_scheme = APIKeyHeader(
-    name="X-API-Key", scheme_name="ApiKeyAuth", description="Service API key.", auto_error=False
+    name="X-API-Key",
+    scheme_name="ApiKeyAuth",
+    description="Service API key.",
+    auto_error=False,
 )
 bearer_scheme = HTTPBearer(scheme_name="BearerAuth", description="Supabase session token.", auto_error=False)
 
@@ -68,7 +70,10 @@ def verify_api_access(request: Request, settings: Settings) -> None:
         )
         raise HTTPException(
             status_code=401,
-            detail={"code": "invalid_api_key", "message": "A valid API key is required."},
+            detail={
+                "code": "invalid_api_key",
+                "message": "A valid API key is required.",
+            },
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
@@ -99,9 +104,7 @@ def mcp_upgrade_url(settings: Settings) -> str:
     return (settings.upgrade_url or "https://mcpize.com").strip() or "https://mcpize.com"
 
 
-MCP_EXECUTION_FORBIDDEN_MESSAGE = (
-    "A premium subscription or valid X-API-Key is required to execute scrapes."
-)
+MCP_EXECUTION_FORBIDDEN_MESSAGE = "A premium subscription or valid X-API-Key is required to execute scrapes."
 
 
 def mcp_execution_forbidden_detail(settings: Settings) -> dict[str, str]:
@@ -126,9 +129,7 @@ def _bearer_matches(request: Request, settings: Settings) -> bool:
     if not separator or scheme.lower() != "bearer":
         return False
     candidate = token.strip()
-    return _secret_matches(candidate, settings.mcp_api_key) or _secret_matches(
-        candidate, settings.api_key
-    )
+    return _secret_matches(candidate, settings.mcp_api_key) or _secret_matches(candidate, settings.api_key)
 
 
 def verify_mcp_execution_access(request: Request, settings: Settings) -> None:
@@ -171,7 +172,10 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
     if not separator or scheme.lower() != "bearer" or invalid_token:
         raise HTTPException(
             status_code=401,
-            detail={"code": "invalid_session", "message": "A valid sign-in session is required."},
+            detail={
+                "code": "invalid_session",
+                "message": "A valid sign-in session is required.",
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -190,9 +194,15 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
         logger.error("invalid_supabase_url_configuration")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_not_configured", "message": "Mobile sign-in is unavailable."},
+            detail={
+                "code": "mobile_auth_not_configured",
+                "message": "Mobile sign-in is unavailable.",
+            },
         ) from error
-    local_http = parsed_url.scheme == "http" and parsed_url.hostname in {"localhost", "127.0.0.1"}
+    local_http = parsed_url.scheme == "http" and parsed_url.hostname in {
+        "localhost",
+        "127.0.0.1",
+    }
     invalid_url = (
         not parsed_url.hostname
         or (parsed_url.scheme != "https" and not local_http)
@@ -203,13 +213,19 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
         logger.error("invalid_supabase_url_configuration")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_not_configured", "message": "Mobile sign-in is unavailable."},
+            detail={
+                "code": "mobile_auth_not_configured",
+                "message": "Mobile sign-in is unavailable.",
+            },
         )
     if "\r" in settings.supabase_anon_key or "\n" in settings.supabase_anon_key:
         logger.error("invalid_supabase_anon_key_configuration")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_not_configured", "message": "Mobile sign-in is unavailable."},
+            detail={
+                "code": "mobile_auth_not_configured",
+                "message": "Mobile sign-in is unavailable.",
+            },
         )
 
     try:
@@ -227,32 +243,47 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
         logger.error("invalid_supabase_auth_configuration")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_not_configured", "message": "Mobile sign-in is unavailable."},
+            detail={
+                "code": "mobile_auth_not_configured",
+                "message": "Mobile sign-in is unavailable.",
+            },
         ) from error
     except HTTPError as error:
         if error.code in {400, 401, 403}:
             raise HTTPException(
                 status_code=401,
-                detail={"code": "invalid_session", "message": "Your sign-in session is invalid or expired."},
+                detail={
+                    "code": "invalid_session",
+                    "message": "Your sign-in session is invalid or expired.",
+                },
                 headers={"WWW-Authenticate": "Bearer"},
             ) from error
         logger.warning("supabase_auth_unavailable status=%d", error.code)
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_unavailable", "message": "Sign-in verification is temporarily unavailable."},
+            detail={
+                "code": "mobile_auth_unavailable",
+                "message": "Sign-in verification is temporarily unavailable.",
+            },
         ) from error
     except (URLError, TimeoutError, OSError) as error:
         logger.warning("supabase_auth_unavailable error_type=%s", type(error).__name__)
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_unavailable", "message": "Sign-in verification is temporarily unavailable."},
+            detail={
+                "code": "mobile_auth_unavailable",
+                "message": "Sign-in verification is temporarily unavailable.",
+            },
         ) from error
 
     if len(body) > 65536:
         logger.warning("supabase_auth_invalid_response reason=response_too_large")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_unavailable", "message": "Sign-in verification returned an invalid response."},
+            detail={
+                "code": "mobile_auth_unavailable",
+                "message": "Sign-in verification returned an invalid response.",
+            },
         )
     try:
         user = json.loads(body)
@@ -260,7 +291,10 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
         logger.warning("supabase_auth_invalid_response reason=invalid_json")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_unavailable", "message": "Sign-in verification returned an invalid response."},
+            detail={
+                "code": "mobile_auth_unavailable",
+                "message": "Sign-in verification returned an invalid response.",
+            },
         ) from error
 
     user_id = user.get("id") if isinstance(user, dict) else None
@@ -268,12 +302,18 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
         logger.warning("supabase_auth_invalid_response reason=missing_user_id")
         raise HTTPException(
             status_code=503,
-            detail={"code": "mobile_auth_unavailable", "message": "Sign-in verification returned an invalid response."},
+            detail={
+                "code": "mobile_auth_unavailable",
+                "message": "Sign-in verification returned an invalid response.",
+            },
         )
     if not user.get("email_confirmed_at"):
         raise HTTPException(
             status_code=403,
-            detail={"code": "email_not_verified", "message": "Verify your email address before using the app."},
+            detail={
+                "code": "email_not_verified",
+                "message": "Verify your email address before using the app.",
+            },
         )
     return user_id
 
@@ -320,8 +360,7 @@ def mcp_rate_limit_identity(request: Request, settings: Settings) -> str:
 
     for credential in (bearer, header_key):
         if credential and (
-            _secret_matches(credential, settings.mcp_api_key)
-            or _secret_matches(credential, settings.api_key)
+            _secret_matches(credential, settings.mcp_api_key) or _secret_matches(credential, settings.api_key)
         ):
             fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()[:16]
             return f"mcp:{fingerprint}"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
@@ -29,15 +29,18 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
             reason="Disallow: /private",
         )
 
-        with patch(
-            "bintu_api.routes.robots_mode",
-            return_value="enforce",
-        ), patch(
-            "bintu_api.routes.robots_decision",
-            new=MagicMock(return_value=decision),
+        with (
+            patch(
+                "bintu_api.routes.robots_mode",
+                return_value="enforce",
+            ),
+            patch(
+                "bintu_api.routes.robots_decision",
+                new=MagicMock(return_value=decision),
+            ),
+            self.assertRaises(HTTPException) as raised,
         ):
-            with self.assertRaises(HTTPException) as raised:
-                await _enforce_robots(self.url, self.settings, self.url_hash)
+            await _enforce_robots(self.url, self.settings, self.url_hash)
 
         self.assertEqual(raised.exception.status_code, 403)
         self.assertEqual(
@@ -54,15 +57,18 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
             reason="robots.txt could not be retrieved",
         )
 
-        with patch(
-            "bintu_api.routes.robots_mode",
-            return_value="enforce",
-        ), patch(
-            "bintu_api.routes.robots_decision",
-            new=MagicMock(return_value=decision),
+        with (
+            patch(
+                "bintu_api.routes.robots_mode",
+                return_value="enforce",
+            ),
+            patch(
+                "bintu_api.routes.robots_decision",
+                new=MagicMock(return_value=decision),
+            ),
+            self.assertRaises(HTTPException) as raised,
         ):
-            with self.assertRaises(HTTPException) as raised:
-                await _enforce_robots(self.url, self.settings, self.url_hash)
+            await _enforce_robots(self.url, self.settings, self.url_hash)
 
         self.assertEqual(raised.exception.status_code, 403)
         self.assertEqual(
@@ -79,13 +85,16 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
             reason="Disallow: /private",
         )
 
-        with patch(
-            "bintu_api.routes.robots_mode",
-            return_value="warn",
-        ), patch(
-            "bintu_api.routes.robots_decision",
-            new=MagicMock(return_value=decision),
-        ) as robots_decision:
+        with (
+            patch(
+                "bintu_api.routes.robots_mode",
+                return_value="warn",
+            ),
+            patch(
+                "bintu_api.routes.robots_decision",
+                new=MagicMock(return_value=decision),
+            ) as robots_decision,
+        ):
             await _enforce_robots(self.url, self.settings, self.url_hash)
 
         robots_decision.assert_called_once()
@@ -97,13 +106,16 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
             reason="Disallow: /private",
         )
 
-        with patch(
-            "bintu_api.routes.robots_mode",
-            return_value="off",
-        ), patch(
-            "bintu_api.routes.robots_decision",
-            new=MagicMock(return_value=decision),
-        ) as robots_decision:
+        with (
+            patch(
+                "bintu_api.routes.robots_mode",
+                return_value="off",
+            ),
+            patch(
+                "bintu_api.routes.robots_decision",
+                new=MagicMock(return_value=decision),
+            ) as robots_decision,
+        ):
             await _enforce_robots(self.url, self.settings, self.url_hash)
 
         robots_decision.assert_not_called()
@@ -115,13 +127,16 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
             reason="",
         )
 
-        with patch(
-            "bintu_api.routes.robots_mode",
-            return_value="enforce",
-        ), patch(
-            "bintu_api.routes.robots_decision",
-            new=MagicMock(return_value=decision),
-        ) as robots_decision:
+        with (
+            patch(
+                "bintu_api.routes.robots_mode",
+                return_value="enforce",
+            ),
+            patch(
+                "bintu_api.routes.robots_decision",
+                new=MagicMock(return_value=decision),
+            ) as robots_decision,
+        ):
             await _enforce_robots(self.url, self.settings, self.url_hash)
 
         robots_decision.assert_called_once()

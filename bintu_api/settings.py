@@ -1,12 +1,10 @@
-﻿import logging
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-
 from dotenv import load_dotenv
-
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -18,7 +16,6 @@ DEFAULT_CACHE_TTL_SECONDS = 300
 ROBOTS_MODES = ("enforce", "warn", "off")
 
 
-
 def _bool_env(name: str, default: bool = False) -> bool:
     """Read a boolean environment flag; only an explicit true enables it.
 
@@ -27,7 +24,6 @@ def _bool_env(name: str, default: bool = False) -> bool:
     value cannot accidentally boot Chromium on free-tier infra.
     """
     return os.getenv(name, "").strip().lower() == "true"
-
 
 
 def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -59,7 +55,6 @@ def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int
     return value
 
 
-
 def _robots_mode_env() -> str:
     """ROBOTS_MODE: enforce (default) | warn | off. Unknown values fall back to enforce."""
     raw = os.getenv("ROBOTS_MODE", "").strip().lower()
@@ -69,7 +64,6 @@ def _robots_mode_env() -> str:
         logger.warning("invalid_env_value name=ROBOTS_MODE value=%r using_default=enforce", raw)
         return "enforce"
     return raw
-
 
 
 @dataclass(frozen=True)
@@ -135,18 +129,13 @@ class Settings:
         "rate-limited, and outbound connections are validated against public IP addresses."
     )
 
-
     # Origins always permitted via CORS: the MCPize gateway that fronts /mcp.
     CORS_GATEWAY_ORIGINS: ClassVar[tuple[str, ...]] = ("https://bintu-web-reader.mcpize.run",)
 
-
     def cors_origin_allowlist(self) -> tuple[str, ...]:
         """Origins allowed to make credentialed cross-origin requests."""
-        extras = tuple(
-            origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()
-        )
+        extras = tuple(origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip())
         return self.CORS_GATEWAY_ORIGINS + extras
-
 
     def allowed_port_set(self) -> frozenset[int]:
         """TCP ports the fetcher may connect to: 80/443 plus ALLOWED_PORTS."""
@@ -166,7 +155,6 @@ class Settings:
                 logger.warning("out_of_range_allowed_port value=%r ignored", raw)
         return frozenset(ports)
 
-
     @classmethod
     def from_env(cls) -> "Settings":
         settings = cls(
@@ -180,16 +168,13 @@ class Settings:
                 "CACHE_TTL_SECONDS", DEFAULT_CACHE_TTL_SECONDS, minimum=0, maximum=86400
             ),
             redis_url=os.getenv("REDIS_URL", "").strip(),
-            upgrade_url=os.getenv("BINTU_UPGRADE_URL", "https://mcpize.com").strip()
-            or "https://mcpize.com",
+            upgrade_url=os.getenv("BINTU_UPGRADE_URL", "https://mcpize.com").strip() or "https://mcpize.com",
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
             require_auth=_bool_env("REQUIRE_AUTH", default=False),
             bot_info_url=os.getenv("BOT_INFO_URL", "").strip(),
             contact_email=os.getenv("CONTACT_EMAIL", "").strip(),
             robots_mode=_robots_mode_env(),
-            robots_cache_ttl_seconds=_bounded_int_env(
-                "ROBOTS_CACHE_TTL_SECONDS", 3600, minimum=0, maximum=86400
-            ),
+            robots_cache_ttl_seconds=_bounded_int_env("ROBOTS_CACHE_TTL_SECONDS", 3600, minimum=0, maximum=86400),
             cors_allowed_origins=os.getenv("CORS_ALLOWED_ORIGINS", "").strip(),
             allowed_ports=os.getenv("ALLOWED_PORTS", "").strip(),
         )

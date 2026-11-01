@@ -1,0 +1,65 @@
+name: bintu-ci
+
+# Runs on every PR and on pushes to main. Nothing here talks to production, so
+# it is safe to make Render wait for it (auto-deploy: "After CI Checks Pass").
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: bintu-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install ruff pytest httpx
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Regression suite compiles
+        run: python -m py_compile tests/regression/test_bintu_regressions.py
+
+      - name: Unit tests
+        run: |
+          if [ -d tests/unit ]; then
+            pytest tests/unit -q
+          else
+            echo "No tests/unit directory yet - add URL-validation unit tests here."
+          fi
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Mirrors what Render builds for the Bintu-API service (Dockerfile at repo root).
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: bintu-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

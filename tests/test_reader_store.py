@@ -248,9 +248,7 @@ def test_rejects_invalid_owner(owner):
         store.read("unknown", owner=owner, max_tokens=2)
 
 
-@pytest.mark.parametrize(
-    "setting", ["ttl_seconds", "max_documents", "max_handles"]
-)
+@pytest.mark.parametrize("setting", ["ttl_seconds", "max_documents", "max_handles"])
 @pytest.mark.parametrize("value", [0, -1, True, 1.5, "2", None])
 def test_rejects_invalid_store_settings(setting, value):
     with pytest.raises(ValueError, match=setting):

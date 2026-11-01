@@ -99,9 +99,7 @@ async def _fetch_snapshot(request: Request, payload: ReadRequest):
     target_id = hashlib.sha256(payload.url.encode("utf-8")).hexdigest()[:12]
 
     try:
-        await scrape_routes._enforce_robots(
-            payload.url, settings, target_id
-        )
+        await scrape_routes._enforce_robots(payload.url, settings, target_id)
         document = await asyncio.to_thread(
             scrape_routes.fetch_html_document,
             payload.url,
@@ -119,32 +117,38 @@ async def _fetch_snapshot(request: Request, payload: ReadRequest):
         raise
     except TargetURLRejected as error:
         raise _error(
-            400, "invalid_or_unsafe_url",
+            400,
+            "invalid_or_unsafe_url",
             "URL must be an allowed public HTTP or HTTPS address.",
         ) from error
     except UnsupportedMediaType as error:
         raise _error(
-            415, "unsupported_media_type",
+            415,
+            "unsupported_media_type",
             "Only HTML and XHTML pages are supported.",
         ) from error
     except UnsupportedContentEncoding as error:
         raise _error(
-            502, "unsupported_content_encoding",
+            502,
+            "unsupported_content_encoding",
             "The target returned invalid or unsupported compression.",
         ) from error
     except PayloadTooLarge as error:
         raise _error(
-            413, "payload_too_large",
+            413,
+            "payload_too_large",
             "The page exceeds the configured upstream size limit.",
         ) from error
     except ReaderDocumentTooLarge as error:
         raise _error(
-            413, "reader_document_too_large",
+            413,
+            "reader_document_too_large",
             "Extracted text exceeds the reader retention limit.",
         ) from error
     except ReaderDocumentEmpty as error:
         raise _error(
-            422, "reader_document_empty",
+            422,
+            "reader_document_empty",
             "No readable text was extracted.",
         ) from error
     except UpstreamHTTPError as error:
@@ -156,17 +160,20 @@ async def _fetch_snapshot(request: Request, payload: ReadRequest):
         ) from error
     except TooManyRedirects as error:
         raise _error(
-            502, "too_many_redirects",
+            502,
+            "too_many_redirects",
             "The target exceeded the redirect limit.",
         ) from error
     except TimeoutError as error:
         raise _error(
-            504, "upstream_timeout",
+            504,
+            "upstream_timeout",
             "The target did not respond in time.",
         ) from error
     except OSError as error:
         raise _error(
-            502, "upstream_connection_error",
+            502,
+            "upstream_connection_error",
             "Could not connect to the target.",
         ) from error
     except Exception as error:
@@ -175,7 +182,8 @@ async def _fetch_snapshot(request: Request, payload: ReadRequest):
             type(error).__name__,
         )
         raise _error(
-            500, "internal_error",
+            500,
+            "internal_error",
             "An internal extraction error occurred.",
         ) from error
 
@@ -213,7 +221,8 @@ async def continue_document(request: Request, payload: ContinueRequest):
         )
     except SnapshotUnavailable as error:
         raise _error(
-            404, "reader_snapshot_unavailable",
+            404,
+            "reader_snapshot_unavailable",
             "Continuation is unavailable. Start a new read.",
         ) from error
 

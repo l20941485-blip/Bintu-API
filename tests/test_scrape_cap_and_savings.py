@@ -1,4 +1,4 @@
-﻿import re
+import re
 import unittest
 from unittest.mock import patch
 
@@ -85,10 +85,7 @@ class ScrapeCapAndSavingsTests(unittest.TestCase):
         self.assertEqual(budgeted_response.status_code, 200)
         budgeted = budgeted_response.json()
 
-        expected = (
-            full_response.json()["tokens_saved_estimate"]
-            + (full_tokens - budgeted["tokens"])
-        )
+        expected = full_response.json()["tokens_saved_estimate"] + (full_tokens - budgeted["tokens"])
         self.assertEqual(budgeted["tokens_saved_estimate"], expected)
 
     def test_summarize_normalizes_headings_and_domains(self) -> None:
@@ -130,5 +127,3 @@ class ScrapeCapAndSavingsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-

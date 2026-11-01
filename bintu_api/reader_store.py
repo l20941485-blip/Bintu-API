@@ -4,8 +4,8 @@ import secrets
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from bintu_api.reader import DocumentPage, DocumentSnapshot, read_page
 
@@ -48,11 +48,7 @@ class SnapshotStore:
             ("max_documents", max_documents),
             ("max_handles", max_handles),
         ):
-            if (
-                isinstance(value, bool)
-                or not isinstance(value, int)
-                or value < 1
-            ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise ValueError(f"{name} must be a positive integer.")
 
         self._ttl = ttl_seconds
@@ -70,20 +66,12 @@ class SnapshotStore:
 
     def _drop_document(self, document_id: str) -> None:
         self._documents.pop(document_id, None)
-        stale = [
-            cursor
-            for cursor, (stored_id, _) in self._handles.items()
-            if stored_id == document_id
-        ]
+        stale = [cursor for cursor, (stored_id, _) in self._handles.items() if stored_id == document_id]
         for cursor in stale:
             del self._handles[cursor]
 
     def _purge_expired(self, now: float) -> None:
-        expired = [
-            document_id
-            for document_id, entry in self._documents.items()
-            if now >= entry.expires_at
-        ]
+        expired = [document_id for document_id, entry in self._documents.items() if now >= entry.expires_at]
         for document_id in expired:
             self._drop_document(document_id)
 
@@ -93,9 +81,7 @@ class SnapshotStore:
             if value not in self._documents and value not in self._handles:
                 return value
 
-    def _wrap_page(
-        self, document_id: str, page: DocumentPage
-    ) -> StoredPage:
+    def _wrap_page(self, document_id: str, page: DocumentPage) -> StoredPage:
         cursor = None
         if page.next_offset is not None:
             cursor = self._new_identifier()
@@ -150,11 +136,7 @@ class SnapshotStore:
         with self._lock:
             self._purge_expired(self._clock())
 
-            position = (
-                self._handles.get(cursor)
-                if isinstance(cursor, str)
-                else None
-            )
+            position = self._handles.get(cursor) if isinstance(cursor, str) else None
             if position is None:
                 raise SnapshotUnavailable("Continuation unavailable.")
 

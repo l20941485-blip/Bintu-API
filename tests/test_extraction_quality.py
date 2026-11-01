@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from bintu_api.extraction_quality import (
     dedupe_blocks,
@@ -9,7 +9,6 @@ from bintu_api.extraction_quality import (
     strip_noise_lines,
     truncate_to_token_budget,
 )
-
 
 LONG_TEXT = "\n".join(
     f"## Story {i}\nThis is the blurb for story number {i}, long enough to matter.\n"
@@ -43,11 +42,7 @@ def test_zero_budget_returns_empty():
 
 
 def test_truncation_does_not_leave_half_url():
-    text = (
-        "Intro line\n"
-        + "word " * 20
-        + "(https://example.com/a/very/long/path/that/gets/cut)"
-    )
+    text = "Intro line\n" + "word " * 20 + "(https://example.com/a/very/long/path/that/gets/cut)"
     out, _ = truncate_to_token_budget(text, 30)
 
     assert not out.endswith("(https://example.com/a/very")
@@ -55,9 +50,7 @@ def test_truncation_does_not_leave_half_url():
 
 
 def test_truncation_is_deterministic():
-    assert truncate_to_token_budget(LONG_TEXT, 500) == truncate_to_token_budget(
-        LONG_TEXT, 500
-    )
+    assert truncate_to_token_budget(LONG_TEXT, 500) == truncate_to_token_budget(LONG_TEXT, 500)
 
 
 # ---- deduplication --------------------------------------------------------
@@ -124,19 +117,14 @@ def test_preamble_before_first_heading_is_kept():
 
 
 def test_normalize_url_strips_tracking_and_fragment():
-    assert (
-        normalize_url("https://X.com/a/?utm_source=t&id=2#top")
-        == "https://x.com/a?id=2"
-    )
+    assert normalize_url("https://X.com/a/?utm_source=t&id=2#top") == "https://x.com/a?id=2"
 
 
 # ---- markdown normalization ----------------------------------------------
 
 
 def test_glued_heading_moves_to_its_own_line():
-    out = normalize_markdown(
-        "kept for documentation purposes. ## Example domains\nBody."
-    )
+    out = normalize_markdown("kept for documentation purposes. ## Example domains\nBody.")
 
     assert "purposes.\n## Example domains" in out
 
@@ -152,12 +140,7 @@ def test_c_sharp_and_issue_numbers_are_untouched():
 
 def test_noise_lines_are_dropped():
     text = (
-        "Headline\n"
-        "list 1 of 10\n"
-        "This video may contain flashing images\n"
-        "أخبار\n"
-        "قد يحتوي هذا الفيديو أنماطا ضوئية\n"
-        "Body"
+        "Headline\nlist 1 of 10\nThis video may contain flashing images\nأخبار\nقد يحتوي هذا الفيديو أنماطا ضوئية\nBody"
     )
     out = strip_noise_lines(text)
 
@@ -168,10 +151,7 @@ def test_noise_lines_are_dropped():
 
 
 def test_domains_are_not_split():
-    text = (
-        "Domains such as example.com and example.org are reserved. "
-        "They are not for sale."
-    )
+    text = "Domains such as example.com and example.org are reserved. They are not for sale."
     sentences = split_sentences(text)
 
     assert sentences[0].endswith("reserved.")
@@ -180,10 +160,7 @@ def test_domains_are_not_split():
 
 
 def test_urls_and_abbreviations_survive():
-    text = (
-        "Dr. Smith visited the U.S. office. "
-        "See [https://www.bbc.co.uk/news](https://www.bbc.co.uk/news) for more."
-    )
+    text = "Dr. Smith visited the U.S. office. See [https://www.bbc.co.uk/news](https://www.bbc.co.uk/news) for more."
     sentences = split_sentences(text)
 
     assert len(sentences) == 2

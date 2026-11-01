@@ -1,4 +1,4 @@
-﻿"""Tests for the /api/v1/scrape/chunks endpoint."""
+"""Tests for the /api/v1/scrape/chunks endpoint."""
 
 from __future__ import annotations
 
@@ -40,18 +40,21 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         request = self._request()
         payload = self._payload()
 
-        with patch("bintu_api.routes.verify_api_access"), patch(
-            "bintu_api.routes.rate_limit_identity",
-            return_value="test-client",
+        with (
+            patch("bintu_api.routes.verify_api_access"),
+            patch(
+                "bintu_api.routes.rate_limit_identity",
+                return_value="test-client",
+            ),
+            self.assertRaises(HTTPException) as caught,
         ):
-            with self.assertRaises(HTTPException) as caught:
-                await scrape_chunks(
-                    request,
-                    payload,
-                    max_tokens=99,
-                    skip_cache=False,
-                    persist=False,
-                )
+            await scrape_chunks(
+                request,
+                payload,
+                max_tokens=99,
+                skip_cache=False,
+                persist=False,
+            )
 
         self.assertEqual(caught.exception.status_code, 400)
         self.assertEqual(
@@ -63,18 +66,21 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         request = self._request()
         payload = self._payload()
 
-        with patch("bintu_api.routes.verify_api_access"), patch(
-            "bintu_api.routes.rate_limit_identity",
-            return_value="test-client",
+        with (
+            patch("bintu_api.routes.verify_api_access"),
+            patch(
+                "bintu_api.routes.rate_limit_identity",
+                return_value="test-client",
+            ),
+            self.assertRaises(HTTPException) as caught,
         ):
-            with self.assertRaises(HTTPException) as caught:
-                await scrape_chunks(
-                    request,
-                    payload,
-                    max_tokens=50001,
-                    skip_cache=False,
-                    persist=False,
-                )
+            await scrape_chunks(
+                request,
+                payload,
+                max_tokens=50001,
+                skip_cache=False,
+                persist=False,
+            )
 
         self.assertEqual(caught.exception.status_code, 400)
         self.assertEqual(
@@ -86,18 +92,21 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         request = self._request(render_js_enabled=False)
         payload = self._payload(render_js=True)
 
-        with patch("bintu_api.routes.verify_api_access"), patch(
-            "bintu_api.routes.rate_limit_identity",
-            return_value="test-client",
+        with (
+            patch("bintu_api.routes.verify_api_access"),
+            patch(
+                "bintu_api.routes.rate_limit_identity",
+                return_value="test-client",
+            ),
+            self.assertRaises(HTTPException) as caught,
         ):
-            with self.assertRaises(HTTPException) as caught:
-                await scrape_chunks(
-                    request,
-                    payload,
-                    max_tokens=1000,
-                    skip_cache=False,
-                    persist=False,
-                )
+            await scrape_chunks(
+                request,
+                payload,
+                max_tokens=1000,
+                skip_cache=False,
+                persist=False,
+            )
 
         self.assertEqual(caught.exception.status_code, 400)
         self.assertEqual(
@@ -110,20 +119,21 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload()
 
         result = MagicMock()
-        result.markdown = (
-            "First paragraph about web scraping. "
-            "Second paragraph about token budgets. "
-        ) * 50
+        result.markdown = ("First paragraph about web scraping. Second paragraph about token budgets. ") * 50
         result.html_tokens = 500
         result.truncated = False
         result.extracted_at = "2026-10-29T00:00:00+00:00"
 
-        with patch("bintu_api.routes.verify_api_access"), patch(
-            "bintu_api.routes.rate_limit_identity",
-            return_value="test-client",
-        ), patch(
-            "bintu_api.routes._scrape_chunks",
-            new=AsyncMock(return_value=(None, result, "none")),
+        with (
+            patch("bintu_api.routes.verify_api_access"),
+            patch(
+                "bintu_api.routes.rate_limit_identity",
+                return_value="test-client",
+            ),
+            patch(
+                "bintu_api.routes._scrape_chunks",
+                new=AsyncMock(return_value=(None, result, "none")),
+            ),
         ):
             response = await scrape_chunks(
                 request,
@@ -144,4 +154,3 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-    

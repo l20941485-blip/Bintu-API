@@ -30,6 +30,7 @@ Integration (three small edits in extract_text_result):
         anchor.replace_with(NavigableString(label))
         continue
 """
+
 from __future__ import annotations
 
 import re
@@ -54,7 +55,13 @@ PERMALINK_SELECTOR = ", ".join(
     ]
 )
 
-_PERMALINK_GLYPHS = {"\u00b6", "#", "\u00a7", "\U0001f517", "\u00a4"}  # pilcrow, hash, section, link emoji
+_PERMALINK_GLYPHS = {
+    "\u00b6",
+    "#",
+    "\u00a7",
+    "\U0001f517",
+    "\u00a4",
+}  # pilcrow, hash, section, link emoji
 _HEADINGISH = ["h1", "h2", "h3", "h4", "h5", "h6", "dt", "caption", "summary"]
 
 _ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff"
@@ -67,7 +74,6 @@ def _is_permalink_text(text: str) -> bool:
     if text in _PERMALINK_GLYPHS:
         return True
     return len(text) == 1 and unicodedata.category(text) == "Co"
-
 
 
 def strip_permalinks(soup) -> int:
@@ -114,10 +120,7 @@ def should_drop_title(title: str, first_heading: str) -> bool:
     if len(h) < 8:
         return False
     delimiter = r"(?:\s+[\u2014\u2013-]\s+|\s*\|\s*)"
-    return bool(
-        re.fullmatch(re.escape(h) + delimiter + r".+", t)
-        or re.fullmatch(r".+" + delimiter + re.escape(h), t)
-    )
+    return bool(re.fullmatch(re.escape(h) + delimiter + r".+", t) or re.fullmatch(r".+" + delimiter + re.escape(h), t))
 
 
 def same_document(base_url: str | None, resolved) -> bool:
@@ -127,6 +130,11 @@ def same_document(base_url: str | None, resolved) -> bool:
     base = urlsplit(base_url)
 
     def key(parts):
-        return (parts.scheme.lower(), parts.netloc.lower(), parts.path or "/", parts.query)
+        return (
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            parts.path or "/",
+            parts.query,
+        )
 
     return key(base) == key(resolved)

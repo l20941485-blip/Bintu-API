@@ -1,4 +1,4 @@
-﻿"""Fetch readable text from a public URL using Bintu's REST API."""
+"""Fetch readable text from a public URL using Bintu's REST API."""
 
 import os
 import sys

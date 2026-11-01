@@ -35,9 +35,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.response = Mock()
         self.response.status = 200
         self.response.getheader.return_value = None
-        self.response.read.return_value = (
-            b"User-agent: *\nAllow: /\n"
-        )
+        self.response.read.return_value = b"User-agent: *\nAllow: /\n"
 
         self.connection = Mock()
         self.connection.sock = None
@@ -91,9 +89,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.assertEqual(headers["Connection"], "close")
         self.assertEqual(headers["Host"], "example.com")
 
-        self.response.read.assert_called_once_with(
-            robots.MAX_ROBOTS_BYTES + 1
-        )
+        self.response.read.assert_called_once_with(robots.MAX_ROBOTS_BYTES + 1)
         self.connection.close.assert_called_once()
 
     def test_request_timeout_is_unreachable_and_closes_connection(self):
@@ -130,9 +126,7 @@ class RobotsTransportTests(unittest.TestCase):
 
         self.assertIn("connection problem", str(captured.exception))
         self.assertIs(captured.exception.__cause__, error)
-        self.response.read.assert_called_once_with(
-            robots.MAX_ROBOTS_BYTES + 1
-        )
+        self.response.read.assert_called_once_with(robots.MAX_ROBOTS_BYTES + 1)
         self.connection.close.assert_called_once()
 
     def test_connection_error_is_unreachable_and_closes_connection(self):
@@ -147,9 +141,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.connection.close.assert_called_once()
 
     def test_http_protocol_error_is_unreachable_and_closes_connection(self):
-        error = http.client.RemoteDisconnected(
-            "server closed without a response"
-        )
+        error = http.client.RemoteDisconnected("server closed without a response")
         self.connection.getresponse.side_effect = error
 
         with self.assertRaises(robots.RobotsUnreachable) as captured:
@@ -182,11 +174,7 @@ class RobotsTransportTests(unittest.TestCase):
     def test_redirect_shares_budget_and_closes_both_connections(self):
         redirect_response = Mock()
         redirect_response.status = 302
-        redirect_response.getheader.side_effect = (
-            lambda name: "/robots-final.txt"
-            if name == "Location"
-            else None
-        )
+        redirect_response.getheader.side_effect = lambda name: "/robots-final.txt" if name == "Location" else None
 
         def first_response():
             self.clock[0] += 2.0
@@ -210,10 +198,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.assertEqual(text, "User-agent: *\nAllow: /\n")
         self.assertEqual(self.make_connection.call_count, 2)
 
-        timeouts = [
-            call.args[4]
-            for call in self.make_connection.call_args_list
-        ]
+        timeouts = [call.args[4] for call in self.make_connection.call_args_list]
         self.assertEqual(
             timeouts,
             [
@@ -237,10 +222,8 @@ class RobotsTransportTests(unittest.TestCase):
 
     def test_https_downgrade_is_rejected_before_second_connection(self):
         self.response.status = 302
-        self.response.getheader.side_effect = (
-            lambda name: "http://example.com/robots.txt"
-            if name == "Location"
-            else None
+        self.response.getheader.side_effect = lambda name: (
+            "http://example.com/robots.txt" if name == "Location" else None
         )
 
         with self.assertRaisesRegex(
@@ -262,12 +245,14 @@ class RobotsTransportTests(unittest.TestCase):
 
         self.resolve.side_effect = slow_resolution
 
-        with patch(
-            "bintu_api.robots.time.monotonic",
-            side_effect=lambda: clock[0],
+        with (
+            patch(
+                "bintu_api.robots.time.monotonic",
+                side_effect=lambda: clock[0],
+            ),
+            self.assertRaises(robots.RobotsUnreachable),
         ):
-            with self.assertRaises(robots.RobotsUnreachable):
-                self.fetch()
+            self.fetch()
 
         self.make_connection.assert_not_called()
         self.connection.request.assert_not_called()
@@ -302,9 +287,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.make_connection.assert_not_called()
 
     def test_request_exhausting_budget_prevents_response_read(self):
-        self.connection.request.side_effect = (
-            lambda *args, **kwargs: self.exhaust_budget()
-        )
+        self.connection.request.side_effect = lambda *args, **kwargs: self.exhaust_budget()
 
         with self.assertRaisesRegex(
             robots.RobotsUnreachable,
@@ -383,10 +366,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.fetch()
 
         self.assertEqual(
-            [
-                call.args[0]
-                for call in connected_socket.settimeout.call_args_list
-            ],
+            [call.args[0] for call in connected_socket.settimeout.call_args_list],
             [
                 robots.ROBOTS_TIMEOUT_SECONDS - 1.0,
                 robots.ROBOTS_TIMEOUT_SECONDS - 3.0,

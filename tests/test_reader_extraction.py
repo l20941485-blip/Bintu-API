@@ -11,7 +11,6 @@ from bintu_api.reader_extraction import (
 )
 from bintu_api.scraper import FetchedHTML, extract_text_result
 
-
 URL = "https://example.com/start"
 
 
@@ -33,12 +32,7 @@ def extract(html, final_url=URL, **options):
 
 def test_long_html_retains_tail_and_can_be_paged_losslessly():
     marker = "BINTU_HTML_END_MARKER"
-    html = (
-        "<html><body><main>"
-        + "<p>Documentation paragraph.</p>" * 500
-        + f"<p>{marker}</p>"
-        + "</main></body></html>"
-    )
+    html = "<html><body><main>" + "<p>Documentation paragraph.</p>" * 500 + f"<p>{marker}</p>" + "</main></body></html>"
     fetched = document(html)
     snapshot = snapshot_from_document(fetched, requested_url=URL)
 
@@ -86,11 +80,7 @@ def test_oversized_unbroken_text_is_rejected(extra):
 
 
 def test_oversized_text_cannot_hide_behind_word_boundary_truncation():
-    text = (
-        "x" * (DEFAULT_MAX_DOCUMENT_CHARACTERS - 10)
-        + " "
-        + "tail " * 100
-    )
+    text = "x" * (DEFAULT_MAX_DOCUMENT_CHARACTERS - 10) + " " + "tail " * 100
 
     with pytest.raises(ReaderDocumentTooLarge):
         extract(f"<main><p>{text}</p></main>")
@@ -102,8 +92,7 @@ def test_oversized_text_cannot_hide_behind_word_boundary_truncation():
         "<html><body></body></html>",
         "<main>   </main>",
         "<html><body><script>alert(1)</script></body></html>",
-        "<html><head><style>body { color: red; }</style></head>"
-        "<body></body></html>",
+        "<html><head><style>body { color: red; }</style></head><body></body></html>",
     ],
 )
 def test_empty_extraction_is_rejected(html):
@@ -117,18 +106,12 @@ def test_relative_links_use_final_redirect_url():
         final_url="https://docs.example.org/guide/",
     )
 
-    assert (
-        "Read authentication "
-        "(https://docs.example.org/guide/authentication)"
-    ) in snapshot.text
+    assert ("Read authentication (https://docs.example.org/guide/authentication)") in snapshot.text
     assert "https://example.com/authentication" not in snapshot.text
 
 
 def test_navigation_is_excluded_by_default_and_can_be_included():
-    html = (
-        "<html><body><nav>Navigation item</nav>"
-        "<main><p>Document body</p></main></body></html>"
-    )
+    html = "<html><body><nav>Navigation item</nav><main><p>Document body</p></main></body></html>"
 
     default = extract(html)
     included = extract(html, include_nav=True)

@@ -38,6 +38,7 @@ Integration (edits in bintu_api/context.py):
     # separators (that is where the 6-8 token gap comes from)
     approx_tokens = sum(chunk["tokens"] for chunk in chunks)
 """
+
 from __future__ import annotations
 
 import math
@@ -56,7 +57,21 @@ except ImportError:  # standalone use and tests
 _HEADING_LINE = re.compile(r"^#{1,6}\s+\S")
 _FENCE_SPLIT = re.compile(r"(```.*?(?:```|\Z))", re.DOTALL)
 _BOUNDARY = re.compile(r"""[.!?]+["')\]]*\s+""")
-_ABBREVIATIONS = {"mr", "mrs", "ms", "dr", "prof", "st", "vs", "etc", "no", "fig", "e.g", "i.e", "u.s"}
+_ABBREVIATIONS = {
+    "mr",
+    "mrs",
+    "ms",
+    "dr",
+    "prof",
+    "st",
+    "vs",
+    "etc",
+    "no",
+    "fig",
+    "e.g",
+    "i.e",
+    "u.s",
+}
 
 
 # --------------------------------------------------------------------------
@@ -193,19 +208,13 @@ def _split_fence(segment: str, max_tokens: int) -> list[str]:
         return [fence]
     fence_lines = fence.splitlines()
     opener = fence_lines[0]
-    body_lines = (
-        fence_lines[1:-1]
-        if len(fence_lines) > 1 and fence_lines[-1].startswith("```")
-        else fence_lines[1:]
-    )
+    body_lines = fence_lines[1:-1] if len(fence_lines) > 1 and fence_lines[-1].startswith("```") else fence_lines[1:]
     body = "\n".join(body_lines)
     body_budget = max(1, max_tokens - count_tokens(f"{opener}\n```\n"))
     return [f"{opener}\n{part}\n```" for part in split_code_body(body, body_budget)]
 
 
-def _split_oversized_table_like_block(
-    block: str, max_tokens: int
-) -> list[str] | None:
+def _split_oversized_table_like_block(block: str, max_tokens: int) -> list[str] | None:
     """Split extracted tables whose header/separator omit Markdown pipes.
 
     The extractor can emit:

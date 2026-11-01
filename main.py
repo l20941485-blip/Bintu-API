@@ -1,22 +1,20 @@
 import asyncio
 import logging
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
-
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-
 from bintu_api.auth import verify_api_access
 from bintu_api.cache import TTLCache
-from bintu_api.discovery import router as discovery_router
 from bintu_api.database import (
     DATABASE_TIMEOUT_SECONDS,
     close_supabase_client,
     create_supabase_client,
 )
+from bintu_api.discovery import router as discovery_router
 from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp_streamable import router as mcp_streamable_router
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
@@ -25,8 +23,6 @@ from bintu_api.reader_routes import router as reader_router
 from bintu_api.reader_store import SnapshotStore
 from bintu_api.routes import router
 from bintu_api.settings import Settings
-
-
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -44,11 +40,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
-
-
 def create_app(settings: Settings | None = None) -> FastAPI:
     app_settings = settings or Settings.from_env()
-
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -59,7 +52,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         except Exception as error:
             logging.getLogger("bintu_api.database").warning(
-                "supabase_client_initialization_failed error_type=%s", type(error).__name__
+                "supabase_client_initialization_failed error_type=%s",
+                type(error).__name__,
             )
             application.state.supabase_client = None
         try:
@@ -74,9 +68,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                 except Exception as error:
                     logging.getLogger("bintu_api.database").warning(
-                        "supabase_client_close_failed error_type=%s", type(error).__name__
+                        "supabase_client_close_failed error_type=%s",
+                        type(error).__name__,
                     )
-
 
     application = FastAPI(
         title=app_settings.service_title,
@@ -125,7 +119,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # plain REST and the legacy /mcp/tools helpers stay documented above.
     application.include_router(mcp_streamable_router)
 
-
     @application.get("/metrics", include_in_schema=False)
     def metrics(request: Request):
         # Operational telemetry: require the same credentials as the API so the
@@ -133,16 +126,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         verify_api_access(request, app_settings)
         return metrics_response()
 
-
     @application.options("/", include_in_schema=False)
     def root_options():
         # Absorb external gateway health pings/pre-flights (e.g. MCPize)
         # that probe OPTIONS / before connecting; no auth required.
         return {"status": "ok", "supported_methods": ["GET", "POST", "OPTIONS"]}
 
-
     return application
-
 
 
 app = create_app()

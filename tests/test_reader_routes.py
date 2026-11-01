@@ -11,7 +11,6 @@ from bintu_api.reader_store import SnapshotStore
 from bintu_api.scraper import FetchedHTML, TargetURLRejected
 from bintu_api.settings import Settings
 
-
 KEY = "reader-route-test-key"
 PROXY = "reader-route-test-proxy"
 URL = "https://example.com/docs"
@@ -33,11 +32,7 @@ def env():
     app.state.supabase_client = None
     app.include_router(router)
 
-    html = (
-        "<main>"
-        + "<p>Documentation paragraph.</p>" * 500
-        + "<p>READER_END_MARKER</p></main>"
-    )
+    html = "<main>" + "<p>Documentation paragraph.</p>" * 500 + "<p>READER_END_MARKER</p></main>"
     fetched = FetchedHTML(
         body=html.encode("utf-8"),
         charset="utf-8",
@@ -56,7 +51,10 @@ def env():
         TestClient(app) as client,
     ):
         yield SimpleNamespace(
-            app=app, client=client, fetch=fetch, robots=robots,
+            app=app,
+            client=client,
+            fetch=fetch,
+            robots=robots,
         )
 
 
@@ -106,10 +104,7 @@ def test_long_read_reconstructs_document_with_one_fetch(env):
         pytest.fail("Continuation failed to terminate.")
 
     text = "".join(parts)
-    assert text == (
-        "\n".join(["Documentation paragraph."] * 500)
-        + "\nREADER_END_MARKER"
-    )
+    assert text == ("\n".join(["Documentation paragraph."] * 500) + "\nREADER_END_MARKER")
     assert len(text) > 6000
     env.fetch.assert_called_once()
     env.robots.assert_awaited_once()
@@ -303,11 +298,7 @@ def test_reader_through_real_application():
         rate_limit_requests=1000,
     )
     fetched = FetchedHTML(
-        body=(
-            "<main>"
-            + "<p>Integration paragraph.</p>" * 100
-            + "</main>"
-        ).encode("utf-8"),
+        body=("<main>" + "<p>Integration paragraph.</p>" * 100 + "</main>").encode("utf-8"),
         charset="utf-8",
         final_url=URL,
     )
@@ -363,10 +354,7 @@ def test_reader_through_real_application():
                 headers=AUTH,
             )
             assert second.status_code == 200, second.text
-            assert (
-                second.json()["start_offset"]
-                == first_body["end_offset"]
-            )
+            assert second.json()["start_offset"] == first_body["end_offset"]
 
             fetch.assert_called_once()
             startup.assert_awaited_once_with(config)

@@ -15,12 +15,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi.testclient import TestClient
 
+from bintu_api.database import CachedMarkdown
 from bintu_api.robots import (
     RobotsUnreachable,
     clear_robots_cache,
     robots_decision,
 )
-from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -63,34 +63,19 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                 persistent_read = AsyncMock(return_value=None)
                 persistent_write = AsyncMock()
 
-                plain_fetch = Mock(
-                    side_effect=AssertionError(
-                        "Plain page fetch started after robots denial"
-                    )
-                )
+                plain_fetch = Mock(side_effect=AssertionError("Plain page fetch started after robots denial"))
                 rendered_fetch = AsyncMock(
-                    side_effect=AssertionError(
-                        "Rendered page fetch started after robots denial"
-                    )
+                    side_effect=AssertionError("Rendered page fetch started after robots denial")
                 )
 
                 if unreachable:
                     expected_code = "robots_unreachable"
                     expected_message = "robots.txt could not be retrieved"
-                    robots_fetch = Mock(
-                        side_effect=RobotsUnreachable(
-                            "connection problem (TimeoutError)"
-                        )
-                    )
+                    robots_fetch = Mock(side_effect=RobotsUnreachable("connection problem (TimeoutError)"))
                 else:
                     expected_code = "blocked_by_robots"
                     expected_message = "disallowed by robots.txt"
-                    robots_fetch = Mock(
-                        return_value=(
-                            "User-agent: *\n"
-                            "Disallow: /private/\n"
-                        )
-                    )
+                    robots_fetch = Mock(return_value=("User-agent: *\nDisallow: /private/\n"))
 
                 with (
                     patch(
@@ -261,6 +246,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
         plain_fetch.assert_not_called()
         rendered_fetch.assert_not_called()
         rendered_fetch.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -27,7 +27,6 @@ from bintu_api.mcp_streamable import (
 from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.settings import Settings
 
-
 METHOD_NOT_FOUND = -32601
 
 
@@ -135,9 +134,7 @@ async def run() -> None:
             response = await handle_message(app, message)
 
             if response is not None:
-                sys.stdout.write(
-                    json.dumps(response, separators=(",", ":")) + "\n"
-                )
+                sys.stdout.write(json.dumps(response, separators=(",", ":")) + "\n")
                 sys.stdout.flush()
     finally:
         if app.state.supabase_client is not None:

@@ -18,16 +18,12 @@ class McpIdentityIsolationTests(unittest.TestCase):
             mcp_api_key="mcp-key-one",
         )
         self.request = MagicMock()
-        self.request.headers.get.side_effect = (
-            lambda name, default=None: default if default is not None else ""
-        )
+        self.request.headers.get.side_effect = lambda name, default=None: default if default is not None else ""
         self.request.client = None
 
     def _identity_for_credential(self, credential: str) -> str:
-        self.request.headers.get.side_effect = (
-            lambda name, default=None: credential
-            if name == "X-API-Key"
-            else (default if default is not None else "")
+        self.request.headers.get.side_effect = lambda name, default=None: (
+            credential if name == "X-API-Key" else (default if default is not None else "")
         )
         return mcp_rate_limit_identity(self.request, self.settings)
 

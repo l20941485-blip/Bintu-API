@@ -1,4 +1,4 @@
-﻿import re
+import re
 
 from bintu_api import context_baseline as old
 from bintu_api import context_chunking as new
@@ -156,9 +156,7 @@ def test_oversized_code_fence_is_split_by_lines_not_sentences():
 
 
 def test_heading_is_not_left_at_the_end_of_a_chunk():
-    text = "\n".join(
-        [f"Paragraph {i} " + "alpha beta gamma delta " * 6 + "\n## Section %d" % i for i in range(12)]
-    )
+    text = "\n".join([f"Paragraph {i} " + "alpha beta gamma delta " * 6 + "\n## Section %d" % i for i in range(12)])
     chunks = new.split_into_chunks(text, 60)
     for chunk in chunks[:-1]:
         lines = chunk.split("\n")
@@ -172,7 +170,11 @@ def test_empty_and_zero_budget():
 
 def test_abbreviations_and_initials_do_not_split_sentences():
     pieces = new.sentence_pieces("Dr. Smith met J. Jones in the U.S. office. They talked. Then left.")
-    assert pieces == ["Dr. Smith met J. Jones in the U.S. office.", "They talked.", "Then left."]
+    assert pieces == [
+        "Dr. Smith met J. Jones in the U.S. office.",
+        "They talked.",
+        "Then left.",
+    ]
 
 
 # ---- table header repetition ----------------------------------------------
@@ -216,9 +218,7 @@ def test_row_too_big_for_header_plus_row_falls_back_without_header():
 
 
 def test_header_repetition_inside_a_mixed_document():
-    text = IANA_LONG_TABLE = (
-        "## Domains\nIntro line here.\n" + TABLE + "\n## After\nClosing paragraph here."
-    )
+    text = IANA_LONG_TABLE = "## Domains\nIntro line here.\n" + TABLE + "\n## After\nClosing paragraph here."
     chunks = new.split_into_chunks(text, 120)
     assert all(count(c) <= 120 for c in chunks)
     table_chunks = [c for c in chunks if "row" in c.split("\n")[0] or c.startswith("Name | Value")]
@@ -269,4 +269,3 @@ def test_intro_is_left_alone_when_moving_would_break_the_budget():
     budget = count(big_fence) + 2  # fence fits alone; fence + intro line does not
     chunks = new.split_into_chunks(text, budget)
     assert all(count(c) <= budget for c in chunks)
-

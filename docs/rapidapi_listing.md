@@ -64,10 +64,14 @@ curl.exe --get "https://bintu-data-extraction-api.p.rapidapi.com/api/v1/scrape/t
 ```
 ```python
 import urllib.parse, urllib.request, json
+
 params = urllib.parse.urlencode({"url": "https://www.iana.org/domains/reserved"})
 req = urllib.request.Request(
     f"https://bintu-data-extraction-api.p.rapidapi.com/api/v1/scrape/text?{params}",
-    headers={"X-RapidAPI-Key": "YOUR_KEY", "X-RapidAPI-Host": "bintu-data-extraction-api.p.rapidapi.com"},
+    headers={
+        "X-RapidAPI-Key": "YOUR_KEY",
+        "X-RapidAPI-Host": "bintu-data-extraction-api.p.rapidapi.com",
+    },
 )
 print(json.load(urllib.request.urlopen(req, timeout=30))["text"][:500])
 ```

@@ -1,16 +1,12 @@
 """Offline tests for the MCP persistent-cache smoke check."""
 
-import json
-from email.message import Message
-from unittest.mock import MagicMock
-
-from smoke_mcp_cache import _call
 import copy
+import json
 import unittest
-from unittest.mock import patch
+from email.message import Message
+from unittest.mock import MagicMock, patch
 
-
-from smoke_mcp_cache import check_mcp_cache
+from smoke_mcp_cache import _call, check_mcp_cache
 
 
 def envelopes():
@@ -73,26 +69,30 @@ class SmokeMcpCacheTests(unittest.TestCase):
         fresh, cached = envelopes()
         cached["cache_layer"] = "memory"
 
-        with patch(
-            "smoke_mcp_cache._call",
-            side_effect=[fresh, cached],
-        ):
-            with self.assertRaisesRegex(
+        with (
+            patch(
+                "smoke_mcp_cache._call",
+                side_effect=[fresh, cached],
+            ),
+            self.assertRaisesRegex(
                 ValueError,
                 "persistent-cache hit",
-            ):
-                self.run_check()
+            ),
+        ):
+            self.run_check()
 
     def test_refresh_cache_hit_is_rejected(self):
         fresh, cached = envelopes()
         fresh.update(cache_hit=True, cache_layer="persistent")
 
-        with patch(
-            "smoke_mcp_cache._call",
-            side_effect=[fresh, cached],
-        ) as call:
-            with self.assertRaisesRegex(ValueError, "bypass"):
-                self.run_check()
+        with (
+            patch(
+                "smoke_mcp_cache._call",
+                side_effect=[fresh, cached],
+            ) as call,
+            self.assertRaisesRegex(ValueError, "bypass"),
+        ):
+            self.run_check()
 
         self.assertEqual(call.call_count, 1)
 
@@ -107,37 +107,41 @@ class SmokeMcpCacheTests(unittest.TestCase):
                 fresh, cached = envelopes()
                 cached[field] = value
 
-                with patch(
-                    "smoke_mcp_cache._call",
-                    side_effect=[fresh, cached],
-                ):
-                    with self.assertRaisesRegex(
+                with (
+                    patch(
+                        "smoke_mcp_cache._call",
+                        side_effect=[fresh, cached],
+                    ),
+                    self.assertRaisesRegex(
                         ValueError,
                         "fidelity",
-                    ):
-                        self.run_check()
+                    ),
+                ):
+                    self.run_check()
 
     def test_empty_text_is_rejected(self):
         fresh, _ = envelopes()
         fresh["chunks"][0]["text"] = " "
 
-        with patch(
-            "smoke_mcp_cache._call",
-            return_value=fresh,
+        with (
+            patch(
+                "smoke_mcp_cache._call",
+                return_value=fresh,
+            ),
+            self.assertRaisesRegex(ValueError, "empty"),
         ):
-            with self.assertRaisesRegex(ValueError, "empty"):
-                self.run_check()
+            self.run_check()
 
     def test_missing_credential_makes_no_request(self):
-        with patch("smoke_mcp_cache._call") as call:
-            with self.assertRaisesRegex(ValueError, "credential"):
-                check_mcp_cache(
-                    "https://service.invalid",
-                    "",
-                    "https://example.com/",
-                )
+        with patch("smoke_mcp_cache._call") as call, self.assertRaisesRegex(ValueError, "credential"):
+            check_mcp_cache(
+                "https://service.invalid",
+                "",
+                "https://example.com/",
+            )
 
         call.assert_not_called()
+
 
 class SmokeMcpTransportTests(unittest.TestCase):
     def rpc_response(self):
@@ -166,9 +170,7 @@ class SmokeMcpTransportTests(unittest.TestCase):
         response.headers = headers
         response.read.return_value = json.dumps(rpc).encode("utf-8")
 
-        with patch(
-            "smoke_mcp_cache.urllib.request.urlopen"
-        ) as urlopen:
+        with patch("smoke_mcp_cache.urllib.request.urlopen") as urlopen:
             urlopen.return_value.__enter__.return_value = response
             result = _call(
                 "https://service.invalid",
@@ -186,10 +188,7 @@ class SmokeMcpTransportTests(unittest.TestCase):
 
         self.assertEqual(result, rpc["result"]["structuredContent"])
         request = urlopen.call_args.args[0]
-        headers = {
-            key.lower(): value
-            for key, value in request.header_items()
-        }
+        headers = {key.lower(): value for key, value in request.header_items()}
         self.assertEqual(request.full_url, "https://service.invalid/mcp")
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(headers["x-api-key"], "offline-test-key")
@@ -278,9 +277,7 @@ class SmokeMcpTransportTests(unittest.TestCase):
         response.headers["Content-Type"] = "application/json"
         response.read.return_value = b"not-json"
 
-        with patch(
-            "smoke_mcp_cache.urllib.request.urlopen"
-        ) as urlopen:
+        with patch("smoke_mcp_cache.urllib.request.urlopen") as urlopen:
             urlopen.return_value.__enter__.return_value = response
             with self.assertRaises(json.JSONDecodeError):
                 _call(

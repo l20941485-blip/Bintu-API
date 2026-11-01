@@ -5,7 +5,6 @@ from starlette.requests import Request
 from bintu_api.reader_auth import reader_owner
 from bintu_api.settings import Settings
 
-
 MASTER = "reader-test-master"
 PROXY = "reader-test-proxy"
 SCOPED = "reader-test-mcp"
@@ -23,16 +22,17 @@ def settings(**overrides):
 
 
 def request(headers=None, host="127.0.0.1"):
-    return Request({
-        "type": "http",
-        "method": "GET",
-        "path": "/",
-        "headers": [
-            (name.lower().encode("ascii"), value.encode("latin-1"))
-            for name, value in (headers or {}).items()
-        ],
-        "client": (host, 1234),
-    })
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [
+                (name.lower().encode("ascii"), value.encode("latin-1")) for name, value in (headers or {}).items()
+            ],
+            "client": (host, 1234),
+        }
+    )
 
 
 def test_direct_key_owner_is_stable_and_hides_key():
@@ -80,10 +80,15 @@ def test_strict_misconfiguration_still_fails_closed():
 def test_verified_gateway_subscribers_have_distinct_owners():
     owners = []
     for user in ["subscriber-one", "subscriber-two"]:
-        owner = reader_owner(request({
-            "X-RapidAPI-Proxy-Secret": PROXY,
-            "X-RapidAPI-User": user,
-        }), settings())
+        owner = reader_owner(
+            request(
+                {
+                    "X-RapidAPI-Proxy-Secret": PROXY,
+                    "X-RapidAPI-User": user,
+                }
+            ),
+            settings(),
+        )
         assert owner.startswith("reader:rapidapi:")
         assert user not in owner
         assert PROXY not in owner
@@ -98,10 +103,15 @@ def test_verified_gateway_subscribers_have_distinct_owners():
 )
 def test_rejects_invalid_verified_subscriber(user):
     with pytest.raises(HTTPException) as error:
-        reader_owner(request({
-            "X-RapidAPI-Proxy-Secret": PROXY,
-            "X-RapidAPI-User": user,
-        }), settings())
+        reader_owner(
+            request(
+                {
+                    "X-RapidAPI-Proxy-Secret": PROXY,
+                    "X-RapidAPI-User": user,
+                }
+            ),
+            settings(),
+        )
 
     assert error.value.status_code == 403
     assert error.value.detail["code"] == "reader_identity_required"
@@ -109,10 +119,15 @@ def test_rejects_invalid_verified_subscriber(user):
 
 def test_verified_proxy_requires_subscriber_even_with_valid_direct_key():
     with pytest.raises(HTTPException) as error:
-        reader_owner(request({
-            "X-RapidAPI-Proxy-Secret": PROXY,
-            "X-API-Key": MASTER,
-        }), settings())
+        reader_owner(
+            request(
+                {
+                    "X-RapidAPI-Proxy-Secret": PROXY,
+                    "X-API-Key": MASTER,
+                }
+            ),
+            settings(),
+        )
 
     assert error.value.status_code == 403
 
@@ -122,20 +137,30 @@ def test_unverified_gateway_headers_do_not_change_direct_owner():
         request({"X-API-Key": MASTER}),
         settings(),
     )
-    spoofed = reader_owner(request({
-        "X-API-Key": MASTER,
-        "X-RapidAPI-Proxy-Secret": "wrong-proxy",
-        "X-RapidAPI-User": "someone-else",
-    }), settings())
+    spoofed = reader_owner(
+        request(
+            {
+                "X-API-Key": MASTER,
+                "X-RapidAPI-Proxy-Secret": "wrong-proxy",
+                "X-RapidAPI-User": "someone-else",
+            }
+        ),
+        settings(),
+    )
 
     assert spoofed == plain
 
 
 def test_subscriber_header_alone_cannot_authenticate():
     with pytest.raises(HTTPException) as error:
-        reader_owner(request({
-            "X-RapidAPI-User": "subscriber-one",
-        }), settings())
+        reader_owner(
+            request(
+                {
+                    "X-RapidAPI-User": "subscriber-one",
+                }
+            ),
+            settings(),
+        )
 
     assert error.value.status_code == 401
 

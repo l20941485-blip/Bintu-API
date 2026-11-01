@@ -39,13 +39,8 @@ def snapshot_from_document(
         base_url=document.final_url or requested_url,
     )
 
-    if (
-        extracted.truncated
-        or len(extracted.text) > DEFAULT_MAX_DOCUMENT_CHARACTERS
-    ):
-        raise ReaderDocumentTooLarge(
-            "Extracted document exceeds the reader character limit."
-        )
+    if extracted.truncated or len(extracted.text) > DEFAULT_MAX_DOCUMENT_CHARACTERS:
+        raise ReaderDocumentTooLarge("Extracted document exceeds the reader character limit.")
 
     if not extracted.text.strip():
         raise ReaderDocumentEmpty("No readable text was extracted.")

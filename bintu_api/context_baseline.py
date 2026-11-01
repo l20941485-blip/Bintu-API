@@ -1,6 +1,7 @@
 """VERBATIM copy of the current helpers from bintu_api/context.py (as pasted),
 with count_tokens inlined. Used only so tests can show the old behaviour next
 to the fixed behaviour. Do not import this in production code."""
+
 from __future__ import annotations
 
 import math
@@ -180,9 +181,7 @@ def split_into_chunks(text: str, max_tokens: int) -> list[str]:
             fence_lines = segment.strip().splitlines()
             opener = fence_lines[0]
             body_lines = (
-                fence_lines[1:-1]
-                if len(fence_lines) > 1 and fence_lines[-1].startswith("```")
-                else fence_lines[1:]
+                fence_lines[1:-1] if len(fence_lines) > 1 and fence_lines[-1].startswith("```") else fence_lines[1:]
             )
             body = "\n".join(body_lines)
 

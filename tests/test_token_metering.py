@@ -1,23 +1,24 @@
-﻿"""Token Tax engine tests: aliases, unified envelope, 401 upgrade_url, metering header."""
+"""Token Tax engine tests: aliases, unified envelope, 401 upgrade_url, metering header."""
 
 import json
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
 from bintu_api.context import normalize_mode
 from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, ToolArguments
-from bintu_api.scraper import FetchedHTML
-from bintu_api.settings import Settings
-from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
-from bintu_api.scraper import _compute_approx_tokens, _compute_tokens_saved_estimate
-from main import create_app
-
-from unittest import mock
-
 from bintu_api.robots import RobotsDecision
+from bintu_api.scraper import (
+    FetchedHTML,
+    _compute_approx_tokens,
+    _compute_tokens_saved_estimate,
+)
+from bintu_api.settings import Settings
+from main import create_app
 
 _robots_patch = mock.patch(
     "bintu_api.routes.robots_decision",
@@ -41,7 +42,12 @@ class TokenMeteringTests(unittest.TestCase):
     def rpc(self, method: str, params: dict | None = None, request_id: int = 1):
         return self.client.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}},
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": method,
+                "params": params or {},
+            },
         )
 
     def test_normalize_mode_maps_chunked_case_insensitive(self) -> None:
@@ -56,9 +62,7 @@ class TokenMeteringTests(unittest.TestCase):
         self.assertEqual(args.mode, "chunk")
 
     def test_tool_arguments_accepts_chunk_token_budget_alias(self) -> None:
-        args = ToolArguments.model_validate(
-            {"url": "https://example.com", "mode": "chunk", "chunk_token_budget": 500}
-        )
+        args = ToolArguments.model_validate({"url": "https://example.com", "mode": "chunk", "chunk_token_budget": 500})
         self.assertEqual(args.max_tokens, 500)
 
     def test_tool_arguments_canonical_max_tokens_wins_on_conflict(self) -> None:
@@ -99,7 +103,10 @@ class TokenMeteringTests(unittest.TestCase):
         ):
             response = self.rpc(
                 "tools/call",
-                {"name": "bintu_scrape_text", "arguments": {"url": "https://example.com/alias"}},
+                {
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com/alias"},
+                },
             )
         envelope = json.loads(response.json()["result"]["content"][0]["text"])
         self.assertIn("approx_tokens", envelope)
@@ -112,9 +119,7 @@ class TokenMeteringTests(unittest.TestCase):
     def test_limiting_factor_reports_which_cap_binds(self) -> None:
         """With a tiny char cap, the char cap binds; with the default cap and a
         tiny token budget, the token budget binds."""
-        capped_app = create_app(
-            Settings(api_key="", rapidapi_proxy_secret="", max_text_characters=40)
-        )
+        capped_app = create_app(Settings(api_key="", rapidapi_proxy_secret="", max_text_characters=40))
         capped_client = TestClient(capped_app)
         with patch(
             "bintu_api.routes.fetch_html_document",
@@ -122,15 +127,26 @@ class TokenMeteringTests(unittest.TestCase):
         ):
             capped = capped_client.post(
                 "/mcp",
-                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                      "params": {"name": "bintu_scrape_text",
-                                 "arguments": {"url": "https://example.com/capped"}}},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "bintu_scrape_text",
+                        "arguments": {"url": "https://example.com/capped"},
+                    },
+                },
             )
             budgeted = self.rpc(
                 "tools/call",
-                {"name": "bintu_scrape_text",
-                 "arguments": {"url": "https://example.com/capped",
-                               "mode": "summarize", "max_tokens": 100}},
+                {
+                    "name": "bintu_scrape_text",
+                    "arguments": {
+                        "url": "https://example.com/capped",
+                        "mode": "summarize",
+                        "max_tokens": 100,
+                    },
+                },
             )
         capped_env = json.loads(capped.json()["result"]["content"][0]["text"])
         self.assertEqual(capped_env["limiting_factor"], "char_cap")
@@ -146,19 +162,12 @@ class TokenMeteringTests(unittest.TestCase):
         ):
             response = self.rpc(
                 "tools/call",
-                {"name": "bintu_scrape_text", "arguments": {"url": "https://example.com/hdr2"}},
+                {
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com/hdr2"},
+                },
             )
         self.assertIn("approx_tokens=", response.headers["x-token-usage"])
-
-    def test_tool_arguments_canonical_max_tokens_wins_on_conflict(self) -> None:
-        args = ToolArguments.model_validate(
-            {
-                "url": "https://example.com",
-                "max_tokens": 1000,
-                "chunk_token_budget": 500,
-            }
-        )
-        self.assertEqual(args.max_tokens, 1000)
 
     def test_schema_documents_pitch_aliases(self) -> None:
         mode_desc = TOOL_INPUT_SCHEMA["properties"]["mode"]["description"]
@@ -178,7 +187,10 @@ class TokenMeteringTests(unittest.TestCase):
         ):
             response = self.rpc(
                 "tools/call",
-                {"name": "bintu_scrape_text", "arguments": {"url": "https://example.com"}},
+                {
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com"},
+                },
             )
         self.assertEqual(response.status_code, 200)
         envelope = json.loads(response.json()["result"]["content"][0]["text"])
@@ -299,7 +311,10 @@ class TokenMeteringTests(unittest.TestCase):
         ):
             response = self.rpc(
                 "tools/call",
-                {"name": "bintu_scrape_text", "arguments": {"url": "https://example.com"}},
+                {
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com"},
+                },
             )
         envelope = json.loads(response.json()["result"]["content"][0]["text"])
         self.assertIn("split", envelope)
@@ -319,9 +334,12 @@ class TokenMeteringTests(unittest.TestCase):
         """
         long_text = "Sentence one. " * 200
         for mode in ("scrape", "chunk"):
-            with self.subTest(mode=mode), patch(
-                "bintu_api.routes.fetch_html_document",
-                return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
+            with (
+                self.subTest(mode=mode),
+                patch(
+                    "bintu_api.routes.fetch_html_document",
+                    return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
+                ),
             ):
                 response = self.rpc(
                     "tools/call",
@@ -382,9 +400,7 @@ class TokenMeteringTests(unittest.TestCase):
     def test_mcp_identity_uses_key_fingerprint_not_gateway_ip(self) -> None:
         """A3: connector traffic all arrives from the gateway IP, so keying on
         IP collapses every Claude user into one shared bucket."""
-        app = create_app(
-            Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="shared-mcp-key")
-        )
+        app = create_app(Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="shared-mcp-key"))
         client = TestClient(app)
         with patch(
             "bintu_api.routes.fetch_html_document",
@@ -393,16 +409,28 @@ class TokenMeteringTests(unittest.TestCase):
             first = client.post(
                 "/mcp",
                 headers={"X-API-Key": "shared-mcp-key"},
-                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                      "params": {"name": "bintu_scrape_text",
-                                 "arguments": {"url": "https://example.com/a"}}},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "bintu_scrape_text",
+                        "arguments": {"url": "https://example.com/a"},
+                    },
+                },
             )
             second = client.post(
                 "/mcp",
                 headers={"X-API-Key": "shared-mcp-key"},
-                json={"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                      "params": {"name": "bintu_scrape_text",
-                                 "arguments": {"url": "https://example.com/b"}}},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "bintu_scrape_text",
+                        "arguments": {"url": "https://example.com/b"},
+                    },
+                },
             )
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 200)
@@ -411,18 +439,19 @@ class TokenMeteringTests(unittest.TestCase):
         settings = Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="scoped-key")
 
         def build(path: str, headers: dict | None = None):
-            scope = {"type": "http", "method": "POST", "path": path,
-                     "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
-                     "query_string": b"", "client": ("203.0.113.9", 1234)}
+            scope = {
+                "type": "http",
+                "method": "POST",
+                "path": path,
+                "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
+                "query_string": b"",
+                "client": ("203.0.113.9", 1234),
+            }
             return Request(scope)
 
         ip_only = mcp_rate_limit_identity(build("/mcp"), settings)
-        with_key = mcp_rate_limit_identity(
-            build("/mcp", {"X-API-Key": "scoped-key"}), settings
-        )
-        with_other_key = mcp_rate_limit_identity(
-            build("/mcp", {"X-API-Key": "another-key"}), settings
-        )
+        with_key = mcp_rate_limit_identity(build("/mcp", {"X-API-Key": "scoped-key"}), settings)
+        with_other_key = mcp_rate_limit_identity(build("/mcp", {"X-API-Key": "another-key"}), settings)
 
         self.assertEqual(ip_only, "203.0.113.9", "no credential -> fall back to IP")
         self.assertTrue(with_key.startswith("mcp:"), "credential should key the bucket")
@@ -435,9 +464,14 @@ class TokenMeteringTests(unittest.TestCase):
         settings = Settings(api_key="master", rapidapi_proxy_secret="")
 
         def build(headers: dict | None = None):
-            scope = {"type": "http", "method": "GET", "path": "/api/v1/scrape/text",
-                     "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
-                     "query_string": b"", "client": ("203.0.113.9", 1234)}
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": "/api/v1/scrape/text",
+                "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
+                "query_string": b"",
+                "client": ("203.0.113.9", 1234),
+            }
             return Request(scope)
 
         first = rate_limit_identity(
@@ -459,7 +493,10 @@ class TokenMeteringTests(unittest.TestCase):
         ):
             response = self.rpc(
                 "tools/call",
-                {"name": "bintu_scrape_text", "arguments": {"url": "https://example.com"}},
+                {
+                    "name": "bintu_scrape_text",
+                    "arguments": {"url": "https://example.com"},
+                },
             )
         self.assertIn("x-token-usage", response.headers)
         self.assertIn("tokens=", response.headers["x-token-usage"])
@@ -502,8 +539,9 @@ class TokenMeteringTests(unittest.TestCase):
 
 def test_rest_rejects_max_tokens_below_minimum():
     from fastapi.testclient import TestClient
-    from main import create_app
+
     from bintu_api.settings import Settings
+    from main import create_app
 
     settings = Settings(
         api_key="test-master-key",

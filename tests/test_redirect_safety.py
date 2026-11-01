@@ -14,7 +14,6 @@ from bintu_api.scraper import (
 )
 from bintu_api.settings import Settings
 
-
 PUBLIC_ADDRESS = "93.184.216.34"
 
 
@@ -22,9 +21,7 @@ def _redirect_response(location: str, status: int = 302) -> MagicMock:
     response = MagicMock()
     response.status = status
     response.reason = "Found"
-    response.getheader.side_effect = lambda name, default=None: (
-        location if name == "Location" else default
-    )
+    response.getheader.side_effect = lambda name, default=None: location if name == "Location" else default
     return response
 
 
@@ -61,13 +58,16 @@ class RedirectSafetyTests(unittest.TestCase):
         ]
         connection = _connection_for(responses)
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ) as resolve, patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
-        ) as make_connection:
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ) as resolve,
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ) as make_connection,
+        ):
             result = fetch_html_document(
                 "https://example.com/start",
                 self.settings,
@@ -89,70 +89,70 @@ class RedirectSafetyTests(unittest.TestCase):
         )
 
     def test_exceeding_redirect_limit_raises_too_many_redirects(self) -> None:
-        responses = [
-            _redirect_response(f"/hop-{index}")
-            for index in range(self.settings.max_redirects + 1)
-        ]
+        responses = [_redirect_response(f"/hop-{index}") for index in range(self.settings.max_redirects + 1)]
         connection = _connection_for(responses)
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ), patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ),
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
+            self.assertRaises(TooManyRedirects),
         ):
-            with self.assertRaises(TooManyRedirects):
-                fetch_html_document(
-                    "https://example.com/start",
-                    self.settings,
-                )
+            fetch_html_document(
+                "https://example.com/start",
+                self.settings,
+            )
 
     def test_https_to_http_redirect_is_rejected(self) -> None:
-        connection = _connection_for(
-            [_redirect_response("http://example.com/insecure")]
-        )
+        connection = _connection_for([_redirect_response("http://example.com/insecure")])
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ) as resolve, patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ) as resolve,
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
+            self.assertRaises(TargetURLRejected) as caught,
         ):
-            with self.assertRaises(TargetURLRejected) as caught:
-                fetch_html_document(
-                    "https://example.com/start",
-                    self.settings,
-                )
+            fetch_html_document(
+                "https://example.com/start",
+                self.settings,
+            )
 
         self.assertIn("HTTPS to HTTP", str(caught.exception))
         self.assertEqual(resolve.call_count, 1)
 
     def test_redirect_to_private_host_is_rejected(self) -> None:
-        connection = _connection_for(
-            [_redirect_response("https://127.0.0.1/admin")]
-        )
+        connection = _connection_for([_redirect_response("https://127.0.0.1/admin")])
 
         def resolve_by_host(host: str, port: int) -> tuple[str, ...]:
             if host == "127.0.0.1":
-                raise TargetURLRejected(
-                    "The target hostname resolves to a non-public address"
-                )
+                raise TargetURLRejected("The target hostname resolves to a non-public address")
             return (PUBLIC_ADDRESS,)
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            side_effect=resolve_by_host,
-        ) as resolve, patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                side_effect=resolve_by_host,
+            ) as resolve,
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
+            self.assertRaises(TargetURLRejected) as caught,
         ):
-            with self.assertRaises(TargetURLRejected) as caught:
-                fetch_html_document(
-                    "https://example.com/start",
-                    self.settings,
-                )
+            fetch_html_document(
+                "https://example.com/start",
+                self.settings,
+            )
 
         self.assertIn("non-public address", str(caught.exception))
         self.assertEqual(resolve.call_count, 2)
@@ -162,22 +162,23 @@ class RedirectSafetyTests(unittest.TestCase):
         )
 
     def test_redirect_to_disallowed_port_is_rejected(self) -> None:
-        connection = _connection_for(
-            [_redirect_response("http://example.com:8080/admin")]
-        )
+        connection = _connection_for([_redirect_response("http://example.com:8080/admin")])
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ) as resolve, patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ) as resolve,
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
+            self.assertRaises(TargetURLRejected) as caught,
         ):
-            with self.assertRaises(TargetURLRejected) as caught:
-                fetch_html_document(
-                    "https://example.com/start",
-                    self.settings,
-                )
+            fetch_html_document(
+                "https://example.com/start",
+                self.settings,
+            )
 
         self.assertIn(
             "Only ports 80 and 443 are allowed by default",
@@ -186,22 +187,23 @@ class RedirectSafetyTests(unittest.TestCase):
         self.assertEqual(resolve.call_count, 1)
 
     def test_redirect_to_ambiguous_numeric_host_is_rejected(self) -> None:
-        connection = _connection_for(
-            [_redirect_response("http://2130706433/admin")]
-        )
+        connection = _connection_for([_redirect_response("http://2130706433/admin")])
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ) as resolve, patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ) as resolve,
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
+            self.assertRaises(TargetURLRejected) as caught,
         ):
-            with self.assertRaises(TargetURLRejected) as caught:
-                fetch_html_document(
-                    "https://example.com/start",
-                    self.settings,
-                )
+            fetch_html_document(
+                "https://example.com/start",
+                self.settings,
+            )
 
         self.assertIn("Ambiguous numeric host", str(caught.exception))
         self.assertEqual(resolve.call_count, 1)
@@ -214,12 +216,15 @@ class RedirectSafetyTests(unittest.TestCase):
         ]
         connection = _connection_for(responses)
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ) as resolve, patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ) as resolve,
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
         ):
             result = fetch_html_document(
                 "https://example.com/start",
@@ -240,18 +245,21 @@ class RedirectSafetyTests(unittest.TestCase):
         response.getheader.return_value = None
         connection = _connection_for([response])
 
-        with patch(
-            "bintu_api.scraper.resolve_public_addresses",
-            return_value=(PUBLIC_ADDRESS,),
-        ), patch(
-            "bintu_api.scraper._make_connection",
-            return_value=connection,
+        with (
+            patch(
+                "bintu_api.scraper.resolve_public_addresses",
+                return_value=(PUBLIC_ADDRESS,),
+            ),
+            patch(
+                "bintu_api.scraper._make_connection",
+                return_value=connection,
+            ),
+            self.assertRaises(UpstreamHTTPError),
         ):
-            with self.assertRaises(UpstreamHTTPError):
-                fetch_html_document(
-                    "https://example.com/start",
-                    self.settings,
-                )
+            fetch_html_document(
+                "https://example.com/start",
+                self.settings,
+            )
 
 
 if __name__ == "__main__":

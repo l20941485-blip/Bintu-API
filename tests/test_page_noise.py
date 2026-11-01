@@ -5,6 +5,7 @@ bintu_api.scraper.extract_text_result (title/heading comparison, anchor
 flattening, heading and block boundaries). patched=False reproduces today's
 output; patched=True applies the three integration edits.
 """
+
 import re
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -14,9 +15,40 @@ from bs4.element import NavigableString
 from bintu_api.page_noise import same_document, should_drop_title, strip_permalinks
 
 BLOCK_TAGS = {
-    "address", "article", "aside", "blockquote", "br", "dd", "div", "dl", "dt", "fieldset",
-    "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr",
-    "li", "main", "nav", "ol", "p", "pre", "section", "table", "tbody", "tfoot", "thead", "ul",
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "br",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "table",
+    "tbody",
+    "tfoot",
+    "thead",
+    "ul",
 }
 BASE = "https://docs.python.org/3/library/json.html"
 
@@ -187,8 +219,7 @@ def test_real_extractor_removes_sphinx_title_and_permalink_noise():
 
 def test_real_extractor_preserves_meaningful_heading_anchor_text():
     out = _real_extract(
-        "<main><h1><a class='anchor' href='#install'>"
-        "Install guide</a></h1><p>Installation instructions.</p></main>"
+        "<main><h1><a class='anchor' href='#install'>Install guide</a></h1><p>Installation instructions.</p></main>"
     )
     assert "# Install guide" in out
     assert "Installation instructions." in out
@@ -213,8 +244,7 @@ def test_title_substring_without_delimiter_is_not_dropped():
 
 def test_permalink_cleanup_preserves_code_content():
     soup = BeautifulSoup(
-        "<pre><code><a class='headerlink' href='#sample'>"
-        "\u00b6</a></code></pre>",
+        "<pre><code><a class='headerlink' href='#sample'>\u00b6</a></code></pre>",
         "html.parser",
     )
     strip_permalinks(soup)
@@ -264,11 +294,6 @@ def test_real_extractor_keeps_same_document_labels_without_url():
 
 
 def test_real_extractor_preserves_heading_inside_same_document_link():
-    out = _real_extract(
-        "<main>"
-        "<a href='#install'><h2>Install guide</h2></a>"
-        "<p>Installation instructions.</p>"
-        "</main>"
-    )
+    out = _real_extract("<main><a href='#install'><h2>Install guide</h2></a><p>Installation instructions.</p></main>")
     assert "## Install guide" in out.splitlines()
     assert f"({BASE})" not in out

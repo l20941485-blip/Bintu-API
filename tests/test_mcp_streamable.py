@@ -2,18 +2,21 @@
 
 import json
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from bintu_api.mcp import TOOL_ANNOTATIONS, TOOL_INPUT_SCHEMA, TOOL_NAME, TOOL_OUTPUT_SCHEMA
+from bintu_api.mcp import (
+    TOOL_ANNOTATIONS,
+    TOOL_INPUT_SCHEMA,
+    TOOL_NAME,
+    TOOL_OUTPUT_SCHEMA,
+)
+from bintu_api.robots import RobotsDecision
 from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
-
-from unittest import mock
-
-from bintu_api.robots import RobotsDecision
 
 _robots_patch = mock.patch(
     "bintu_api.routes.robots_decision",
@@ -28,6 +31,7 @@ def setUpModule():
 def tearDownModule():
     _robots_patch.stop()
 
+
 class McpStreamableTests(unittest.TestCase):
     def setUp(self) -> None:
         self.app = create_app(Settings(api_key="", rapidapi_proxy_secret=""))
@@ -36,7 +40,12 @@ class McpStreamableTests(unittest.TestCase):
     def rpc(self, method: str, params: dict | None = None, request_id: int = 1):
         return self.client.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}},
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": method,
+                "params": params or {},
+            },
         )
 
     def test_initialize_returns_supported_protocol_and_server_info(self) -> None:
@@ -62,7 +71,6 @@ class McpStreamableTests(unittest.TestCase):
 
         self.assertEqual(response.json()["result"]["protocolVersion"], "2025-11-25")
 
-
     def test_post_rejects_non_json_accept_header(self) -> None:
         """Transport spec: the client must accept application/json; an SSE-only
         client cannot be served a single-JSON response and must get 406."""
@@ -78,7 +86,11 @@ class McpStreamableTests(unittest.TestCase):
         self.assertIn("application/json", body["error"]["message"])
 
     def test_post_accepts_json_and_wildcard_accept_headers(self) -> None:
-        for accept in ("application/json, text/event-stream", "application/json", "*/*"):
+        for accept in (
+            "application/json, text/event-stream",
+            "application/json",
+            "*/*",
+        ):
             with self.subTest(accept=accept):
                 response = self.client.post(
                     "/mcp",
@@ -127,7 +139,10 @@ class McpStreamableTests(unittest.TestCase):
             "bintu_api.routes.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>MCP stream</main>", charset=None),
         ):
-            response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}})
+            response = self.rpc(
+                "tools/call",
+                {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()["result"]
@@ -192,7 +207,10 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_render_js_disabled_is_in_band_tool_error(self) -> None:
         response = self.rpc(
             "tools/call",
-            {"name": TOOL_NAME, "arguments": {"url": "https://example.com", "render_js": True}},
+            {
+                "name": TOOL_NAME,
+                "arguments": {"url": "https://example.com", "render_js": True},
+            },
         )
 
         self.assertEqual(response.status_code, 200)
@@ -204,7 +222,10 @@ class McpStreamableTests(unittest.TestCase):
         """Invalid mode strings must map to JSON-RPC -32602 on the streamable endpoint."""
         response = self.rpc(
             "tools/call",
-            {"name": TOOL_NAME, "arguments": {"url": "https://example.com", "mode": "not-a-mode"}},
+            {
+                "name": TOOL_NAME,
+                "arguments": {"url": "https://example.com", "mode": "not-a-mode"},
+            },
         )
 
         error = response.json()["error"]
@@ -344,7 +365,12 @@ class McpStreamableTests(unittest.TestCase):
             with self.subTest(method=method):
                 response = client.post(
                     "/mcp",
-                    json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": method,
+                        "params": params,
+                    },
                 )
 
                 self.assertEqual(response.status_code, 200)
@@ -372,9 +398,7 @@ class McpStreamableTests(unittest.TestCase):
             "bintu_api.routes.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>gated</main>", charset=None),
         ):
-            authorized = client.post(
-                "/mcp", json=call_payload, headers={"X-API-Key": "owner-key"}
-            )
+            authorized = client.post("/mcp", json=call_payload, headers={"X-API-Key": "owner-key"})
         self.assertEqual(authorized.status_code, 200)
         envelope = json.loads(authorized.json()["result"]["content"][0]["text"])
         self.assertEqual(envelope["chunks"][0]["text"], "gated")
@@ -397,9 +421,7 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(response.json()["result"]["serverInfo"]["name"], "bintu")
 
     def test_execution_accepts_authorization_bearer_with_either_key(self) -> None:
-        app = create_app(
-            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
-        )
+        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key"))
         client = TestClient(app)
         call_payload = {
             "jsonrpc": "2.0",
@@ -424,9 +446,7 @@ class McpStreamableTests(unittest.TestCase):
                     self.assertIn("tokens", envelope)
 
     def test_execution_rejects_invalid_bearer_with_premium_detail(self) -> None:
-        app = create_app(
-            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
-        )
+        app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key"))
         client = TestClient(app)
         response = client.post(
             "/mcp",
@@ -434,7 +454,10 @@ class McpStreamableTests(unittest.TestCase):
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+                "params": {
+                    "name": TOOL_NAME,
+                    "arguments": {"url": "https://example.com"},
+                },
             },
             headers={"Authorization": "Bearer wrong-token"},
         )
@@ -520,9 +543,7 @@ class McpScopedApiKeyTests(unittest.TestCase):
     """MCP_API_KEY unlocks the MCP surfaces only, never REST or /metrics."""
 
     def setUp(self) -> None:
-        self.app = create_app(
-            Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key")
-        )
+        self.app = create_app(Settings(api_key="owner-key", rapidapi_proxy_secret="", mcp_api_key="claude-key"))
         self.client = TestClient(self.app)
 
     def rpc(self, method: str, params: dict | None = None, headers: dict | None = None):

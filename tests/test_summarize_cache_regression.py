@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from bintu_api.context import (
@@ -33,15 +33,12 @@ def _cache_economics() -> CacheEconomics:
         tokens_saved_estimate=0,
         limiting_factor="none",
         truncated=False,
-        extracted_at=datetime.now(timezone.utc).isoformat(),
+        extracted_at=datetime.now(UTC).isoformat(),
     )
 
 
 def test_cached_summarize_reports_request_specific_truncation() -> None:
-    raw_text = " ".join(
-        f"Sentence {index} is deliberately long enough to consume budget."
-        for index in range(20)
-    )
+    raw_text = " ".join(f"Sentence {index} is deliberately long enough to consume budget." for index in range(20))
 
     result = asyncio.run(
         extract_context(

@@ -88,10 +88,6 @@ class ExtractorStructureTests(unittest.TestCase):
         result = self.extract(html)
         self.assertIn("report (https://example.com/report)", result.text)
 
-
-
-
-
     def test_trafilatura_fallback_runs_for_sparse_html(self):
         html = """
         <html><body><script>ignored</script></body></html>

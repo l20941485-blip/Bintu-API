@@ -36,9 +36,6 @@ from bintu_api.context import (
     extract_context,
     normalize_mode,
 )
-from bintu_api.observability import log_extraction_completed
-from bintu_api.scraper import TargetURLRejected
-from bintu_api.settings import Settings
 from bintu_api.mcp_descriptions import (
     CACHE_DESCRIPTION,
     MAX_TOKENS_DESCRIPTION,
@@ -46,10 +43,14 @@ from bintu_api.mcp_descriptions import (
     OUTPUT_SCHEMA_EXTRA_PROPERTIES,
     PERSIST_DESCRIPTION,
     RENDER_JS_DESCRIPTION,
-    TOOL_DESCRIPTION as NEW_TOOL_DESCRIPTION,
     URL_DESCRIPTION,
 )
-
+from bintu_api.mcp_descriptions import (
+    TOOL_DESCRIPTION as NEW_TOOL_DESCRIPTION,
+)
+from bintu_api.observability import log_extraction_completed
+from bintu_api.scraper import TargetURLRejected
+from bintu_api.settings import Settings
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
 
@@ -183,8 +184,7 @@ TOOL_INPUT_SCHEMA = {
             "type": "string",
             "format": "uri",
             "description": (
-                "Absolute public HTTP or HTTPS URL to extract. "
-                "Unsafe targets fail with invalid_or_unsafe_url."
+                "Absolute public HTTP or HTTPS URL to extract. Unsafe targets fail with invalid_or_unsafe_url."
             ),
             "examples": [
                 "https://www.iana.org/domains/reserved",
@@ -214,9 +214,7 @@ TOOL_INPUT_SCHEMA = {
             "type": "integer",
             "minimum": 100,
             "maximum": 50000,
-            "description": (
-                "Accepted alias for max_tokens; max_tokens wins on conflict."
-            ),
+            "description": ("Accepted alias for max_tokens; max_tokens wins on conflict."),
         },
         "max_tokens": {
             "type": "integer",
@@ -299,15 +297,10 @@ class ToolArguments(BaseModel):
 
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
-                logger.warning(
-                    "mcp_alias_conflict canonical=max_tokens wins "
-                    "over chunk_token_budget"
-                )
+                logger.warning("mcp_alias_conflict canonical=max_tokens wins over chunk_token_budget")
                 normalized.pop("chunk_token_budget")
             else:
-                normalized["max_tokens"] = normalized.pop(
-                    "chunk_token_budget"
-                )
+                normalized["max_tokens"] = normalized.pop("chunk_token_budget")
 
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
@@ -412,8 +405,7 @@ async def call_tool(
         return _mcp_error_response(
             "invalid_or_unsafe_url",
             str(error),
-            "URL must start with http:// or https:// and be "
-            "publicly accessible.",
+            "URL must start with http:// or https:// and be publicly accessible.",
         )
     except HTTPException as error:
         detail = error.detail
@@ -451,11 +443,7 @@ async def call_tool(
         identity=mcp_rate_limit_identity(request, settings),
         raw_text=cached.markdown,
         content_truncated=cached.truncated,
-        html_source_text=(
-            _decode_source_text(document)
-            if document is not None
-            else ""
-        ),
+        html_source_text=(_decode_source_text(document) if document is not None else ""),
         cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
         document=document,
@@ -496,11 +484,7 @@ async def call_tool(
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "deduplicated_count": context.deduplicated_count,
         "low_yield": context.low_yield,
-        **(
-            {"yield_hint": context.yield_hint}
-            if context.low_yield
-            else {}
-        ),
+        **({"yield_hint": context.yield_hint} if context.low_yield else {}),
         "truncated": context.truncated,
         "split": context.split,
         "chunks": context.chunks,

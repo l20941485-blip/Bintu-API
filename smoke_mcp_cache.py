@@ -3,7 +3,6 @@
 import json
 import urllib.request
 
-
 TIMEOUT_SECONDS = 60
 
 PRESERVED_FIELDS = (
@@ -111,9 +110,7 @@ def _call(base_url, api_key, target_url, *, cache, request_id):
 
     first = content[0]
     _require(
-        isinstance(first, dict)
-        and first.get("type") == "text"
-        and isinstance(first.get("text"), str),
+        isinstance(first, dict) and first.get("type") == "text" and isinstance(first.get("text"), str),
         "MCP: invalid text content",
     )
     _require(
@@ -141,8 +138,7 @@ def _validate_envelope(envelope):
         "MCP: expected scrape mode",
     )
     _require(
-        isinstance(envelope["extracted_at"], str)
-        and bool(envelope["extracted_at"].strip()),
+        isinstance(envelope["extracted_at"], str) and bool(envelope["extracted_at"].strip()),
         "MCP: missing extraction timestamp",
     )
 
@@ -152,11 +148,7 @@ def _validate_envelope(envelope):
         "MCP: missing chunks",
     )
     _require(
-        all(
-            isinstance(chunk, dict)
-            and isinstance(chunk.get("text"), str)
-            for chunk in chunks
-        ),
+        all(isinstance(chunk, dict) and isinstance(chunk.get("text"), str) for chunk in chunks),
         "MCP: invalid chunks",
     )
     _require(
@@ -181,8 +173,7 @@ def check_mcp_cache(base_url, api_key, target_url):
     _validate_envelope(fresh)
 
     _require(
-        fresh.get("cache_hit") is False
-        and fresh.get("cache_layer") == "none",
+        fresh.get("cache_hit") is False and fresh.get("cache_layer") == "none",
         "MCP: refresh did not bypass cache reads",
     )
     print("OK  authenticated MCP refresh")
@@ -197,8 +188,7 @@ def check_mcp_cache(base_url, api_key, target_url):
     _validate_envelope(cached)
 
     _require(
-        cached.get("cache_hit") is True
-        and cached.get("cache_layer") == "persistent",
+        cached.get("cache_hit") is True and cached.get("cache_layer") == "persistent",
         "MCP: expected persistent-cache hit",
     )
 

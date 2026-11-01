@@ -1,7 +1,8 @@
 def test_legacy_mcp_tools_discovery_is_public():
     from fastapi.testclient import TestClient
-    from main import create_app
+
     from bintu_api.settings import Settings
+    from main import create_app
 
     settings = Settings(
         api_key="test-master-key",
@@ -18,8 +19,9 @@ def test_legacy_mcp_tools_discovery_is_public():
 
 def test_legacy_mcp_tool_call_requires_auth():
     from fastapi.testclient import TestClient
-    from main import create_app
+
     from bintu_api.settings import Settings
+    from main import create_app
 
     settings = Settings(
         api_key="test-master-key",

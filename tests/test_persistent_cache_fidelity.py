@@ -11,14 +11,8 @@ from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 from main import create_app
 
-
 CACHED_MARKDOWN = (
-    "# Example Domain\n"
-    "This domain is for use in examples.\n"
-    "\n"
-    "| Column A | Column B |\n"
-    "| --- | --- |\n"
-    "| 1 | 2 |"
+    "# Example Domain\nThis domain is for use in examples.\n\n| Column A | Column B |\n| --- | --- |\n| 1 | 2 |"
 )
 
 
@@ -68,12 +62,13 @@ class PersistentCacheFidelityTests(unittest.TestCase):
         self.assertIn("| Column A | Column B |", payload["text"])
 
     def test_persistent_cache_hit_does_not_reextract_markdown(self) -> None:
-        with patch(
-            "bintu_api.routes.get_cached_markdown",
-            new=AsyncMock(return_value=_cached_row()),
-        ), patch(
-            "bintu_api.routes.extract_text_result"
-        ) as extract:
+        with (
+            patch(
+                "bintu_api.routes.get_cached_markdown",
+                new=AsyncMock(return_value=_cached_row()),
+            ),
+            patch("bintu_api.routes.extract_text_result") as extract,
+        ):
             response = self.client.get(
                 "/api/v1/scrape/text",
                 params={"url": "https://example.com/page"},
