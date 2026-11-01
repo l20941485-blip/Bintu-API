@@ -1401,7 +1401,7 @@ def extract_text_result(
         )
 
         if links == "false":
-            _unwrap_inline_with_space(anchor)
+            anchor.replace_with(NavigableString(f" {label} "))
             continue
 
         if links == "footnotes":
