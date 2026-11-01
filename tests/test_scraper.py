@@ -486,6 +486,45 @@ def test_adjacent_links_do_not_run_together():
     assert ")salt" not in result.text
 
 
+def test_adjacent_inline_nodes_do_not_run_together():
+    html = (
+        b"<p>Main ingredients: "
+        b"<a href='/flour'>Flour</a>"
+        b"<a href='/water'>water</a>"
+        b"<span>sourdough culture</span>"
+        b"<a href='/salt'>salt</a>"
+        b"</p>"
+    )
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+    )
+
+    assert "Flourwater" not in result.text
+    assert "culturesalt" not in result.text
+    assert "sourdough culture salt" in result.text
+
+
+def test_wikipedia_edit_links_are_removed():
+    html = (
+        b"<h2 id='History'>History"
+        b"<span class='mw-editsection'>"
+        b"<a href='/w/index.php?title=Sourdough&amp;action=edit&amp;section=1'>edit</a>"
+        b"</span>"
+        b"</h2>"
+        b"<p>Sourdough history text.</p>"
+    )
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://en.wikipedia.org/wiki/Sourdough",
+    )
+
+    assert "edit" not in result.text
+    assert "Sourdough history text." in result.text
+
+
 def test_links_false_removes_urls():
     html = b"<p>Read <a href='https://example.com/page'>the guide</a>.</p>"
     result = extract_text_result(

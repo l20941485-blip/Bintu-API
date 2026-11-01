@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import codecs
@@ -14,8 +14,7 @@ from dataclasses import dataclass
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
-from bs4 import BeautifulSoup
-from bs4.element import NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from bintu_api.final_fixes import close_up_punctuation, drop_empty_fences
 from bintu_api.page_noise import same_document, should_drop_title, strip_permalinks
@@ -1180,6 +1179,37 @@ def _trafilatura_fallback(
 
 
 
+def _ensure_space_before(node) -> None:
+    """Ensure a word boundary exists immediately before this node."""
+    previous = node.previous_sibling
+
+    if previous is None:
+        return
+
+    if isinstance(previous, NavigableString):
+        if (
+            previous.string
+            and not previous.string.endswith((" ", "\n", "\t"))
+        ):
+            previous.replace_with(
+                NavigableString(f"{previous.string} ")
+            )
+        return
+
+    if isinstance(previous, Tag):
+        children = list(previous.children)
+        last_child = children[-1] if children else None
+
+        if (
+            isinstance(last_child, NavigableString)
+            and last_child.string
+            and not last_child.string.endswith((" ", "\n", "\t"))
+        ):
+            last_child.replace_with(
+                NavigableString(f"{last_child.string} ")
+            )
+
+
 def extract_text_result(
     html_bytes: bytes,
     max_characters: int,
@@ -1226,6 +1256,9 @@ def extract_text_result(
     for node in soup(tags_to_remove):
         node.decompose()
 
+
+    for edit_section in soup.find_all(class_="mw-editsection"):
+        edit_section.decompose()
 
     strip_permalinks(soup)
 
@@ -1387,6 +1420,7 @@ def extract_text_result(
                 anchor.append(NavigableString(f" ({destination})"))
                 _unwrap_inline_with_space(anchor)
             else:
+                _ensure_space_before(anchor)
                 anchor.replace_with(NavigableString(f"{label} ({destination}) "))
             continue
 
@@ -1509,3 +1543,5 @@ def extract_text_result(
         text,
         max_characters,
     )
+
+
