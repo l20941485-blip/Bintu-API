@@ -1407,7 +1407,7 @@ def extract_text_result(
         if links == "footnotes":
             footnotes.append(destination)
             anchor.replace_with(
-                NavigableString(f"{label} [{len(footnotes)}]")
+                NavigableString(f" {label} [{len(footnotes)}] ")
             )
             continue
 
