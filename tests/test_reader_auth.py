@@ -11,12 +11,12 @@ SCOPED = "reader-test-mcp"
 
 
 def settings(**overrides):
-    values = dict(
-        api_key=MASTER,
-        rapidapi_proxy_secret=PROXY,
-        mcp_api_key=SCOPED,
-        require_auth=True,
-    )
+    values = {
+        "api_key": MASTER,
+        "rapidapi_proxy_secret": PROXY,
+        "mcp_api_key": SCOPED,
+        "require_auth": True,
+    }
     values.update(overrides)
     return Settings(**values)
 

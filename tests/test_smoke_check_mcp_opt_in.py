@@ -106,7 +106,7 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
         self.assertIsNone(exit_code)
 
     def test_scoped_key_takes_priority(self):
-        helper, stdout, stderr, exit_code = self.run_main(
+        helper, _stdout, stderr, exit_code = self.run_main(
             {
                 "BINTU_SMOKE_MCP_CACHE": "1",
                 "BINTU_MCP_API_KEY": "offline-scoped-key",
@@ -122,7 +122,7 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
         self.assertIsNone(exit_code)
 
     def test_blank_scoped_key_falls_back_to_service_key(self):
-        helper, stdout, stderr, exit_code = self.run_main(
+        helper, _stdout, stderr, exit_code = self.run_main(
             {
                 "BINTU_SMOKE_MCP_CACHE": "1",
                 "BINTU_MCP_API_KEY": "   ",
