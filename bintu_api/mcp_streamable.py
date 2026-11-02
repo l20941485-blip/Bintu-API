@@ -136,7 +136,7 @@ INVALID_PARAMS = -32602
 # validators still recognise the envelope.
 AUTH_REQUIRED = -32001
 
-UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
+UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403)
 
 
 def _rpc_result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
@@ -275,6 +275,8 @@ def _http_detail_text(detail: Any) -> str:
 def _failure_code_for_error(error: Exception) -> str:
     """Map an upstream extraction exception to a stable privacy-safe code."""
     if isinstance(error, UpstreamHTTPError):
+        if error.status_code == 429:
+            return "upstream_rate_limited"
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             return "upstream_access_denied"
         return "upstream_http_error"
@@ -484,7 +486,13 @@ async def _tools_call_result(
         logger.info("mcp_tool_error error_type=%s", type(error).__name__)
 
         if isinstance(error, UpstreamHTTPError):
-            if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
+            if error.status_code == 429:
+                message = (
+                    "upstream_rate_limited: The target returned HTTP 429. "
+                    "Hint: The target is rate limiting requests. "
+                    "Wait before retrying."
+                )
+            elif error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
                 message = (
                     f"upstream_access_denied: The target returned HTTP "
                     f"{error.status_code}. Hint: The target denied access; "
