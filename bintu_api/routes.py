@@ -78,10 +78,10 @@ from bintu_api.yield_check import assess_yield
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
 
-
 TOKEN_METHOD = "ceil(characters/4)"
-UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403, 429)
-UPSTREAM_RATE_LIMITED_STATUSES = ()
+
+UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403)
+UPSTREAM_RATE_LIMITED_STATUSES = (429,)
 
 
 LINK_MODES = ("inline", "footnotes", "false")
@@ -595,18 +595,29 @@ async def _scrape_chunks(
             },
         ) from error
     except UpstreamHTTPError as error:
+        if error.status_code == 429:
+            error_code = "upstream_rate_limited"
+            hint = "The target is rate limiting requests. Back off and retry later."
+        elif error.status_code in (401, 402, 403):
+            error_code = "upstream_access_denied"
+            hint = "The target refused access to the requested resource."
+        else:
+            error_code = "upstream_http_error"
+            hint = "The target server returned an error. Try again later."
+
         log_upstream_error(
-            error_type="upstream_http_error",
+            error_type=error_code,
             url=url,
             request_id=request_id,
             status_code=error.status_code,
         )
+
         raise HTTPException(
             status_code=502,
             detail={
-                "code": "upstream_http_error",
+                "code": error_code,
                 "message": f"The target returned HTTP {error.status_code}.",
-                "hint": "The target server returned an error. Try again later.",
+                "hint": hint,
             },
         ) from error
     except TooManyRedirects as error:
@@ -1140,54 +1151,30 @@ async def _scrape_text(
                 "hint": "The target returned an unsupported or invalid compressed response",
             },
         ) from error
-    except PayloadTooLarge as error:
-        log_upstream_error(
-            error_type="payload_too_large",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=413,
-            detail={
-                "code": "payload_too_large",
-                "message": "The page exceeds the 1 MiB size limit",
-                "hint": "The page exceeds the 1 MiB size limit",
-            },
-        ) from error
     except UpstreamHTTPError as error:
+        if error.status_code == 429:
+            error_code = "upstream_rate_limited"
+            hint = "The target is rate limiting requests. Back off and retry later."
+        elif error.status_code in (401, 402, 403):
+            error_code = "upstream_access_denied"
+            hint = "The target refused access to the requested resource."
+        else:
+            error_code = "upstream_http_error"
+            hint = "The target server returned an error. Try again later."
+
         log_upstream_error(
-            error_type="upstream_http_error",
+            error_type=error_code,
             url=url,
             request_id=request_id,
             status_code=error.status_code,
         )
-        logger.warning(
-            "upstream_http_error status=%d reason=%s",
-            error.status_code,
-            error.reason,
-        )
-
-
-        if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
-            # Returned as 502 so a target's 401/403 is never mistaken for a problem
-            # with the caller's own API key. No retries, no workarounds.
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "code": "upstream_access_denied",
-                    "message": (f"The target refused access (HTTP {error.status_code})."),
-                    "hint": ("Bintu does not retry, log in, solve CAPTCHAs or work around blocks."),
-                    "upstream_status": error.status_code,
-                },
-            ) from error
-
 
         raise HTTPException(
             status_code=502,
             detail={
-                "code": "upstream_http_error",
-                "message": (f"The target returned HTTP {error.status_code}."),
-                "hint": "The target server returned an error. Try again later.",
+                "code": error_code,
+                "message": f"The target returned HTTP {error.status_code}.",
+                "hint": hint,
             },
         ) from error
     except TooManyRedirects as error:
