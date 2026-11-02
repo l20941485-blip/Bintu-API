@@ -1168,6 +1168,19 @@ async def _scrape_text(
         )
 
 
+        if error.status_code == 429:
+            # Returned as 502 so a target's rate limit is distinguishable from
+            # access denial and other upstream failures.
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "upstream_rate_limited",
+                    "message": "The target returned HTTP 429.",
+                    "hint": "The target is rate limiting requests. Wait before retrying.",
+                    "upstream_status": error.status_code,
+                },
+            ) from error
+
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             # Returned as 502 so a target's 401/403 is never mistaken for a problem
             # with the caller's own API key. No retries, no workarounds.
@@ -1175,19 +1188,19 @@ async def _scrape_text(
                 status_code=502,
                 detail={
                     "code": "upstream_access_denied",
-                    "message": (f"The target refused access (HTTP {error.status_code})."),
-                    "hint": ("Bintu does not retry, log in, solve CAPTCHAs or work around blocks."),
+                    "message": f"The target refused access (HTTP {error.status_code}).",
+                    "hint": "Bintu does not retry, log in, solve CAPTCHAs or work around blocks.",
                     "upstream_status": error.status_code,
                 },
             ) from error
-
 
         raise HTTPException(
             status_code=502,
             detail={
                 "code": "upstream_http_error",
-                "message": (f"The target returned HTTP {error.status_code}."),
+                "message": f"The target returned HTTP {error.status_code}.",
                 "hint": "The target server returned an error. Try again later.",
+                "upstream_status": error.status_code,
             },
         ) from error
     except TooManyRedirects as error:
