@@ -136,7 +136,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
         self.assertIn("upstream_access_denied", text)
         self.assertIn("HTTP 403", text)
 
-    def test_upstream_429_maps_to_access_denied(self) -> None:
+    def test_upstream_429_maps_to_rate_limited(self) -> None:
         with patch(
             "bintu_api.routes._fetch_and_extract",
             new=AsyncMock(side_effect=UpstreamHTTPError(429, "Too Many Requests")),
@@ -147,7 +147,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
         payload = response.json()
         text = payload["result"]["content"][0]["text"]
 
-        self.assertIn("upstream_access_denied", text)
+        self.assertIn("upstream_rate_limited", text)
         self.assertIn("HTTP 429", text)
 
 
