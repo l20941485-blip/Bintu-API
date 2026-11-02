@@ -49,6 +49,31 @@ def test_links_footnotes_separates_adjacent_links():
     assert "culturesalt" not in result.text
 
 
+def test_links_footnotes_separates_footnote_and_span():
+    html = b"""
+    <html><body>
+      <p>
+        <a href="https://en.wikipedia.org/wiki/Flour">Flour</a>
+        <a href="https://en.wikipedia.org/wiki/Water">water</a>
+        <span>sourdough culture</span>
+        <a href="https://en.wikipedia.org/wiki/Salt">salt</a>
+      </p>
+    </body></html>
+    """
+
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://en.wikipedia.org/wiki/Sourdough",
+        links="footnotes",
+    )
+
+    assert "Flour [1] water [2] sourdough culture salt [3]" in result.text
+    assert "Flour [1]water" not in result.text
+    assert "water [2]sourdough" not in result.text
+    assert "culturesalt" not in result.text
+
+
 def test_links_inline_preserves_urls():
     html = b"""
     <html><body>
