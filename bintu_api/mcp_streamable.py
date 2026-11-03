@@ -440,6 +440,7 @@ async def _tools_call_result(
             include_header=False,
             include_footer=False,
             render_js=arguments.render_js,
+            links=arguments.links,
             skip_cache=not arguments.cache,
             persist=arguments.persist,
             mode=arguments.mode,

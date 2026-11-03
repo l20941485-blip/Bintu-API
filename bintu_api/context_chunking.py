@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import math
 import re
+from urllib.parse import urljoin
 
 try:  # same estimator as the rest of the service
     from bintu_api.scraper import _compute_approx_tokens as count_tokens
@@ -72,6 +73,80 @@ _ABBREVIATIONS = {
     "i.e",
     "u.s",
 }
+
+
+
+
+# --------------------------------------------------------------------------
+# link policy
+# --------------------------------------------------------------------------
+
+
+_MARKDOWN_LINK = re.compile(
+    r"(?<!\!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)"
+)
+_FENCED_BLOCK = re.compile(r"```.*?(?:```|\\Z)", re.DOTALL)
+
+
+def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
+    """Apply link policy to Markdown prose outside fenced code."""
+    if links == "inline":
+        return text
+
+    footnote_lines: list[str] = []
+    footnote_numbers: dict[str, int] = {}
+
+    def replace(match: re.Match[str]) -> str:
+        label = match.group(1).strip()
+        url = match.group(2).strip()
+
+        if base_url and not url.startswith(
+            ("http://", "https://", "mailto:", "#")
+        ):
+            url = urljoin(base_url, url)
+
+        if links == "false":
+            return label
+
+        if url not in footnote_numbers:
+            footnote_numbers[url] = len(footnote_numbers) + 1
+            footnote_lines.append(f"{footnote_numbers[url]}. {url}")
+
+        return f"{label} [{footnote_numbers[url]}]"
+
+    transformed = _MARKDOWN_LINK.sub(replace, text)
+
+    if links == "footnotes" and footnote_lines:
+        transformed = (
+            transformed.rstrip()
+            + "\\n\\n## Links\\n\\n"
+            + "\\n".join(footnote_lines)
+        )
+
+    return transformed
+
+
+def apply_link_policy(
+    text: str,
+    links: str,
+    base_url: str | None = None,
+) -> str:
+    """Apply link policy outside fenced code blocks only."""
+    if links == "inline":
+        return text
+
+    rebuilt: list[str] = []
+    last_end = 0
+
+    for match in _FENCED_BLOCK.finditer(text):
+        prose = text[last_end : match.start()]
+        rebuilt.append(_apply_link_policy(prose, links, base_url))
+        rebuilt.append(match.group(0))
+        last_end = match.end()
+
+    rebuilt.append(_apply_link_policy(text[last_end:], links, base_url))
+    return "".join(rebuilt)
+
 
 
 # --------------------------------------------------------------------------
