@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from bintu_api.usage import UsageMeteringMiddleware
 from bintu_api.auth import verify_api_access
 from bintu_api.cache import TTLCache
 from bintu_api.database import (
@@ -109,6 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.cache = TTLCache(app_settings.cache_ttl_seconds)
     application.state.supabase_client = None
     application.state.reader_store = SnapshotStore()
+    application.add_middleware(UsageMeteringMiddleware)
     application.add_middleware(RequestObservabilityMiddleware)
     application.include_router(discovery_router)
     application.include_router(router)
