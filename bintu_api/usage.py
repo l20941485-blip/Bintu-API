@@ -1,14 +1,18 @@
 import hashlib
 import logging
 
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+
 from bintu_api.auth import has_valid_proxy_secret
 from bintu_api.settings import Settings
 
+
 logger = logging.getLogger("bintu_api.usage")
+
 
 EXCLUDED_PATHS = {
     "/",
@@ -51,7 +55,7 @@ def resolve_metering_identity(
     return None
 
 
-def increment_usage(
+async def increment_usage(
     supabase,
     *,
     identity: str,
@@ -61,7 +65,7 @@ def increment_usage(
     mode: str | None = None,
 ) -> None:
     try:
-        supabase.rpc(
+        await supabase.rpc(
             "increment_developer_usage",
             {
                 "p_rapidapi_user": identity,
@@ -109,7 +113,7 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
                     except ValueError:
                         tokens = 0
 
-                    increment_usage(
+                    await increment_usage(
                         supabase,
                         identity=identity[0],
                         gateway=identity[1],
