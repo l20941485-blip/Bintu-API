@@ -43,6 +43,7 @@ def make_request(cache, db_client=None):
 def cache_key():
     return hashlib.sha256(f"0:inline:{URL}".encode()).hexdigest()
 
+
 def run(request, skip_cache=False):
     return asyncio.run(
         routes._scrape_text(
@@ -57,6 +58,7 @@ def run(request, skip_cache=False):
             skip_cache=skip_cache,
         )
     )
+
 
 class CacheBypassTests(unittest.TestCase):
     def patches(self):

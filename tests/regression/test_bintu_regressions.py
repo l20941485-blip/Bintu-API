@@ -196,10 +196,7 @@ class McpClient:
 @pytest.fixture(scope="session")
 def mcp() -> McpClient:
     if not TOKEN:
-        pytest.skip(
-            "BINTU_TOKEN is not configured; tools/call requires Bintu's "
-            "master API_KEY or scoped MCP_API_KEY."
-        )
+        pytest.skip("BINTU_TOKEN is not configured; tools/call requires Bintu's master API_KEY or scoped MCP_API_KEY.")
     return McpClient()
 
 

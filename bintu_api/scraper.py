@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import codecs
@@ -25,7 +25,6 @@ READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
-
 def get_user_agent(settings) -> str:
     """Build the honest, identifiable User-Agent: BintuBot/<version> (+<info url>; <contact>)."""
     version = (getattr(settings, "service_version", "") or "").strip() or "0"
@@ -38,7 +37,6 @@ def get_user_agent(settings) -> str:
         details.append(contact)
     suffix = f" ({'; '.join(details)})" if details else ""
     return f"BintuBot/{version}{suffix}"
-
 
 
 BLOCK_TAGS = {
@@ -79,13 +77,11 @@ BLOCK_TAGS = {
 }
 
 
-
 @dataclass(frozen=True)
 class FetchedHTML:
     body: bytes
     charset: str | None
     final_url: str | None = None
-
 
 
 @dataclass(frozen=True)
@@ -94,13 +90,11 @@ class ExtractedText:
     truncated: bool
 
 
-
 def _compute_approx_tokens(text: str) -> int:
     """Approximate token count: ceil(characters / 4). An estimate, not a tokenizer count."""
     if not text or not text.strip():
         return 0
     return math.ceil(len(text) / 4)
-
 
 
 def _compute_tokens_saved_estimate(
@@ -115,35 +109,28 @@ def _compute_tokens_saved_estimate(
     )
 
 
-
 class TargetURLRejected(ValueError):
     pass
-
 
 
 class PrivateNetworkRejected(TargetURLRejected):
     """The resolved destination is private, reserved, multicast, or otherwise non-public."""
 
 
-
 class RedirectedToPrivateNetwork(TargetURLRejected):
     """A redirect attempted to pivot the request into a private network."""
-
 
 
 class UnsupportedMediaType(Exception):
     pass
 
 
-
 class UnsupportedContentEncoding(Exception):
     pass
 
 
-
 class PayloadTooLarge(Exception):
     pass
-
 
 
 class UpstreamHTTPError(Exception):
@@ -153,15 +140,12 @@ class UpstreamHTTPError(Exception):
         super().__init__(f"Upstream returned HTTP {status_code} {reason}".strip())
 
 
-
 class TooManyRedirects(Exception):
     pass
 
 
-
 class UpstreamRenderError(Exception):
     pass
-
 
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
@@ -175,7 +159,6 @@ class _PinnedHTTPConnection(http.client.HTTPConnection):
         super().__init__(host, port=port, timeout=timeout)
         self._address = address
 
-
     def connect(self) -> None:
         self.sock = socket.create_connection(
             (self._address, self.port),
@@ -184,7 +167,6 @@ class _PinnedHTTPConnection(http.client.HTTPConnection):
         )
         if self._tunnel_host:
             self._tunnel()
-
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
@@ -203,7 +185,6 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         )
         self._address = address
 
-
     def connect(self) -> None:
         raw_socket = socket.create_connection(
             (self._address, self.port),
@@ -216,7 +197,6 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
             raw_socket,
             server_hostname=self._tunnel_host or self.host,
         )
-
 
 
 def resolve_public_addresses(
@@ -232,18 +212,15 @@ def resolve_public_addresses(
     except socket.gaierror as error:
         raise TargetURLRejected("The target hostname could not be resolved") from error
 
-
     addresses = tuple(dict.fromkeys(result[4][0] for result in results))
     if not addresses:
         raise TargetURLRejected("The target hostname could not be resolved")
-
 
     for address in addresses:
         try:
             parsed_address = ipaddress.ip_address(address.split("%", 1)[0])
         except ValueError as error:
             raise TargetURLRejected("The target hostname resolved to an invalid address") from error
-
 
         # Reject non-public and multicast destinations, including IPv6
         # wrappers whose embedded IPv4 destination is non-public.
@@ -254,9 +231,7 @@ def resolve_public_addresses(
         ):
             raise PrivateNetworkRejected("The target hostname resolves to a non-public address")
 
-
     return addresses
-
 
 
 def _is_ambiguous_numeric_host(host: str) -> bool:
@@ -265,17 +240,14 @@ def _is_ambiguous_numeric_host(host: str) -> bool:
     if not candidate:
         return False
 
-
     try:
         ipaddress.ip_address(candidate)
         return False
     except ValueError:
         pass
 
-
     if re.fullmatch(r"0*[0-9]{1,10}", candidate):
         return True
-
 
     if re.fullmatch(r"0x[0-9a-f]+", candidate) or re.fullmatch(
         r"0x[0-9a-f]+(?:\.0x[0-9a-f]+){1,3}",
@@ -283,17 +255,14 @@ def _is_ambiguous_numeric_host(host: str) -> bool:
     ):
         return True
 
-
     if re.fullmatch(
         r"(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)(?:\.(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)){1,3}",
         candidate,
     ):
         return True
 
-
     if re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,2}", candidate):
         return True
-
 
     if re.fullmatch(
         r"(?:[0-9a-f:]*:)?(?:ffff:)?(?:0{1,4}:)?[0-9]+(?:\.[0-9]+){3}",
@@ -301,9 +270,7 @@ def _is_ambiguous_numeric_host(host: str) -> bool:
     ):
         return True
 
-
     return False
-
 
 
 def _parse_target(
@@ -313,7 +280,6 @@ def _parse_target(
     if any(character in url for character in "\r\n\t"):
         raise TargetURLRejected("The URL contains invalid characters")
 
-
     try:
         parsed = urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -321,21 +287,17 @@ def _parse_target(
         if parsed.username is not None or parsed.password is not None:
             raise TargetURLRejected("URLs containing credentials are not allowed")
 
-
         host = parsed.hostname.encode("idna").decode("ascii")
-
 
         if _is_ambiguous_numeric_host(host):
             raise TargetURLRejected(
                 "Ambiguous numeric host forms are not allowed; use a canonical domain name or canonical IP literal"
             )
 
-
         if parsed.port is None:
             port = 443 if parsed.scheme == "https" else 80
         else:
             port = parsed.port
-
 
         allowed_ports = (
             getattr(
@@ -349,31 +311,26 @@ def _parse_target(
         if port not in allowed_ports:
             raise TargetURLRejected("Only ports 80 and 443 are allowed by default")
 
-
         if _is_nat64_or_6to4_address(host):
             raise TargetURLRejected(
                 "URL host uses an IPv4-mapped, NAT64, or 6to4 address embedding "
                 "a non-public IPv4 destination, which is not allowed"
             )
 
-
     except (UnicodeError, ValueError) as error:
         if isinstance(error, TargetURLRejected):
             raise
         raise TargetURLRejected("The target URL is malformed") from error
 
-
     path = parsed.path or "/"
     if parsed.query:
         path = f"{path}?{parsed.query}"
-
 
     path = quote(
         path,
         safe="/?&=%:@+;,-._~!*'()$",
     )
     return parsed, host, port, path
-
 
 
 def _make_connection(
@@ -392,7 +349,6 @@ def _make_connection(
     )
 
 
-
 def _host_header(
     host: str,
     port: int,
@@ -403,11 +359,9 @@ def _host_header(
     return formatted_host if port == default_port else f"{formatted_host}:{port}"
 
 
-
 def fetch_html(url: str, settings: Settings) -> bytes:
     """Fetch HTML bytes, following redirects and re-validating every hop."""
     return fetch_html_document(url, settings).body
-
 
 
 def _is_multicast_address(host: str) -> bool:
@@ -418,7 +372,6 @@ def _is_multicast_address(host: str) -> bool:
         return False
 
 
-
 def _embedded_ipv4(
     address: ipaddress.IPv6Address,
 ) -> ipaddress.IPv4Address | None:
@@ -427,24 +380,18 @@ def _embedded_ipv4(
     if mapped is not None:
         return mapped
 
-
     packed = address.packed
-
 
     if packed[:12] == bytes.fromhex("0000000000000000ffff0000"):
         return ipaddress.IPv4Address(packed[12:16])
 
-
     if packed[:12] == bytes.fromhex("0064ff9b0000000000000000"):
         return ipaddress.IPv4Address(packed[12:16])
-
 
     if packed[:2] == b"\x20\x02":
         return ipaddress.IPv4Address(packed[2:6])
 
-
     return None
-
 
 
 def _is_nat64_or_6to4_address(host: str) -> bool:
@@ -454,18 +401,14 @@ def _is_nat64_or_6to4_address(host: str) -> bool:
     except ValueError:
         return False
 
-
     if address.version != 6:
         return False
-
 
     embedded = _embedded_ipv4(address)
     if embedded is None:
         return False
 
-
     return not embedded.is_global or embedded.is_multicast
-
 
 
 def fetch_html_document(
@@ -477,13 +420,11 @@ def fetch_html_document(
     current_scheme = urlsplit(url).scheme
     is_redirect_hop = False
 
-
     for _ in range(settings.max_redirects + 1):
         parsed, host, port, path = _parse_target(
             current_url,
             settings,
         )
-
 
         if port not in settings.allowed_port_set():
             raise TargetURLRejected(
@@ -492,10 +433,8 @@ def fetch_html_document(
                 f"{settings.allowed_ports or 'none'})"
             )
 
-
         if _is_multicast_address(host):
             raise TargetURLRejected(f"Multicast address {host} is not allowed (IPv4: 224.0.0.0/4, IPv6: ff00::/8)")
-
 
         if _is_nat64_or_6to4_address(host):
             raise TargetURLRejected(
@@ -503,12 +442,10 @@ def fetch_html_document(
                 "a non-public IPv4 destination, which is not allowed"
             )
 
-
         if parsed.scheme != current_scheme:
             if current_scheme == "https" and parsed.scheme == "http":
                 raise TargetURLRejected("Redirects from HTTPS to HTTP are not allowed")
             current_scheme = parsed.scheme
-
 
         try:
             addresses = resolve_public_addresses(
@@ -523,7 +460,6 @@ def fetch_html_document(
         response = None
         last_error = None
 
-
         for address in addresses:
             candidate = _make_connection(
                 parsed,
@@ -532,7 +468,6 @@ def fetch_html_document(
                 port,
                 settings.request_timeout_seconds,
             )
-
 
             try:
                 candidate.request(
@@ -558,14 +493,11 @@ def fetch_html_document(
                 candidate.close()
                 continue
 
-
         if connection is None or response is None:
             raise last_error or OSError("No validated address could be connected to")
 
-
         try:
             status = response.status
-
 
             if status in REDIRECT_STATUSES:
                 location = response.getheader("Location")
@@ -581,13 +513,11 @@ def fetch_html_document(
                 is_redirect_hop = True
                 continue
 
-
             if not 200 <= status < 300:
                 raise UpstreamHTTPError(
                     status,
                     response.reason or "upstream error",
                 )
-
 
             content_type = response.getheader(
                 "Content-Type",
@@ -598,7 +528,6 @@ def fetch_html_document(
                 settings.max_html_bytes,
             )
 
-
             return FetchedHTML(
                 body=body,
                 charset=_content_charset(content_type),
@@ -607,9 +536,7 @@ def fetch_html_document(
         finally:
             connection.close()
 
-
     raise TooManyRedirects("The target exceeded the redirect limit")
-
 
 
 async def fetch_rendered_html_document(
@@ -623,7 +550,6 @@ async def fetch_rendered_html_document(
         TimeoutError as PlaywrightTimeoutError,
     )
 
-
     _, host, port, _ = _parse_target(url, settings)
     await asyncio.to_thread(
         resolve_public_addresses,
@@ -631,10 +557,8 @@ async def fetch_rendered_html_document(
         port,
     )
 
-
     blocked_targets: list[Exception] = []
     browser = None
-
 
     async with async_playwright() as playwright:
         try:
@@ -651,7 +575,6 @@ async def fetch_rendered_html_document(
             )
             page = await context.new_page()
 
-
             async def validate_request(
                 route: Route,
             ) -> None:
@@ -664,7 +587,6 @@ async def fetch_rendered_html_document(
                     await route.abort()
                     return
 
-
                 request_url = urlsplit(request.url)
                 if request_url.scheme in {
                     "data",
@@ -674,7 +596,6 @@ async def fetch_rendered_html_document(
                     await route.continue_()
                     return
 
-
                 if request_url.scheme not in {
                     "http",
                     "https",
@@ -683,19 +604,16 @@ async def fetch_rendered_html_document(
                     await route.abort()
                     return
 
-
                 redirect_count = 0
                 redirected_request = request.redirected_from
                 while redirected_request is not None:
                     redirect_count += 1
                     redirected_request = redirected_request.redirected_from
 
-
                 if redirect_count > settings.max_redirects:
                     blocked_targets.append(TooManyRedirects("The target exceeded the redirect limit"))
                     await route.abort()
                     return
-
 
                 try:
                     (
@@ -717,15 +635,12 @@ async def fetch_rendered_html_document(
                     await route.abort()
                     return
 
-
                 await route.continue_()
-
 
             await page.route(
                 "**/*",
                 validate_request,
             )
-
 
             try:
                 response = await page.goto(
@@ -742,7 +657,6 @@ async def fetch_rendered_html_document(
                     raise blocked_targets[0] from error
                 raise UpstreamRenderError("The target could not be rendered") from error
 
-
             if blocked_targets:
                 raise blocked_targets[0]
             if response is None:
@@ -752,7 +666,6 @@ async def fetch_rendered_html_document(
                     response.status,
                     response.reason or "upstream error",
                 )
-
 
             content_type = response.headers.get(
                 "content-type",
@@ -765,14 +678,11 @@ async def fetch_rendered_html_document(
             }:
                 raise UnsupportedMediaType("Only HTML/XHTML responses are supported")
 
-
             html = await page.content()
             body = html.encode("utf-8")
 
-
             if len(body) > settings.max_html_bytes:
                 raise PayloadTooLarge("Rendered HTML may not exceed 1 MiB")
-
 
             return FetchedHTML(
                 body=body,
@@ -784,16 +694,13 @@ async def fetch_rendered_html_document(
                 await browser.close()
 
 
-
 def _content_charset(content_type: str) -> str | None:
     headers = Message()
     headers["content-type"] = content_type
     charset = headers.get_content_charset()
 
-
     if charset is None:
         return None
-
 
     try:
         codecs.lookup(charset)
@@ -804,9 +711,7 @@ def _content_charset(content_type: str) -> str | None:
         )
         return None
 
-
     return charset
-
 
 
 def _read_html_response(
@@ -819,13 +724,11 @@ def _read_html_response(
     )
     media_type = content_type.split(";", 1)[0].strip().lower()
 
-
     if media_type not in {
         "text/html",
         "application/xhtml+xml",
     }:
         raise UnsupportedMediaType("Only HTML/XHTML responses are supported")
-
 
     content_encoding = (
         response.getheader(
@@ -836,7 +739,6 @@ def _read_html_response(
         .lower()
     )
 
-
     if content_encoding not in {
         "",
         "identity",
@@ -844,7 +746,6 @@ def _read_html_response(
         "x-gzip",
     }:
         raise UnsupportedContentEncoding(f"Unsupported content encoding: {content_encoding}")
-
 
     content_length = response.getheader("Content-Length")
     if content_length is not None:
@@ -854,31 +755,24 @@ def _read_html_response(
         except ValueError:
             pass
 
-
     html_bytes = bytearray()
-
 
     while True:
         remaining = max_bytes - len(html_bytes)
         chunk = response.read(min(READ_CHUNK_BYTES, remaining + 1))
 
-
         if not chunk:
             break
-
 
         if len(html_bytes) + len(chunk) > max_bytes:
             raise PayloadTooLarge("HTML responses may not exceed 1 MiB")
 
-
         html_bytes.extend(chunk)
-
 
     if content_encoding in {"gzip", "x-gzip"}:
         decompressor = zlib.decompressobj(
             16 + zlib.MAX_WBITS,
         )
-
 
         try:
             decoded = decompressor.decompress(
@@ -888,26 +782,20 @@ def _read_html_response(
         except zlib.error as error:
             raise UnsupportedContentEncoding("The gzip-compressed response is invalid") from error
 
-
         if len(decoded) > max_bytes or decompressor.unconsumed_tail:
             raise PayloadTooLarge("Decompressed HTML responses may not exceed 1 MiB")
-
 
         try:
             decoded += decompressor.flush(max_bytes - len(decoded) + 1)
         except zlib.error as error:
             raise UnsupportedContentEncoding("The gzip-compressed response is invalid") from error
 
-
         if not decompressor.eof or decompressor.unused_data:
             raise UnsupportedContentEncoding("The gzip-compressed response is incomplete or malformed")
 
-
         return decoded
 
-
     return bytes(html_bytes)
-
 
 
 def _unwrap_inline_with_space(node) -> None:
@@ -942,7 +830,6 @@ def _unwrap_inline_with_space(node) -> None:
         parent.append(NavigableString(" "))
 
 
-
 def extract_text(
     html_bytes: bytes,
     max_characters: int,
@@ -961,21 +848,17 @@ def extract_text(
     ).text
 
 
-
 def _select_comment_thread_root(soup):
     """Select discussion content for comment-thread pages."""
     comment_nodes = soup.select(
         "div.commtext, span.commtext, td.comment, [class*='comment-body'], [data-testid*='comment']"
     )
 
-
     if not comment_nodes:
         return None
 
-
     thread_root = soup.new_tag("div")
     thread_root["class"] = "bintu-comment-thread"
-
 
     title_anchor = soup.select_one("a.titlelink, .titleline a, .storylink")
     if title_anchor:
@@ -983,24 +866,20 @@ def _select_comment_thread_root(soup):
         heading.string = title_anchor.get_text(" ", strip=True)
         thread_root.append(heading)
 
-
     for comment in comment_nodes:
         wrapper = soup.new_tag("p")
         wrapper.append(comment.extract())
         thread_root.append(wrapper)
-
 
     container = soup.body or soup
     container.append(thread_root)
     return thread_root
 
 
-
 def _pick_content_root(soup, *, min_ratio: float = 0.3):
     """Select a root containing a meaningful share of visible page text."""
     body = soup.body or soup
     total = len(body.get_text(" ", strip=True))
-
 
     candidates = (
         soup.find("article"),
@@ -1026,19 +905,15 @@ def _pick_content_root(soup, *, min_ratio: float = 0.3):
         ),
     )
 
-
     for candidate in candidates:
         if candidate is None:
             continue
-
 
         candidate_text = len(candidate.get_text(" ", strip=True))
         if candidate_text >= total * min_ratio:
             return candidate
 
-
     return soup
-
 
 
 PRE_NL = "\x01"
@@ -1047,7 +922,6 @@ PRE_TAB = "\x03"
 
 
 _LANG_RE = re.compile(r"(?:language|lang|highlight(?:-source)?)-([A-Za-z0-9+#_-]+)")
-
 
 
 def _fence_language(pre) -> str:
@@ -1067,7 +941,6 @@ def _fence_language(pre) -> str:
     return ""
 
 
-
 def protect_pre_blocks(root, boundary: str) -> int:
     """Replace <pre> blocks with fenced placeholders that survive normalization."""
     replaced = 0
@@ -1083,18 +956,15 @@ def protect_pre_blocks(root, boundary: str) -> int:
     return replaced
 
 
-
 def restore_pre_placeholders(text: str) -> str:
     """Restore whitespace shielded by protect_pre_blocks."""
     return text.replace(PRE_NL, "\n").replace(PRE_SP, " ").replace(PRE_TAB, "\t")
-
 
 
 def close_open_fence(text: str) -> str:
     """Close a Markdown code fence left open by truncation."""
     open_fences = sum(1 for line in text.split("\n") if line.startswith("```")) % 2
     return f"{text}\n```" if open_fences else text
-
 
 
 def _truncate_extracted_text(
@@ -1107,29 +977,23 @@ def _truncate_extracted_text(
             truncated=False,
         )
 
-
     limit = max_characters - 4 if "```" in text else max_characters
     truncated_text = text[:limit]
-
 
     last_boundary = max(
         truncated_text.rfind("\n"),
         truncated_text.rfind(" "),
     )
 
-
     if last_boundary > 0:
         truncated_text = truncated_text[:last_boundary].rstrip()
 
-
     truncated_text = drop_empty_fences(close_open_fence(truncated_text))
-
 
     return ExtractedText(
         text=truncated_text,
         truncated=True,
     )
-
 
 
 def _trafilatura_fallback(
@@ -1140,7 +1004,6 @@ def _trafilatura_fallback(
 ) -> str | None:
     """Extract main content with Trafilatura when BeautifulSoup is too sparse."""
     import trafilatura
-
 
     try:
         html = html_bytes.decode(
@@ -1161,10 +1024,8 @@ def _trafilatura_fallback(
         )
         return None
 
-
     if not text:
         return None
-
 
     lines = []
     for line in text.splitlines():
@@ -1174,9 +1035,7 @@ def _trafilatura_fallback(
         if line:
             lines.append(line)
 
-
     return "\n".join(lines)
-
 
 
 def _ensure_space_before(node) -> None:
@@ -1187,13 +1046,8 @@ def _ensure_space_before(node) -> None:
         return
 
     if isinstance(previous, NavigableString):
-        if (
-            previous.string
-            and not previous.string.endswith((" ", "\n", "\t"))
-        ):
-            previous.replace_with(
-                NavigableString(f"{previous.string} ")
-            )
+        if previous.string and not previous.string.endswith((" ", "\n", "\t")):
+            previous.replace_with(NavigableString(f"{previous.string} "))
         return
 
     if isinstance(previous, Tag):
@@ -1205,9 +1059,7 @@ def _ensure_space_before(node) -> None:
             and last_child.string
             and not last_child.string.endswith((" ", "\n", "\t"))
         ):
-            last_child.replace_with(
-                NavigableString(f"{last_child.string} ")
-            )
+            last_child.replace_with(NavigableString(f"{last_child.string} "))
 
 
 def extract_text_result(
@@ -1230,7 +1082,6 @@ def extract_text_result(
         from_encoding=from_encoding,
     )
 
-
     tags_to_remove = [
         "button",
         "iframe",
@@ -1244,7 +1095,6 @@ def extract_text_result(
         "textarea",
     ]
 
-
     if not include_nav:
         tags_to_remove.append("nav")
     if not include_header:
@@ -1252,25 +1102,20 @@ def extract_text_result(
     if not include_footer:
         tags_to_remove.append("footer")
 
-
     for node in soup(tags_to_remove):
         node.decompose()
-
 
     for edit_section in soup.find_all(class_="mw-editsection"):
         edit_section.decompose()
 
     strip_permalinks(soup)
 
-
     for node in soup.find_all(True):
         attributes = node.attrs or {}
-
 
         if "hidden" in attributes or str(attributes.get("aria-hidden") or "").lower() == "true":
             node.decompose()
             continue
-
 
         style = re.sub(
             r"\s+",
@@ -1281,7 +1126,6 @@ def extract_text_result(
             node.decompose()
             continue
 
-
         role = str(attributes.get("role") or "").lower()
         if role in {
             "dialog",
@@ -1291,7 +1135,6 @@ def extract_text_result(
         }:
             node.decompose()
             continue
-
 
         classes = attributes.get("class", [])
         class_names = classes if isinstance(classes, list) else [classes]
@@ -1307,7 +1150,6 @@ def extract_text_result(
             identifiers,
         ).lower()
 
-
         if re.search(
             r"\b(?:share|social|related|recommend(?:ation)?|"
             r"advert(?:isement)?|"
@@ -1317,20 +1159,15 @@ def extract_text_result(
         ):
             node.decompose()
 
-
     page_title = soup.title.get_text(" ", strip=True) if soup.title else ""
     if soup.title:
         soup.title.decompose()
 
-
     comment_thread_root = _select_comment_thread_root(soup)
-
 
     content_root = comment_thread_root or _pick_content_root(soup)
 
-
     content_roots = [content_root]
-
 
     if content_root is not soup:
         for tag_name, should_include in (
@@ -1345,10 +1182,8 @@ def extract_text_result(
                     if all(parent is not content_root for parent in node.parents)
                 )
 
-
     first_heading = content_root.find(["h1", "h2", "h3", "h4", "h5", "h6"])
     heading_text = first_heading.get_text(" ", strip=True) if first_heading else ""
-
 
     normalized_title = re.sub(
         r"\s+",
@@ -1361,10 +1196,8 @@ def extract_text_result(
         heading_text,
     ).strip()
 
-
     if normalized_title and should_drop_title(normalized_title, normalized_heading):
         normalized_title = ""
-
 
     footnotes: list[str] = []
 
@@ -1416,9 +1249,7 @@ def extract_text_result(
 
         if links == "footnotes":
             footnotes.append(destination)
-            anchor.replace_with(
-                NavigableString(f" {label} [{len(footnotes)}] ")
-            )
+            anchor.replace_with(NavigableString(f" {label} [{len(footnotes)}] "))
             continue
 
         if same_document(base_url, resolved):
@@ -1430,31 +1261,24 @@ def extract_text_result(
                 anchor.append(NavigableString(f" ({destination})"))
                 _unwrap_inline_with_space(anchor)
             else:
-                anchor.replace_with(
-                    NavigableString(f" {label} ({destination}) ")
-                )
+                anchor.replace_with(NavigableString(f" {label} ({destination}) "))
             continue
 
         _unwrap_inline_with_space(anchor)
 
-
     boundary = "\x00BINTU_BLOCK_BOUNDARY\x00"
-
 
     while boundary in " ".join(root.get_text() for root in content_roots):
         boundary += "\x00"
 
-
     for root in content_roots:
         protect_pre_blocks(root, boundary)
-
 
         for row in root.find_all("tr"):
             cells = row.find_all(
                 ["th", "td"],
                 recursive=False,
             )
-
 
             if cells:
                 cell_text = [
@@ -1467,13 +1291,10 @@ def extract_text_result(
                 ]
                 row_text = " | ".join(cell_text)
 
-
                 if row.find("th", recursive=False):
                     row_text = f"{row_text}{boundary}{' | '.join('---' for _ in cells)}"
 
-
                 row.replace_with(NavigableString(f"{boundary}{row_text}{boundary}"))
-
 
         for node in root.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             level = int(node.name[1])
@@ -1484,17 +1305,13 @@ def extract_text_result(
             ).strip()
             node.replace_with(NavigableString(f"{boundary}{'#' * level} {heading}{boundary}"))
 
-
         for node in root.find_all(BLOCK_TAGS):
             node.insert_before(boundary)
             node.insert_after(boundary)
 
-
     text = boundary.join(root.get_text() for root in content_roots)
 
-
     lines = []
-
 
     for line in text.split(boundary):
         line = re.sub(
@@ -1505,29 +1322,21 @@ def extract_text_result(
         line = re.sub(r"\s+", " ", line).strip()
         line = close_up_punctuation(line)
 
-
         if line:
             lines.append(line)
-
 
     if normalized_title:
         lines.insert(0, f"# {normalized_title}")
 
     if links == "footnotes" and footnotes:
         lines.extend(["", "## Links"])
-        lines.extend(
-            f"{index}. {destination}"
-            for index, destination in enumerate(footnotes, start=1)
-        )
-
+        lines.extend(f"{index}. {destination}" for index, destination in enumerate(footnotes, start=1))
 
     text = "\n".join(lines)
     text = restore_pre_placeholders(text)
 
-
     bs4_text = text.strip()
     minimum_useful_text = min(120, max_characters)
-
 
     fallback_text = None
     if len(bs4_text) == 0 and comment_thread_root is None:
@@ -1538,21 +1347,16 @@ def extract_text_result(
             base_url,
         )
 
-
     if fallback_text and len(fallback_text.strip()) >= len(bs4_text) + 80:
         if normalized_title:
             fallback_text = f"# {normalized_title}\n{fallback_text}"
-
 
         return _truncate_extracted_text(
             fallback_text,
             max_characters,
         )
 
-
     return _truncate_extracted_text(
         text,
         max_characters,
     )
-
-

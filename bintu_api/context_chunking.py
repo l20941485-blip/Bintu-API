@@ -75,16 +75,12 @@ _ABBREVIATIONS = {
 }
 
 
-
-
 # --------------------------------------------------------------------------
 # link policy
 # --------------------------------------------------------------------------
 
 
-_MARKDOWN_LINK = re.compile(
-    r"(?<!\!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)"
-)
+_MARKDOWN_LINK = re.compile(r"(?<!\!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _FENCED_BLOCK = re.compile(r"```.*?(?:```|\\Z)", re.DOTALL)
 
 
@@ -100,9 +96,7 @@ def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
         label = match.group(1).strip()
         url = match.group(2).strip()
 
-        if base_url and not url.startswith(
-            ("http://", "https://", "mailto:", "#")
-        ):
+        if base_url and not url.startswith(("http://", "https://", "mailto:", "#")):
             url = urljoin(base_url, url)
 
         if links == "false":
@@ -117,11 +111,7 @@ def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
     transformed = _MARKDOWN_LINK.sub(replace, text)
 
     if links == "footnotes" and footnote_lines:
-        transformed = (
-            transformed.rstrip()
-            + "\\n\\n## Links\\n\\n"
-            + "\\n".join(footnote_lines)
-        )
+        transformed = transformed.rstrip() + "\\n\\n## Links\\n\\n" + "\\n".join(footnote_lines)
 
     return transformed
 
@@ -146,7 +136,6 @@ def apply_link_policy(
 
     rebuilt.append(_apply_link_policy(text[last_end:], links, base_url))
     return "".join(rebuilt)
-
 
 
 # --------------------------------------------------------------------------

@@ -10,9 +10,7 @@ from bintu_api.scraper import RedirectedToPrivateNetwork
 
 
 def _raise_redirect_to_private_network(*args, **kwargs):
-    raise RedirectedToPrivateNetwork(
-        "A redirect attempted to access a private network address"
-    )
+    raise RedirectedToPrivateNetwork("A redirect attempted to access a private network address")
 
 
 class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
@@ -40,9 +38,7 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch(
                 "bintu_api.routes._fetch_and_extract",
-                new=AsyncMock(
-                    side_effect=_raise_redirect_to_private_network
-                ),
+                new=AsyncMock(side_effect=_raise_redirect_to_private_network),
             ),
             self.assertRaises(HTTPException) as caught,
         ):
