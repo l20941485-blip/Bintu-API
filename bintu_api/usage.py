@@ -130,7 +130,7 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
                     gateway=identity[1],
                     scrapes=1,
                     tokens=tokens,
-                    mode=request.headers.get("x-mode"),
+                    mode=request.headers.get("x-mode") or "unspecified",
                 )
 
         return response
