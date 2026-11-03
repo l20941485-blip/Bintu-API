@@ -1368,7 +1368,17 @@ def extract_text_result(
 
     footnotes: list[str] = []
 
-    for anchor in soup.find_all("a", href=True):
+    seen_anchors: set[int] = set()
+    content_anchors: list[Tag] = []
+
+    for root in content_roots:
+        for anchor in root.find_all("a", href=True):
+            anchor_id = id(anchor)
+            if anchor_id not in seen_anchors:
+                seen_anchors.add(anchor_id)
+                content_anchors.append(anchor)
+
+    for anchor in content_anchors:
         if anchor.find_parent("pre"):
             continue
 
