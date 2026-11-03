@@ -65,7 +65,7 @@ async def increment_usage(
     mode: str | None = None,
 ) -> None:
     try:
-        await supabase.rpc(
+        response = await supabase.rpc(
             "increment_developer_usage",
             {
                 "p_rapidapi_user": identity,
@@ -75,6 +75,11 @@ async def increment_usage(
                 "p_mode": mode,
             },
         ).execute()
+
+        logger.info(
+            "supabase_usage_increment_completed response=%s",
+            response,
+        )
     except Exception:
         logger.exception(
             "supabase_usage_increment_failed",
