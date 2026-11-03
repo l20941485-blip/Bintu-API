@@ -101,25 +101,34 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
         if should_meter:
             settings: Settings = request.app.state.settings
             identity = resolve_metering_identity(request, settings)
+            supabase = request.app.state.supabase_client
 
-            if identity is not None:
-                supabase = request.app.state.supabase_client
+            logger.info(
+                "usage_metering_decision",
+                extra={
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "identity": identity[0] if identity else None,
+                    "gateway": identity[1] if identity else None,
+                    "supabase_client_present": supabase is not None,
+                },
+            )
 
-                if supabase is not None:
-                    token_header = response.headers.get("x-token-usage", "0")
+            if identity is not None and supabase is not None:
+                token_header = response.headers.get("x-token-usage", "0")
 
-                    try:
-                        tokens = int(token_header)
-                    except ValueError:
-                        tokens = 0
+                try:
+                    tokens = int(token_header)
+                except ValueError:
+                    tokens = 0
 
-                    await increment_usage(
-                        supabase,
-                        identity=identity[0],
-                        gateway=identity[1],
-                        scrapes=1,
-                        tokens=tokens,
-                        mode=request.headers.get("x-mode"),
-                    )
+                await increment_usage(
+                    supabase,
+                    identity=identity[0],
+                    gateway=identity[1],
+                    scrapes=1,
+                    tokens=tokens,
+                    mode=request.headers.get("x-mode"),
+                )
 
         return response
