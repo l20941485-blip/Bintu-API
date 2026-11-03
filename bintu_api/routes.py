@@ -14,7 +14,7 @@ from urllib.parse import (
     urlunsplit,
 )
 
-from fastapi import APIRouter, HTTPException, Request, Security
+from fastapi import APIRouter, HTTPException, Query, Request, Security
 
 from bintu_api.auth import (
     api_key_scheme,
@@ -318,6 +318,8 @@ async def scrape_text(
     include_footer: bool = False,
     render_js: bool = False,
     links: Literal["inline", "footnotes", "false"] = "inline",
+    footnote_url_policy: Literal["full", "truncated"] = "full",
+    max_footnote_url_length: int = Query(default=100, gt=0),
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
@@ -356,6 +358,8 @@ async def scrape_text(
         skip_cache,
         persist,
         max_tokens,
+        footnote_url_policy=footnote_url_policy,
+        max_footnote_url_length=max_footnote_url_length,
     )
 
 
@@ -748,6 +752,8 @@ async def _fetch_and_extract(
     persist: bool = True,
     mode: str = "scrape",
     max_tokens: int = 6000,
+    footnote_url_policy: Literal["full", "truncated"] = "full",
+    max_footnote_url_length: int = 100,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
@@ -864,6 +870,8 @@ async def _fetch_and_extract(
         from_encoding=document.charset,
         base_url=document.final_url or url,
         links=links,
+        footnote_url_policy=footnote_url_policy,
+        max_footnote_url_length=max_footnote_url_length,
     )
 
     # Replace raw HTML only after a successful, nonempty extraction.
@@ -936,6 +944,8 @@ async def _scrape_text(
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
+    footnote_url_policy: Literal["full", "truncated"] = "full",
+    max_footnote_url_length: int = 100,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -957,6 +967,8 @@ async def _scrape_text(
             skip_cache=skip_cache,
             persist=persist,
             max_tokens=max_tokens,
+            footnote_url_policy=footnote_url_policy,
+            max_footnote_url_length=max_footnote_url_length,
         )
 
         if request.app.state.supabase_client is not None and has_valid_proxy_secret(request, settings):

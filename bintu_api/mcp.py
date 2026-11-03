@@ -23,6 +23,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictInt,
     ValidationError,
     model_validator,
 )
@@ -219,6 +220,24 @@ TOOL_INPUT_SCHEMA = {
                 "URLs for the lowest-token output."
             ),
         },
+        "footnote_url_policy": {
+            "type": "string",
+            "enum": ["full", "truncated"],
+            "default": "full",
+            "description": (
+                "For links=footnotes only, preserve complete URL destinations "
+                "or replace over-limit destinations with non-clickable truncated text."
+            ),
+        },
+        "max_footnote_url_length": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": (
+                "For links=footnotes only, maximum URL length for the visible "
+                "label and truncated destination."
+            ),
+        },
         "mode": {
             "type": "string",
             "enum": ["scrape", "chunk", "summarize", "chunked"],
@@ -296,6 +315,8 @@ class ToolArguments(BaseModel):
     url: str
     render_js: bool = False
     links: Literal["inline", "footnotes", "false"] = "inline"
+    footnote_url_policy: Literal["full", "truncated"] = "full"
+    max_footnote_url_length: StrictInt = Field(default=100, gt=0)
     mode: str = "scrape"
     max_tokens: int = Field(
         default=6000,
@@ -423,6 +444,8 @@ async def call_tool(
             persist=arguments.persist,
             max_tokens=arguments.max_tokens,
             links=arguments.links,
+            footnote_url_policy=arguments.footnote_url_policy,
+            max_footnote_url_length=arguments.max_footnote_url_length,
         )
     except TargetURLRejected as error:
         return _mcp_error_response(

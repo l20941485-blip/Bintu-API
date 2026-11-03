@@ -445,6 +445,8 @@ async def _tools_call_result(
             persist=arguments.persist,
             mode=arguments.mode,
             max_tokens=arguments.max_tokens,
+            footnote_url_policy=arguments.footnote_url_policy,
+            max_footnote_url_length=arguments.max_footnote_url_length,
         )
     except TargetURLRejected as error:
         log_extraction_failed(

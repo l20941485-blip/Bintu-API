@@ -53,9 +53,17 @@ Extracts readable text from a public HTML or XHTML page.
 | `include_header` | boolean | false | Preserve header elements |
 | `include_footer` | boolean | false | Preserve footer elements |
 | `render_js` | boolean | false | Request browser rendering; disabled unless enabled by the operator |
-| `links` | string | `inline` | `inline`, `footnotes`, or `false`; footnotes deduplicate destinations and shorten displayed URLs to 100 characters while retaining the full target |
+| `links` | string | `inline` | `inline`, `footnotes`, or `false` |
+| `footnote_url_policy` | string | `full` | `full` preserves complete footnote destinations; `truncated` caps over-limit destinations as non-clickable text. Applies only when `links=footnotes` |
+| `max_footnote_url_length` | integer | 100 | Positive maximum URL length for footnote labels and, with the `truncated` policy, destinations. Applies only when `links=footnotes` |
 | `skip_cache` | boolean | false | Bypass cache reads |
 | `persist` | boolean | true | Allow a fresh successful result to be written to persistent cache |
+
+Footnotes deduplicate equivalent destinations and cap their visible labels at
+`max_footnote_url_length`. With the default `footnote_url_policy=full`, the
+complete destination is retained. Set `footnote_url_policy=truncated` to
+replace over-limit destinations with a safe, non-clickable abbreviated
+display. Both options are ignored for other `links` modes.
 
 The response includes the requested URL, extracted `text`, `truncated`,
 `limiting_factor`, approximate token counts, cache metadata, low-yield
@@ -122,7 +130,10 @@ the tool and requires MCP authentication.
 
 `url` is required. Optional inputs include `mode` (`scrape`, `chunk`, or
 `summarize`; `chunked` is an alias), `max_tokens` (default 6000, range
-100–50,000), `links`, `render_js`, `cache`, and `persist`.
+100–50,000), `links`, `footnote_url_policy` (`full` or `truncated`, default
+`full`), `max_footnote_url_length` (positive integer, default 100),
+`render_js`, `cache`, and `persist`. The footnote URL options apply only when
+`links=footnotes`; truncated destinations are non-clickable abbreviated text.
 Token counts are approximate. `summarize` selects leading text; it is not
 an AI-generated summary.
 
