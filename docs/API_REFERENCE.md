@@ -53,7 +53,7 @@ Extracts readable text from a public HTML or XHTML page.
 | `include_header` | boolean | false | Preserve header elements |
 | `include_footer` | boolean | false | Preserve footer elements |
 | `render_js` | boolean | false | Request browser rendering; disabled unless enabled by the operator |
-| `links` | string | `inline` | `inline`, `footnotes`, or `false` |
+| `links` | string | `inline` | `inline`, `footnotes`, or `false`; footnotes deduplicate destinations and shorten displayed URLs to 100 characters while retaining the full target |
 | `skip_cache` | boolean | false | Bypass cache reads |
 | `persist` | boolean | true | Allow a fresh successful result to be written to persistent cache |
 

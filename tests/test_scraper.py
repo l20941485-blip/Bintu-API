@@ -511,7 +511,7 @@ def test_links_footnotes_collects_references():
     )
     assert "the guide [1]" in result.text
     assert "## Links" in result.text
-    assert "1. https://example.com/page" in result.text
+    assert "1. [example.com/page](<https://example.com/page>)" in result.text
 
 
 def test_invalid_links_mode_is_rejected():

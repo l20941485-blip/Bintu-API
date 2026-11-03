@@ -916,6 +916,59 @@ def _pick_content_root(soup, *, min_ratio: float = 0.3):
     return soup
 
 
+def _footnote_destination_key(destination: str) -> str:
+    parts = urlsplit(destination)
+    hostname = parts.hostname
+
+    if hostname is None:
+        return destination
+
+    try:
+        port = parts.port
+    except ValueError:
+        return destination
+
+    host = f"[{hostname.lower()}]" if ":" in hostname else hostname.lower()
+    if port is not None and not (
+        (parts.scheme.lower() == "http" and port == 80)
+        or (parts.scheme.lower() == "https" and port == 443)
+    ):
+        host = f"{host}:{port}"
+
+    path = parts.path[:-1] if parts.path.endswith("/") else parts.path
+    return urlunsplit((parts.scheme.lower(), host, path, parts.query, ""))
+
+
+def _footnote_display_label(destination: str, max_length: int) -> str:
+    parts = urlsplit(destination)
+    hostname = parts.hostname
+
+    if hostname is None:
+        label = destination
+    else:
+        host = f"[{hostname.lower()}]" if ":" in hostname else hostname.lower()
+        try:
+            port = parts.port
+        except ValueError:
+            port = None
+
+        if port is not None and not (
+            (parts.scheme.lower() == "http" and port == 80)
+            or (parts.scheme.lower() == "https" and port == 443)
+        ):
+            host = f"{host}:{port}"
+
+        label = f"{host}{parts.path}"
+        if parts.query:
+            label = f"{label}?{parts.query}"
+
+    if len(label) <= max_length:
+        return label
+    if max_length == 1:
+        return "…"
+    return f"{label[: max_length - 1]}…"
+
+
 PRE_NL = "\x01"
 PRE_SP = "\x02"
 PRE_TAB = "\x03"
@@ -1071,10 +1124,13 @@ def extract_text_result(
     from_encoding: str | None = None,
     base_url: str | None = None,
     links: str = "inline",
+    footnote_display_max_length: int = 100,
 ) -> ExtractedText:
     """Extract visible text from HTML bytes."""
     if links not in {"inline", "footnotes", "false"}:
         raise ValueError("links must be one of: inline, footnotes, false")
+    if links == "footnotes" and footnote_display_max_length < 1:
+        raise ValueError("footnote_display_max_length must be greater than zero")
 
     soup = BeautifulSoup(
         html_bytes,
@@ -1200,6 +1256,7 @@ def extract_text_result(
         normalized_title = ""
 
     footnotes: list[str] = []
+    footnote_numbers: dict[str, int] = {}
 
     seen_anchors: set[int] = set()
     content_anchors: list[Tag] = []
@@ -1225,7 +1282,11 @@ def extract_text_result(
         if not label or not href or not base_url:
             continue
 
-        resolved = urlsplit(urljoin(base_url, href))
+        href_parts = urlsplit(href)
+        original_destination = (
+            href if href_parts.scheme and href_parts.netloc else urljoin(base_url, href)
+        )
+        resolved = urlsplit(original_destination)
 
         if resolved.scheme not in {"http", "https"} or not resolved.hostname:
             continue
@@ -1248,8 +1309,13 @@ def extract_text_result(
             continue
 
         if links == "footnotes":
-            footnotes.append(destination)
-            anchor.replace_with(NavigableString(f" {label} [{len(footnotes)}] "))
+            key = _footnote_destination_key(original_destination)
+            number = footnote_numbers.get(key)
+            if number is None:
+                number = len(footnotes) + 1
+                footnote_numbers[key] = number
+                footnotes.append(original_destination)
+            anchor.replace_with(NavigableString(f" {label} [{number}] "))
             continue
 
         if same_document(base_url, resolved):
@@ -1274,7 +1340,7 @@ def extract_text_result(
     for root in content_roots:
         protect_pre_blocks(root, boundary)
 
-        for row in root.find_all("tr"):
+        for row in reversed(root.find_all("tr")):
             cells = row.find_all(
                 ["th", "td"],
                 recursive=False,
@@ -1329,8 +1395,22 @@ def extract_text_result(
         lines.insert(0, f"# {normalized_title}")
 
     if links == "footnotes" and footnotes:
+        footnote_lines = []
+        for index, destination in enumerate(footnotes, start=1):
+            display_label = _footnote_display_label(
+                destination,
+                footnote_display_max_length,
+            )
+            escaped_label = (
+                display_label.replace("\\", "\\\\")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+            )
+            footnote_lines.append(
+                f"{index}. [{escaped_label}](<{destination}>)"
+            )
         lines.extend(["", "## Links"])
-        lines.extend(f"{index}. {destination}" for index, destination in enumerate(footnotes, start=1))
+        lines.extend(footnote_lines)
 
     text = "\n".join(lines)
     text = restore_pre_placeholders(text)
