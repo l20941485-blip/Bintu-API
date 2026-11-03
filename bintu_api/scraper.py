@@ -1124,13 +1124,13 @@ def extract_text_result(
     from_encoding: str | None = None,
     base_url: str | None = None,
     links: str = "inline",
-    footnote_display_max_length: int = 100,
+    max_footnote_url_length: int = 100,
 ) -> ExtractedText:
     """Extract visible text from HTML bytes."""
     if links not in {"inline", "footnotes", "false"}:
         raise ValueError("links must be one of: inline, footnotes, false")
-    if links == "footnotes" and footnote_display_max_length < 1:
-        raise ValueError("footnote_display_max_length must be greater than zero")
+    if links == "footnotes" and max_footnote_url_length < 1:
+        raise ValueError("max_footnote_url_length must be greater than zero")
 
     soup = BeautifulSoup(
         html_bytes,
@@ -1399,7 +1399,7 @@ def extract_text_result(
         for index, destination in enumerate(footnotes, start=1):
             display_label = _footnote_display_label(
                 destination,
-                footnote_display_max_length,
+                max_footnote_url_length,
             )
             escaped_label = (
                 display_label.replace("\\", "\\\\")
