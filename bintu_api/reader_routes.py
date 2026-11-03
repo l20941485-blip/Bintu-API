@@ -152,10 +152,16 @@ async def _fetch_snapshot(request: Request, payload: ReadRequest):
             "No readable text was extracted.",
         ) from error
     except UpstreamHTTPError as error:
-        denied = error.status_code in (401, 402, 403, 429)
+        if error.status_code == 429:
+            error_code = "upstream_rate_limited"
+        elif error.status_code in (401, 402, 403):
+            error_code = "upstream_access_denied"
+        else:
+            error_code = "upstream_http_error"
+
         raise _error(
             502,
-            "upstream_access_denied" if denied else "upstream_http_error",
+            error_code,
             f"The target returned HTTP {error.status_code}.",
         ) from error
     except TooManyRedirects as error:
