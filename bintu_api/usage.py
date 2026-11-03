@@ -104,16 +104,13 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
             supabase = request.app.state.supabase_client
 
             logger.info(
-                "usage_metering_decision",
-                extra={
-                    "path": request.url.path,
-                    "status_code": response.status_code,
-                    "identity": identity[0] if identity else None,
-                    "gateway": identity[1] if identity else None,
-                    "supabase_client_present": supabase is not None,
-                },
+                "usage_metering_decision path=%s status=%s identity=%s gateway=%s supabase_client_present=%s",
+                 request.url.path,
+                 response.status_code,
+                 identity[0] if identity else None,
+                 identity[1] if identity else None,
+                 supabase is not None,
             )
-
             if identity is not None and supabase is not None:
                 token_header = response.headers.get("x-token-usage", "0")
 
