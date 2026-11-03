@@ -1,5 +1,6 @@
 """Asynchronous Supabase access for persistent scrape caching and usage counts."""
 
+
 from __future__ import annotations
 
 import logging
@@ -28,8 +29,10 @@ CACHE_TTL = timedelta(hours=24)
 DATABASE_TIMEOUT_SECONDS = 2.0
 
 
+
 class CacheWriteFailed(RuntimeError):
     """Supabase accepted the request but did not return a persisted cache row."""
+
 
 
 @dataclass(frozen=True)
@@ -42,23 +45,41 @@ class CachedMarkdown:
     extracted_at: str = ""
 
 
+
 async def create_supabase_client(settings: Settings) -> AsyncClient | None:
     """Create a server-side client only when the private database key is configured."""
     if not settings.supabase_url or not settings.supabase_service_role_key:
         return None
 
+
     try:
         from supabase import create_async_client  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
     except ImportError as exc:
         raise RuntimeError(
-            "supabase package is not installed. Install it with `pip install supabase==2.15.0`."
+            "supabase package is not installed. Install it with `pip install supabase==2.33.0`."
         ) from exc
+
 
     return await create_async_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
+
 async def close_supabase_client(client: AsyncClient) -> None:
-    await client.aclose()
+    """Shut down a Supabase client using the installed SDK's supported API."""
+    auth = getattr(client, "auth", None)
+    sign_out = getattr(auth, "sign_out", None)
+
+
+    if sign_out is None:
+        return
+
+
+    result = sign_out()
+
+
+    if hasattr(result, "__await__"):
+        await result
+
 
 
 async def get_cached_markdown(
@@ -104,10 +125,12 @@ async def get_cached_markdown(
         logger.warning("supabase_cache_invalid_row")
         return None
 
+
     html_tokens = _safe_int(row.get("html_tokens"), default=0)
     tokens_saved_estimate = _safe_int(row.get("tokens_saved_estimate"), default=0)
     limiting_factor = row.get("limiting_factor")
     extracted_at = row.get("extracted_at")
+
 
     return CachedMarkdown(
         markdown=markdown,
@@ -117,6 +140,7 @@ async def get_cached_markdown(
         limiting_factor=(limiting_factor if isinstance(limiting_factor, str) and limiting_factor else "none"),
         extracted_at=(extracted_at if isinstance(extracted_at, str) and extracted_at else ""),
     )
+
 
 
 async def upsert_cached_markdown(
@@ -136,6 +160,7 @@ async def upsert_cached_markdown(
     """Store extracted text plus the economics needed to rehydrate cache hits.
 
 
+
     Raises CacheWriteFailed when Supabase does not return exactly one persisted
     row. The route already catches unexpected database failures and logs them
     without exposing URL material.
@@ -146,8 +171,10 @@ async def upsert_cached_markdown(
         # Do not persist empty extractions: they would poison later cache hits.
         raise ValueError("refusing to cache empty extraction")
 
+
     if extracted_at is None:
         extracted_at = datetime.now(UTC).isoformat()
+
 
     response = await (
         client.table("scrape_cache")
@@ -172,6 +199,7 @@ async def upsert_cached_markdown(
         .execute()
     )
 
+
     rows = getattr(response, "data", None)
     if not isinstance(rows, list) or len(rows) != 1:
         logger.warning(
@@ -182,11 +210,13 @@ async def upsert_cached_markdown(
         raise CacheWriteFailed("supabase did not return a persisted cache row")
 
 
+
 def _safe_int(value: Any, *, default: int = 0) -> int:
     """Coerce a database value to a non-negative integer without raising."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return default
     return max(0, int(value))
+
 
 
 async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> None:
@@ -197,8 +227,10 @@ async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> 
     ).execute()
 
 
+
 async def increment_token_usage(client: AsyncClient, rapidapi_user: str, tokens: int = 1, mode: str = "scrape") -> None:
     """Count one billable MCP execution with its token volume.
+
 
 
 
