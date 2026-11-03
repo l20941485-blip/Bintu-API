@@ -3,7 +3,7 @@ create table if not exists public.developer_usage (
     total_scrapes_counted bigint not null default 0,
     total_tokens_counted bigint not null default 0,
     gateway text not null default 'unknown',
-    last_mode text not null default 'scrape',
+    last_mode text not null default 'unspecified',
     updated_at timestamptz not null default now()
 );
 
@@ -11,7 +11,7 @@ alter table public.developer_usage
     add column if not exists total_scrapes_counted bigint not null default 0,
     add column if not exists total_tokens_counted bigint not null default 0,
     add column if not exists gateway text,
-    add column if not exists last_mode text not null default 'scrape',
+    add column if not exists last_mode text not null default 'unspecified',
     add column if not exists updated_at timestamptz not null default now();
 
 update public.developer_usage
@@ -25,7 +25,7 @@ where last_mode is null;
 alter table public.developer_usage
     alter column gateway set default 'unknown',
     alter column gateway set not null,
-    alter column last_mode set default 'scrape',
+    alter column last_mode set default 'unspecified',
     alter column last_mode set not null;
 
 alter table public.developer_usage enable row level security;
@@ -65,7 +65,23 @@ $$;
 
 grant execute on function public.increment_developer_usage(text, text, bigint, bigint, text) to service_role;
 
--- Keep the existing database.py RPC call shapes working while callers migrate.
+-- Keep legacy RPC call shapes working while callers migrate.
+create or replace function public.increment_developer_usage(
+    p_rapidapi_user text,
+    p_tokens bigint
+)
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+    select public.increment_developer_usage(
+        p_rapidapi_user, 'unknown', 1, p_tokens, 'scrape'
+    );
+$$;
+
+grant execute on function public.increment_developer_usage(text, bigint) to service_role;
+
 create or replace function public.increment_developer_usage(
     p_rapidapi_user text,
     p_tokens bigint,
