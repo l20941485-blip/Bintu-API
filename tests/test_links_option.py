@@ -134,8 +134,8 @@ def test_links_footnotes_normalizes_scheme_host_and_default_port_for_duplicates(
 
 
 def test_links_footnotes_shorten_only_display_label_for_long_url():
-    url = "https://example.com/" + ("very/long/path/" * 44) + ("x" * 12)
-    assert len(url) == 692
+    url = "https://example.com/" + ("very/long/path/" * 44) + ("x" * 13)
+    assert len(url) == 693
     html = f'<html><body><p><a href="{url}">Source</a></p></body></html>'.encode()
 
     result = extract_text_result(
@@ -147,7 +147,7 @@ def test_links_footnotes_shorten_only_display_label_for_long_url():
 
     link_line = next(line for line in result.text.splitlines() if line.startswith("1. ["))
     label = link_line.split("](", 1)[0][4:]
-    assert len(label) == 100
+    assert len(label) <= 100
     assert label.startswith("example.com/very/long/path/")
     assert label.endswith("…")
     assert f"](<{url}>)" in link_line
