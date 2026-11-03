@@ -79,7 +79,7 @@ class UpstreamErrorContractTests(unittest.TestCase):
         self.assertEqual(payload["detail"]["upstream_status"], 403)
         self._assert_privacy(response)
 
-    def test_target_429_maps_to_upstream_access_denied(self) -> None:
+    def test_target_429_maps_to_upstream_rate_limited(self) -> None:
         with (
             patch(
                 "bintu_api.routes._enforce_robots",
@@ -96,7 +96,7 @@ class UpstreamErrorContractTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(
             payload["detail"]["code"],
-            "upstream_access_denied",
+            "upstream_rate_limited",
         )
         self.assertEqual(payload["detail"]["upstream_status"], 429)
         self._assert_privacy(response)

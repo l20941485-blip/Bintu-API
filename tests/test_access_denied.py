@@ -46,12 +46,19 @@ class UpstreamAccessDeniedTests(unittest.TestCase):
         return caught.exception
 
     def test_denied_statuses_map_to_upstream_access_denied(self):
-        for status in (401, 402, 403, 429):
+        for status in (401, 402, 403):
             with self.subTest(status=status):
                 error = self._run(status)
                 self.assertEqual(error.status_code, 502)
                 self.assertEqual(error.detail["code"], "upstream_access_denied")
                 self.assertEqual(error.detail["upstream_status"], status)
+
+    def test_429_maps_to_upstream_rate_limited(self):
+        error = self._run(429)
+
+        self.assertEqual(error.status_code, 502)
+        self.assertEqual(error.detail["code"], "upstream_rate_limited")
+        self.assertEqual(error.detail["upstream_status"], 429)
 
     def test_other_statuses_stay_upstream_http_error(self):
         error = self._run(500)
