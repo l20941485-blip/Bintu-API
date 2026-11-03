@@ -1,4 +1,6 @@
-from bintu_api.scraper import extract_text_result
+import pytest
+
+from bintu_api.scraper import _compute_approx_tokens, extract_text_result
 
 
 def test_links_false_separates_link_and_span():
@@ -144,6 +146,7 @@ def test_links_footnotes_shorten_only_display_label_for_long_url():
         max_characters=1000,
         base_url="https://example.com/",
         links="footnotes",
+        footnote_url_policy="full",
         max_footnote_url_length=max_footnote_url_length,
     )
 
@@ -170,6 +173,86 @@ def test_links_footnotes_shorten_only_display_label_for_long_url():
     assert len(shorter_label) == 40
     assert shorter_label.endswith("…")
     assert shorter_target == url
+
+
+def test_links_footnotes_truncated_policy_caps_destination_and_reduces_tokens():
+    url = "https://example.com/" + ("very/long/path/" * 44) + ("x" * 13)
+    assert len(url) == 693
+    max_footnote_url_length = 100
+    html = f'<html><body><p><a href="{url}">Source</a></p></body></html>'.encode()
+
+    full_result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+        links="footnotes",
+        footnote_url_policy="full",
+        max_footnote_url_length=max_footnote_url_length,
+    )
+    truncated_result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+        links="footnotes",
+        footnote_url_policy="truncated",
+        max_footnote_url_length=max_footnote_url_length,
+    )
+
+    footnote_output = truncated_result.text.split("## Links\n", 1)[1]
+    footnote_line = footnote_output.strip()
+    visible_label = footnote_line.split("] —", 1)[0][4:]
+    truncated_destination = footnote_output.split("`", 2)[1]
+    assert len(visible_label) <= max_footnote_url_length
+    assert visible_label.endswith("…")
+    assert len(truncated_destination) <= max_footnote_url_length
+    assert truncated_destination.endswith("…")
+    assert url not in footnote_output
+    assert "](<" not in footnote_output
+    assert footnote_line == (
+        f"1. [{visible_label}] — truncated URL: "
+        f"`{truncated_destination}` (not clickable)"
+    )
+    assert _compute_approx_tokens(truncated_result.text) < _compute_approx_tokens(
+        full_result.text
+    )
+
+
+def test_legacy_footnote_display_length_alias_is_supported():
+    url = "https://example.com/" + ("path/" * 25)
+    html = f'<html><body><p><a href="{url}">Source</a></p></body></html>'.encode()
+
+    result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+        links="footnotes",
+        footnote_display_max_length=20,
+    )
+
+    footnote_line = next(line for line in result.text.splitlines() if line.startswith("1. ["))
+    label = footnote_line.split("](", 1)[0][4:]
+    assert len(label) == 20
+    assert label.endswith("…")
+
+
+def test_footnote_length_options_reject_conflicting_values():
+    html = (
+        b'<html><body><p><a href="https://example.com/long/path">'
+        b"Source</a></p></body></html>"
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Specify either max_footnote_url_length or footnote_display_max_length",
+    ):
+        extract_text_result(
+            html,
+            max_characters=1000,
+            base_url="https://example.com/",
+            links="footnotes",
+            max_footnote_url_length=40,
+            footnote_display_max_length=20,
+        )
 
 
 def test_links_inline_preserves_urls():

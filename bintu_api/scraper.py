@@ -12,6 +12,7 @@ import ssl
 import zlib
 from dataclasses import dataclass
 from email.message import Message
+from typing import Literal
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -1124,11 +1125,30 @@ def extract_text_result(
     from_encoding: str | None = None,
     base_url: str | None = None,
     links: str = "inline",
-    max_footnote_url_length: int = 100,
+    footnote_url_policy: Literal["full", "truncated"] = "full",
+    max_footnote_url_length: int | None = None,
+    footnote_display_max_length: int | None = None,
 ) -> ExtractedText:
-    """Extract visible text from HTML bytes."""
+    """Extract text; footnote URL length defaults to 100 and supports a deprecated alias."""
     if links not in {"inline", "footnotes", "false"}:
         raise ValueError("links must be one of: inline, footnotes, false")
+    if links == "footnotes" and footnote_url_policy not in {"full", "truncated"}:
+        raise ValueError("footnote_url_policy must be 'full' or 'truncated'")
+    if (
+        footnote_display_max_length is not None
+        and max_footnote_url_length is not None
+        and footnote_display_max_length != max_footnote_url_length
+    ):
+        raise ValueError(
+            "Specify either max_footnote_url_length or "
+            "footnote_display_max_length, not both"
+        )
+    if max_footnote_url_length is None:
+        max_footnote_url_length = (
+            footnote_display_max_length
+            if footnote_display_max_length is not None
+            else 100
+        )
     if links == "footnotes" and max_footnote_url_length < 1:
         raise ValueError("max_footnote_url_length must be greater than zero")
 
@@ -1406,9 +1426,23 @@ def extract_text_result(
                 .replace("[", "\\[")
                 .replace("]", "\\]")
             )
-            footnote_lines.append(
-                f"{index}. [{escaped_label}](<{destination}>)"
-            )
+            if (
+                footnote_url_policy == "truncated"
+                and len(destination) > max_footnote_url_length
+            ):
+                truncated_destination = _footnote_display_label(
+                    destination,
+                    max_footnote_url_length,
+                )
+                escaped_destination = truncated_destination.replace("`", "\\`")
+                footnote_lines.append(
+                    f"{index}. [{escaped_label}] — truncated URL: "
+                    f"`{escaped_destination}` (not clickable)"
+                )
+            else:
+                footnote_lines.append(
+                    f"{index}. [{escaped_label}](<{destination}>)"
+                )
         lines.extend(["", "## Links"])
         lines.extend(footnote_lines)
 
