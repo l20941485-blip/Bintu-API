@@ -136,6 +136,8 @@ INVALID_PARAMS = -32602
 # validators still recognise the envelope.
 AUTH_REQUIRED = -32001
 
+MAX_MCP_BODY_BYTES = 64 * 1024
+
 UPSTREAM_ACCESS_DENIED_STATUSES = (401, 402, 403)
 
 
@@ -152,6 +154,19 @@ def _rpc_error(request_id: Any, code: int, message: str, data: Any = None) -> di
 
 def _tool_error(message: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": message}], "isError": True}
+
+
+async def _read_mcp_body(request: Request) -> bytes | None:
+    content_length = request.headers.get("content-length", "")
+    if content_length.isdigit() and int(content_length) > MAX_MCP_BODY_BYTES:
+        return None
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_MCP_BODY_BYTES:
+            return None
+        body.extend(chunk)
+    return bytes(body)
 
 
 def _protocol_version_header(request: Request) -> str:
@@ -711,8 +726,15 @@ async def mcp_messages(request: Request):
             ),
         )
 
+    body = await _read_mcp_body(request)
+    if body is None:
+        return JSONResponse(
+            status_code=413,
+            content=_rpc_error(None, INVALID_REQUEST, "Request body too large."),
+        )
+
     try:
-        payload = json.loads(await request.body())
+        payload = json.loads(body)
     except json.JSONDecodeError:
         # Malformed JSON-RPC: HTTP 400 + parse error, id null per spec.
         return JSONResponse(

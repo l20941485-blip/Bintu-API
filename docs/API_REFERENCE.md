@@ -1,161 +1,163 @@
-﻿# API reference
+# API reference
 
-This page consolidates the public Bintu REST and MCP interfaces. For
-interactive request testing, open `/docs`; for the machine-readable OpenAPI
-schema, open `/openapi.json`.
+This reference describes the deployed Bintu REST and MCP interfaces. For
+interactive testing, use `/docs`; the live OpenAPI document is at
+`/openapi.json`.
 
-## Base URL
+## Base URL and authentication
 
 ```text
-[https://bintu-api.onrender.com](https://bintu-api.onrender.com)
+https://bintu-api.onrender.com
 ```
 
-## Authentication
+| Surface | Authentication |
+|---|---|
+| REST scrape and metrics | Master `API_KEY` in `X-API-Key`, or configured RapidAPI proxy authentication |
+| MCP discovery | No credential for `initialize`, `tools/list`, and `ping` |
+| MCP tool execution | Scoped `MCP_API_KEY` or master `API_KEY` in `X-API-Key` or `Authorization: Bearer` |
+| Mobile scrape | Supabase user access token in `Authorization: Bearer`; verified email required |
+| Reader | Master `API_KEY` in `X-API-Key`, or a verified RapidAPI subscriber identity |
 
-| Surface | Header | Accepted credentials |
-|---|---|---|
-| REST | `X-API-Key` | Master `API_KEY`; MCP-only keys do not unlock REST routes |
-| MCP | `X-API-Key` or `Authorization: Bearer` | Scoped `MCP_API_KEY` or master `API_KEY` |
-
-Strict authentication is enabled when `API_KEY` or `RAPIDAPI_PROXY_SECRET` is
-configured. Requests without a valid credential receive `401 invalid_api_key`.
+An MCP-scoped key does not grant REST access. Never put credentials in a URL
+or source code.
 
 ## REST endpoints
 
+### `GET /`
+
+Returns service status and the relative path to API documentation.
+
 ### `GET /healthz`
 
-Returns service health information.
-
-```http
-GET /healthz
-```
-
-Response fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `status` | string | `ok` when the service is healthy |
-| `service` | string | Service name |
-| `version` | string | Deployed application version |
-| `environment` | string | Deployment environment |
+Unauthenticated health and deployment metadata, including `status`, `version`,
+and, when supplied by Render, `commit` and `environment`.
 
 ### `GET /version`
 
-Returns the deployed application version.
-
-```http
-GET /version
-```
-
-Response fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `version` | string | Semantic application version |
-| `service` | string | Service name |
-| `environment` | string | Deployment environment |
+Returns non-secret service configuration, including version, fetch limits,
+rate limits, and cache TTL.
 
 ### `GET /metrics`
 
-Returns Prometheus-format service metrics.
+Returns Prometheus metrics. Requires the same service authentication as REST.
 
-```http
-GET /metrics
-```
+### `GET /api/v1/scrape/text`
 
-Response: `text/plain; version=0.0.4`
+Extracts readable text from a public HTML or XHTML page.
 
-### `POST /v1/extract-text`
+| Query parameter | Type | Default | Description |
+|---|---|---:|---|
+| `url` | string | required | Absolute public HTTP(S) URL |
+| `max_tokens` | integer | 6000 | Approximate response budget; 100–50,000 |
+| `include_nav` | boolean | false | Preserve navigation elements |
+| `include_header` | boolean | false | Preserve header elements |
+| `include_footer` | boolean | false | Preserve footer elements |
+| `render_js` | boolean | false | Request browser rendering; disabled unless enabled by the operator |
+| `links` | string | `inline` | `inline`, `footnotes`, or `false` |
+| `skip_cache` | boolean | false | Bypass cache reads |
+| `persist` | boolean | true | Allow a fresh successful result to be written to persistent cache |
 
-Extracts readable text from a public HTML page.
+The response includes the requested URL, extracted `text`, `truncated`,
+`limiting_factor`, approximate token counts, cache metadata, low-yield
+information, and optional provenance. `approx_tokens` is estimated as
+`ceil(characters / 4)`, not with a model tokenizer.
 
-```http
-POST /v1/extract-text
-Content-Type: application/json
-X-API-Key: <your-rest-api-key>
+### `POST /api/v1/scrape/chunks`
 
-{
-  "url": "[https://example.com/article](https://example.com/article)",
-  "max_tokens": 12000,
-  "chunk": false
-}
-```
+Uses the same fetch, authentication, robots, cache, and extraction pipeline,
+then returns ordered text chunks. The JSON body accepts `url`,
+`include_nav`, `include_header`, `include_footer`, and `render_js`.
+The `max_tokens` query parameter defaults to 6000 and accepts 100–50,000;
+it budgets each chunk. The decoded upstream HTML limit is 1 MiB, and the
+extracted-text ceiling is 200,000 characters.
 
-Request fields:
+### `POST /api/v1/mobile/scrape/text`
 
-| Field | Type | Required | Default | Description |
-|---|---:|---:|---:|---|
-| `url` | string | Yes | — | Public `http://` or `https://` HTML URL |
-| `max_tokens` | integer | No | `12000` | Approximate output-token budget |
-| `chunk` | boolean | No | `false` | Return text in continuation chunks |
-| `chunk_index` | integer | No | `0` | Chunk to request when `chunk=true` |
+Accepts a JSON body containing `url` and optional inclusion flags. Requires a
+valid Supabase user bearer token and verified email. Returns the standard
+scrape response.
 
-Response fields:
+### `POST /api/v1/reader/read` and `POST /api/v1/reader/continue`
 
-| Field | Type | Description |
+The reader fetches one page into a bounded text snapshot and returns pages
+using an opaque continuation cursor. Both endpoints require reader
+authentication. The initial request accepts `url`, `max_tokens` (1–6000,
+default 1000), and inclusion flags. Continuation accepts `cursor` and
+`max_tokens`. Snapshots are process-local, expire after 600 seconds, and may
+be evicted sooner; they are not shared across workers or instances.
+
+## MCP
+
+### Stateless Streamable HTTP: `POST /mcp`
+
+Send one JSON-RPC 2.0 message per `application/json` POST. The server returns a
+single JSON response; it does not create resumable sessions or push SSE
+messages.
+
+These methods are public discovery/liveness operations:
+
+- `initialize`
+- `tools/list`
+- `ping`
+
+`tools/call` requires the scoped `MCP_API_KEY` or master `API_KEY`.
+The advertised tool is `bintu_scrape_text`. Successful calls return the
+extraction envelope in `structuredContent` and as JSON in
+`content[0].text`. Tool execution errors are returned in-band with
+`isError: true`.
+
+`GET /mcp` returns an immediately closing, empty `text/event-stream`
+response. `GET /sse` and `GET /mcp/sse` are compatibility aliases.
+
+The MCP request body is limited to 64 KiB by the application. A deployment
+behind a trusted CDN, reverse proxy, or API gateway should enforce the same
+limit there as well.
+
+### Legacy MCP helpers
+
+`GET /mcp/tools` advertises the tool schema. `POST /mcp/tools/call` invokes
+the tool and requires MCP authentication.
+
+### Tool inputs and budgets
+
+`url` is required. Optional inputs include `mode` (`scrape`, `chunk`, or
+`summarize`; `chunked` is an alias), `max_tokens` (default 6000, range
+100–50,000), `links`, `render_js`, `cache`, and `persist`.
+Token counts are approximate. `summarize` selects leading text; it is not
+an AI-generated summary.
+
+## Error behavior
+
+REST errors use a JSON `detail` object with a stable `code` and `message`.
+MCP tool execution failures use the corresponding code in the in-band error
+text.
+
+| Condition | REST result | MCP tool error code |
 |---|---|---|
-| `url` | string | Final URL after redirects |
-| `title` | string or null | Extracted page title |
-| `content` | string | Extracted readable text |
-| `approx_tokens` | integer | Estimated tokens, calculated as `ceil(characters / 4)` |
-| `truncated` | boolean | Whether output was shortened |
-| `limiting_factor` | string | `char_cap`, `token_budget`, or `none` |
-| `low_yield` | boolean | Whether very little readable text was extracted |
-| `yield_hint` | string or null | Guidance for low-yield responses |
-| `chunk` | boolean | Whether chunk mode is active |
-| `chunk_index` | integer | Current chunk index |
-| `has_more` | boolean | Whether another chunk is available |
-| `next_chunk_index` | integer or null | Index of the next chunk |
-| `cache` | string | Cache result: `hit`, `miss`, or `disabled` |
-| `request_id` | string | Request correlation identifier |
+| Invalid or unsafe target URL | HTTP 400, `invalid_or_unsafe_url` | `invalid_or_unsafe_url` |
+| Robots disallow or robots unavailable | HTTP 403, `blocked_by_robots` or `robots_unreachable` | Same code |
+| Caller burst limit | HTTP 429, `burst_rate_limit_exceeded` | Same code |
+| Upstream returns HTTP 429 | HTTP 502, `upstream_rate_limited` | `upstream_rate_limited` |
+| Upstream returns HTTP 401, 402, or 403 | HTTP 502, `upstream_access_denied` | `upstream_access_denied` |
+| Other upstream HTTP error | HTTP 502, `upstream_http_error` | `upstream_http_error` |
+| Upstream body exceeds 1 MiB | HTTP 413, `payload_too_large` | `payload_too_large` |
+| Unsupported response media type | HTTP 415, `unsupported_media_type` | `unsupported_media_type` |
+| Request body exceeds MCP limit | HTTP 413, JSON-RPC `-32600` | Not applicable |
 
-## MCP tool
-
-### `bintu_scrape_text`
-
-Extracts readable text from a public HTML page through the MCP interface.
-
-Tool input:
-
-| Field | Type | Required | Default | Description |
-|---|---:|---:|---:|---|
-| `url` | string | Yes | — | Public `http://` or `https://` HTML URL |
-| `max_tokens` | integer | No | `12000` | Approximate output-token budget |
-| `chunk` | boolean | No | `false` | Return text in continuation chunks |
-| `chunk_index` | integer | No | `0` | Chunk to request when `chunk=true` |
-
-The tool returns the same core extraction fields as the REST endpoint, plus
-MCP-specific metadata where applicable.
-
-## Error codes
-
-| HTTP status | `detail.code` | Meaning |
-|---:|---|---|
-| 400 | `invalid_or_unsafe_url` | URL is missing, malformed, private, or unsafe |
-| 400 | `invalid_request` | Request body or parameters are invalid |
-| 401 | `invalid_api_key` | Credential is missing, invalid, or unauthorized for the route |
-| 403 | `blocked_by_robots` | Target robots.txt disallows the request |
-| 403 | `robots_unreachable` | robots.txt could not be retrieved while enforcement is enabled |
-| 413 | `payload_too_large` | Target HTML exceeds the 1 MiB limit |
-| 415 | `unsupported_media_type` | Target is not HTML or XHTML |
-| 429 | `burst_rate_limit_exceeded` | Short-term rate limit exceeded |
-| 500 | `internal_error` | Unexpected service error |
-| 500 | `auth_misconfiguration` | Strict auth is enabled without a valid service credential |
-| 502 | `unsupported_content_encoding` | Target uses unsupported or invalid compression |
-| 502 | `upstream_http_error` | Target returned an HTTP error |
-| 504 | `upstream_timeout` | Target did not respond in time |
-
-## Limits
+## Service limits
 
 | Limit | Value |
 |---|---:|
-| Maximum target HTML size | 1 MiB |
-| Default approximate token budget | 12,000 |
-| Supported target formats | HTML and XHTML |
-| Supported URL schemes | HTTP and HTTPS |
+| Decoded upstream HTML | 1 MiB |
+| Redirects | 5 |
+| Default scrape/MCP token budget | 6000 |
+| Scrape/MCP token budget range | 100–50,000 |
+| Extracted-text ceiling for chunk/MCP modes | 200,000 characters |
+| MCP JSON-RPC request body | 64 KiB |
+| Default burst limit | 60 requests per 60 seconds |
+| Default process-local cache TTL | 300 seconds |
 | JavaScript rendering | Disabled unless enabled by the operator |
 
-## Request correlation
-
-Send the `X-Request-ID` response header when reporting an issue. It correlates
-the request with service logs without exposing credentials or extracted content.
+`X-Request-ID` is returned for request correlation. Share it when reporting
+an issue; do not share API keys, bearer tokens, continuation cursors, or
+private page content.

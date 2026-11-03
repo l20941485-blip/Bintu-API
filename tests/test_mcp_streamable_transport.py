@@ -6,6 +6,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from bintu_api.mcp_streamable import MAX_MCP_BODY_BYTES
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -111,6 +112,39 @@ class McpStreamableTransportTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["error"]["code"], -32700)
         self.assertIsNone(payload["id"])
+
+    def test_oversized_declared_body_returns_request_too_large(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            headers={
+                **self.json_headers,
+                "Content-Length": str(MAX_MCP_BODY_BYTES + 1),
+            },
+            content=b"{}",
+        )
+
+        self.assertEqual(response.status_code, 413)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], -32600)
+        self.assertEqual(payload["error"]["message"], "Request body too large.")
+        self.assertIsNone(payload["id"])
+
+    def test_oversized_streamed_body_returns_request_too_large(self) -> None:
+        response = self.client.post(
+            "/mcp",
+            headers=self.json_headers,
+            content=iter(
+                [
+                    b" " * (MAX_MCP_BODY_BYTES // 2),
+                    b" " * (MAX_MCP_BODY_BYTES // 2 + 1),
+                ]
+            ),
+        )
+
+        self.assertEqual(response.status_code, 413)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], -32600)
+        self.assertEqual(payload["error"]["message"], "Request body too large.")
 
     def test_wrong_content_type_returns_invalid_request(self) -> None:
         response = self.client.post(
