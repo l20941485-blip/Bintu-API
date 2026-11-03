@@ -112,6 +112,7 @@ def test_rest_truncated_policy_preserves_full_default_and_reduces_tokens(client)
     truncated_text = truncated_response.json()["text"]
     assert LONG_URL not in truncated_text
     assert "…" in truncated_text
+    assert "[URL truncated]" in truncated_text
     assert (
         truncated_response.json()["approx_tokens"]
         < full_response.json()["approx_tokens"]
@@ -162,7 +163,7 @@ def test_rest_footnote_options_do_not_change_inline_links(client):
 
     assert response.status_code == 200
     assert LONG_URL in response.json()["text"]
-    assert "truncated URL" not in response.json()["text"]
+    assert "[URL truncated]" not in response.json()["text"]
 
 
 def test_mcp_discovery_exposes_footnote_policy_options(client):
@@ -209,6 +210,7 @@ def test_mcp_forwards_truncated_policy_to_footnote_extractor(
     text = _mcp_text(response, transport)
     assert LONG_URL not in text
     assert "…" in text
+    assert "[URL truncated]" in text
 
 
 @pytest.mark.parametrize(

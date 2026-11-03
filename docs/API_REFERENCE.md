@@ -63,7 +63,8 @@ Footnotes deduplicate equivalent destinations and cap their visible labels at
 `max_footnote_url_length`. With the default `footnote_url_policy=full`, the
 complete destination is retained. Set `footnote_url_policy=truncated` to
 replace over-limit destinations with a safe, non-clickable abbreviated
-display. Both options are ignored for other `links` modes.
+display, marked `[URL truncated]`. Both options are ignored for other
+`links` modes.
 
 The response includes the requested URL, extracted `text`, `truncated`,
 `limiting_factor`, approximate token counts, cache metadata, low-yield

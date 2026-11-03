@@ -1430,14 +1430,8 @@ def extract_text_result(
                 footnote_url_policy == "truncated"
                 and len(destination) > max_footnote_url_length
             ):
-                truncated_destination = _footnote_display_label(
-                    destination,
-                    max_footnote_url_length,
-                )
-                escaped_destination = truncated_destination.replace("`", "\\`")
                 footnote_lines.append(
-                    f"{index}. [{escaped_label}] — truncated URL: "
-                    f"`{escaped_destination}` (not clickable)"
+                    f"{index}. {escaped_label} [URL truncated]"
                 )
             else:
                 footnote_lines.append(

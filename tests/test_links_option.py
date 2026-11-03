@@ -200,18 +200,11 @@ def test_links_footnotes_truncated_policy_caps_destination_and_reduces_tokens():
 
     footnote_output = truncated_result.text.split("## Links\n", 1)[1]
     footnote_line = footnote_output.strip()
-    visible_label = footnote_line.split("] —", 1)[0][4:]
-    truncated_destination = footnote_output.split("`", 2)[1]
+    visible_label = footnote_line.split(" [URL truncated]", 1)[0][3:]
     assert len(visible_label) <= max_footnote_url_length
     assert visible_label.endswith("…")
-    assert len(truncated_destination) <= max_footnote_url_length
-    assert truncated_destination.endswith("…")
     assert url not in footnote_output
-    assert "](<" not in footnote_output
-    assert footnote_line == (
-        f"1. [{visible_label}] — truncated URL: "
-        f"`{truncated_destination}` (not clickable)"
-    )
+    assert footnote_line == f"1. {visible_label} [URL truncated]"
     assert _compute_approx_tokens(truncated_result.text) < _compute_approx_tokens(
         full_result.text
     )
