@@ -1125,7 +1125,7 @@ def extract_text_result(
     from_encoding: str | None = None,
     base_url: str | None = None,
     links: str = "inline",
-    footnote_url_policy: Literal["full", "truncated"] = "full",
+    footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int | None = None,
     footnote_display_max_length: int | None = None,
 ) -> ExtractedText:

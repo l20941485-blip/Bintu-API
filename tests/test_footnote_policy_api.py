@@ -73,7 +73,7 @@ def test_rest_openapi_exposes_footnote_policy_options(client):
 
     policy_schema = parameters["footnote_url_policy"]["schema"]
     assert policy_schema["enum"] == ["full", "truncated"]
-    assert policy_schema["default"] == "full"
+    assert policy_schema["default"] == "truncated"
 
     length_schema = parameters["max_footnote_url_length"]["schema"]
     assert length_schema["type"] == "integer"
@@ -81,7 +81,7 @@ def test_rest_openapi_exposes_footnote_policy_options(client):
     assert length_schema["default"] == 100
 
 
-def test_rest_truncated_policy_preserves_full_default_and_reduces_tokens(client):
+def test_rest_default_policy_truncates_and_reduces_tokens(client):
     with patch(
         "bintu_api.routes.fetch_html_document",
         return_value=FetchedHTML(body=LONG_URL_HTML, charset="utf-8"),
@@ -100,7 +100,6 @@ def test_rest_truncated_policy_preserves_full_default_and_reduces_tokens(client)
             params={
                 "url": PAGE_URL,
                 "links": "footnotes",
-                "footnote_url_policy": "truncated",
                 "max_footnote_url_length": 100,
                 "skip_cache": "true",
             },
@@ -113,6 +112,8 @@ def test_rest_truncated_policy_preserves_full_default_and_reduces_tokens(client)
     assert LONG_URL not in truncated_text
     assert "…" in truncated_text
     assert "[URL truncated]" in truncated_text
+    assert truncated_text.count("[URL truncated]") == 1
+    assert "`" not in truncated_text
     assert (
         truncated_response.json()["approx_tokens"]
         < full_response.json()["approx_tokens"]
@@ -179,14 +180,14 @@ def test_mcp_discovery_exposes_footnote_policy_options(client):
             "full",
             "truncated",
         ]
-        assert properties["footnote_url_policy"]["default"] == "full"
+        assert properties["footnote_url_policy"]["default"] == "truncated"
         assert properties["max_footnote_url_length"]["type"] == "integer"
         assert properties["max_footnote_url_length"]["minimum"] == 1
         assert properties["max_footnote_url_length"]["default"] == 100
 
 
 @pytest.mark.parametrize("transport", ["legacy", "streamable"])
-def test_mcp_forwards_truncated_policy_to_footnote_extractor(
+def test_mcp_defaults_to_truncated_policy_for_footnote_extractor(
     client,
     transport,
 ):
@@ -200,7 +201,6 @@ def test_mcp_forwards_truncated_policy_to_footnote_extractor(
             {
                 "url": PAGE_URL,
                 "links": "footnotes",
-                "footnote_url_policy": "truncated",
                 "max_footnote_url_length": 100,
                 "cache": False,
             },
@@ -211,6 +211,8 @@ def test_mcp_forwards_truncated_policy_to_footnote_extractor(
     assert LONG_URL not in text
     assert "…" in text
     assert "[URL truncated]" in text
+    assert text.count("[URL truncated]") == 1
+    assert "`" not in text
 
 
 @pytest.mark.parametrize(

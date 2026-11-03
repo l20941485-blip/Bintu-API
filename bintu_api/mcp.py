@@ -223,10 +223,10 @@ TOOL_INPUT_SCHEMA = {
         "footnote_url_policy": {
             "type": "string",
             "enum": ["full", "truncated"],
-            "default": "full",
+            "default": "truncated",
             "description": (
-                "For links=footnotes only, preserve complete URL destinations "
-                "or replace over-limit destinations with non-clickable truncated text."
+                "For links=footnotes only, choose full URL destinations or "
+                "replace over-limit destinations with non-clickable truncated text."
             ),
         },
         "max_footnote_url_length": {
@@ -315,7 +315,7 @@ class ToolArguments(BaseModel):
     url: str
     render_js: bool = False
     links: Literal["inline", "footnotes", "false"] = "inline"
-    footnote_url_policy: Literal["full", "truncated"] = "full"
+    footnote_url_policy: Literal["full", "truncated"] = "truncated"
     max_footnote_url_length: StrictInt = Field(default=100, gt=0)
     mode: str = "scrape"
     max_tokens: int = Field(

@@ -166,16 +166,16 @@ def test_links_footnotes_shorten_only_display_label_for_long_url():
         max_footnote_url_length=40,
     )
     shorter_line = next(
-        line for line in shorter_result.text.splitlines() if line.startswith("1. [")
+        line for line in shorter_result.text.splitlines() if line.startswith("1. ")
     )
-    shorter_label = shorter_line.split("](", 1)[0][4:]
-    shorter_target = shorter_line.split("](<", 1)[1][:-2]
+    shorter_label = shorter_line.split(" [URL truncated]", 1)[0][3:]
     assert len(shorter_label) == 40
     assert shorter_label.endswith("…")
-    assert shorter_target == url
+    assert url not in shorter_line
+    assert shorter_line == f"1. {shorter_label} [URL truncated]"
 
 
-def test_links_footnotes_truncated_policy_caps_destination_and_reduces_tokens():
+def test_links_footnotes_default_policy_truncates_and_reduces_tokens():
     url = "https://example.com/" + ("very/long/path/" * 44) + ("x" * 13)
     assert len(url) == 693
     max_footnote_url_length = 100
@@ -189,7 +189,14 @@ def test_links_footnotes_truncated_policy_caps_destination_and_reduces_tokens():
         footnote_url_policy="full",
         max_footnote_url_length=max_footnote_url_length,
     )
-    truncated_result = extract_text_result(
+    default_result = extract_text_result(
+        html,
+        max_characters=1000,
+        base_url="https://example.com/",
+        links="footnotes",
+        max_footnote_url_length=max_footnote_url_length,
+    )
+    explicit_truncated_result = extract_text_result(
         html,
         max_characters=1000,
         base_url="https://example.com/",
@@ -198,14 +205,17 @@ def test_links_footnotes_truncated_policy_caps_destination_and_reduces_tokens():
         max_footnote_url_length=max_footnote_url_length,
     )
 
-    footnote_output = truncated_result.text.split("## Links\n", 1)[1]
+    footnote_output = default_result.text.split("## Links\n", 1)[1]
     footnote_line = footnote_output.strip()
     visible_label = footnote_line.split(" [URL truncated]", 1)[0][3:]
     assert len(visible_label) <= max_footnote_url_length
     assert visible_label.endswith("…")
     assert url not in footnote_output
+    assert footnote_output.count("[URL truncated]") == 1
+    assert "`" not in footnote_output
     assert footnote_line == f"1. {visible_label} [URL truncated]"
-    assert _compute_approx_tokens(truncated_result.text) < _compute_approx_tokens(
+    assert explicit_truncated_result.text == default_result.text
+    assert _compute_approx_tokens(default_result.text) < _compute_approx_tokens(
         full_result.text
     )
 
@@ -222,10 +232,11 @@ def test_legacy_footnote_display_length_alias_is_supported():
         footnote_display_max_length=20,
     )
 
-    footnote_line = next(line for line in result.text.splitlines() if line.startswith("1. ["))
-    label = footnote_line.split("](", 1)[0][4:]
+    footnote_line = next(line for line in result.text.splitlines() if line.startswith("1. "))
+    label = footnote_line.split(" [URL truncated]", 1)[0][3:]
     assert len(label) == 20
     assert label.endswith("…")
+    assert footnote_line == f"1. {label} [URL truncated]"
 
 
 def test_footnote_length_options_reject_conflicting_values():

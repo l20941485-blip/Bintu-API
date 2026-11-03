@@ -318,7 +318,7 @@ async def scrape_text(
     include_footer: bool = False,
     render_js: bool = False,
     links: Literal["inline", "footnotes", "false"] = "inline",
-    footnote_url_policy: Literal["full", "truncated"] = "full",
+    footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = Query(default=100, gt=0),
     skip_cache: bool = False,
     persist: bool = True,
@@ -752,7 +752,7 @@ async def _fetch_and_extract(
     persist: bool = True,
     mode: str = "scrape",
     max_tokens: int = 6000,
-    footnote_url_policy: Literal["full", "truncated"] = "full",
+    footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
@@ -944,7 +944,7 @@ async def _scrape_text(
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
-    footnote_url_policy: Literal["full", "truncated"] = "full",
+    footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
