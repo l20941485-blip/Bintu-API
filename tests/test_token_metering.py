@@ -167,7 +167,84 @@ class TokenMeteringTests(unittest.TestCase):
                     "arguments": {"url": "https://example.com/hdr2"},
                 },
             )
-        self.assertIn("approx_tokens=", response.headers["x-token-usage"])
+        self.assertTrue(response.headers["x-token-usage"].isdigit())
+        self.assertEqual(response.headers["x-mode"], "scrape")
+
+    def test_successful_tools_call_increments_developer_usage_once(self) -> None:
+        supabase = mock.Mock()
+        supabase.rpc.return_value.execute = mock.AsyncMock()
+        self.app.state.supabase_client = supabase
+
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=b"<main>Metered success</main>", charset=None),
+        ):
+            response = self.client.post(
+                "/mcp",
+                headers={"x-user-id": "metering-test"},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "bintu_scrape_text",
+                        "arguments": {"url": "https://example.com/metered"},
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        token_usage = response.headers["x-token-usage"]
+        self.assertTrue(token_usage.isdigit())
+        self.assertEqual(response.headers["x-mode"], "scrape")
+        supabase.rpc.assert_called_once_with(
+            "increment_developer_usage",
+            {
+                "p_rapidapi_user": "local:metering-test",
+                "p_gateway": "local",
+                "p_scrapes": 1,
+                "p_tokens": int(token_usage),
+                "p_mode": "scrape",
+            },
+        )
+        supabase.rpc.return_value.execute.assert_awaited_once()
+
+    def test_non_billable_mcp_requests_do_not_increment_developer_usage(self) -> None:
+        supabase = mock.Mock()
+        supabase.rpc.return_value.execute = mock.AsyncMock()
+        self.app.state.supabase_client = supabase
+
+        requests = (
+            self.client.post(
+                "/mcp",
+                headers={"x-user-id": "metering-test"},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {"protocolVersion": "2025-11-25"},
+                },
+            ),
+            self.client.post(
+                "/mcp",
+                headers={"x-user-id": "metering-test"},
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+            ),
+            self.client.post(
+                "/mcp",
+                headers={"x-user-id": "metering-test"},
+                json={"jsonrpc": "2.0", "id": 3, "method": "ping"},
+            ),
+            self.client.get("/mcp", headers={"x-user-id": "metering-test"}),
+            self.client.options("/mcp", headers={"x-user-id": "metering-test"}),
+        )
+
+        self.assertEqual(
+            [response.status_code for response in requests[:4]],
+            [200, 200, 200, 200],
+        )
+        self.assertEqual(requests[4].request.method, "OPTIONS")
+        supabase.rpc.assert_not_called()
 
     def test_schema_documents_pitch_aliases(self) -> None:
         mode_desc = TOOL_INPUT_SCHEMA["properties"]["mode"]["description"]
@@ -499,7 +576,8 @@ class TokenMeteringTests(unittest.TestCase):
                 },
             )
         self.assertIn("x-token-usage", response.headers)
-        self.assertIn("tokens=", response.headers["x-token-usage"])
+        self.assertTrue(response.headers["x-token-usage"].isdigit())
+        self.assertEqual(response.headers["x-mode"], "scrape")
 
     def test_approx_tokens_calculation(self) -> None:
         """Phase D: _compute_approx_tokens uses ceil(characters/4) whitespace-split tokenizer."""

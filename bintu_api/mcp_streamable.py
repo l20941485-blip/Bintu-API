@@ -64,7 +64,6 @@ from bintu_api.context import (
     extract_context,
     normalize_mode,
 )
-from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_token_usage
 from bintu_api.mcp import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -77,7 +76,6 @@ from bintu_api.mcp import (
 from bintu_api.observability import (
     log_extraction_completed,
     log_extraction_failed,
-    log_token_metering_failure,
 )
 from bintu_api.scraper import (
     PayloadTooLarge,
@@ -308,20 +306,6 @@ def _failure_code_for_error(error: Exception) -> str:
     if isinstance(error, (TimeoutError, socket.timeout)):
         return "upstream_timeout"
     return "upstream_connection_error"
-
-
-def _metering_identity(request: Request, settings: Settings) -> str:
-    """Identity for token metering: RapidAPI subscriber, MCP key, or IP.
-
-    Reuses the same bucket as rate limiting: a keyed caller is metered under
-    its key fingerprint (without the raw secret), not under the gateway's IP.
-    """
-    identity = mcp_rate_limit_identity(request, settings)
-    if identity.startswith("rapidapi:"):
-        return identity.split("rapidapi:", 1)[1]
-    if identity.startswith("mcp:"):
-        return identity
-    return f"mcp:{identity}"
 
 
 def _initialize_result(settings: Settings, request_id: Any, params: dict[str, Any]) -> dict[str, Any]:
@@ -662,23 +646,6 @@ async def _tools_call_result(
         # Add provenance additively (Phase D)
         **provenance_dict,
     }
-
-    # Fire-and-forget token metering (2s, never blocks extraction): counts
-    # even cache hits so dashboards can bill per token slice.
-    if request.app.state.supabase_client is not None:
-        try:
-            await asyncio.wait_for(
-                increment_token_usage(
-                    request.app.state.supabase_client,
-                    _metering_identity(request, settings),
-                    tokens=context.tokens,
-                    mode=context.mode,
-                ),
-                timeout=DATABASE_TIMEOUT_SECONDS,
-            )
-        except Exception as error:
-            log_token_metering_failure(error)
-
     return _rpc_result(
         request_id,
         {
@@ -847,12 +814,8 @@ async def mcp_messages(request: Request):
             envelope = json.loads(text) if isinstance(text, str) and text.startswith("{") else {}
             approx = envelope.get("approx_tokens", envelope.get("tokens", 0))
             if isinstance(envelope, dict) and ("approx_tokens" in envelope or "tokens" in envelope):
-                response.headers["X-Token-Usage"] = (
-                    f"approx_tokens={approx}, "
-                    f"tokens={approx}, "
-                    f"chunks={envelope.get('chunk_count', 0)}, "
-                    f"cache_hit={1 if envelope.get('cache_hit') else 0}"
-                )
+                response.headers["X-Token-Usage"] = str(max(0, int(approx)))
+                response.headers["X-Mode"] = str(envelope.get("mode", ""))
         except Exception:
             pass
         return response

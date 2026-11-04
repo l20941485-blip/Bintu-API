@@ -1,11 +1,9 @@
 import hashlib
 import logging
 
-
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-
 
 from bintu_api.auth import has_valid_proxy_secret
 from bintu_api.settings import Settings
@@ -20,6 +18,13 @@ EXCLUDED_PATHS = {
     "/docs",
     "/redoc",
     "/openapi.json",
+}
+
+# Only requests that represent a completed billable operation should be
+# metered by middleware. MCP discovery endpoints, health checks, and REST
+# routes that meter themselves directly are intentionally excluded.
+METERED_PATHS = {
+    "/mcp",
 }
 
 
@@ -98,9 +103,10 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         should_meter = (
-            request.method != "OPTIONS"
-            and request.url.path not in EXCLUDED_PATHS
+            request.method == "POST"
+            and request.url.path in METERED_PATHS
             and 200 <= response.status_code < 400
+            and response.headers.get("x-token-usage") is not None
         )
 
         if should_meter:
@@ -110,12 +116,13 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
 
             logger.info(
                 "usage_metering_decision path=%s status=%s identity=%s gateway=%s supabase_client_present=%s",
-                 request.url.path,
-                 response.status_code,
-                 identity[0] if identity else None,
-                 identity[1] if identity else None,
-                 supabase is not None,
+                request.url.path,
+                response.status_code,
+                identity[0] if identity else None,
+                identity[1] if identity else None,
+                supabase is not None,
             )
+
             if identity is not None and supabase is not None:
                 token_header = response.headers.get("x-token-usage", "0")
 
@@ -130,7 +137,11 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
                     gateway=identity[1],
                     scrapes=1,
                     tokens=tokens,
-                    mode=request.headers.get("x-mode") or "unspecified",
+                    mode=(
+                        response.headers.get("x-mode")
+                        or request.headers.get("x-mode")
+                        or "unspecified"
+                    ),
                 )
 
         return response
