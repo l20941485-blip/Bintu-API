@@ -1,10 +1,3 @@
-from dataclasses import dataclass
+from bintu_api.errors.tool_errors import ToolError
 
-
-@dataclass(frozen=True)
-class ToolError:
-    code: str
-    message: str
-    hint: str | None = None
-    retryable: bool = False
-    retry_with: str | None = None
+__all__ = ["ToolError"]

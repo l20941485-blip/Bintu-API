@@ -1,0 +1,52 @@
+from bintu_api.errors.codes import ERROR_CODES
+from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
+from bintu_api.tool_errors import ToolError as LegacyToolError
+
+
+def test_legacy_tool_error_import_is_backward_compatible():
+    assert LegacyToolError is ToolError
+
+
+def test_tool_error_result_preserves_existing_optional_field_behavior():
+    result = build_mcp_tool_error_result(ToolError("example_error", "A message."))
+
+    assert result == {
+        "content": [{"type": "text", "text": "example_error: A message"}],
+        "structuredContent": {
+            "error": {
+                "code": "example_error",
+                "message": "A message.",
+                "retryable": False,
+            }
+        },
+        "isError": True,
+    }
+
+
+def test_tool_error_result_includes_hint_retryable_and_retry_with():
+    result = build_mcp_tool_error_result(
+        ToolError(
+            "upstream_rate_limited",
+            "The target is rate limiting requests.",
+            hint="Wait before retrying.",
+            retryable=True,
+            retry_with="retry_after_delay",
+        )
+    )
+
+    error = result["structuredContent"]["error"]
+    assert error["hint"] == "Wait before retrying."
+    assert error["retryable"] is True
+    assert error["retry_with"] == "retry_after_delay"
+    assert result["content"][0]["text"].endswith(". Hint: Wait before retrying.")
+
+
+def test_error_code_catalog_contains_existing_application_codes():
+    assert {
+        "invalid_or_unsafe_url",
+        "upstream_rate_limited",
+        "blocked_by_robots",
+        "premium_required",
+        "reader_snapshot_unavailable",
+    } <= ERROR_CODES
+    assert all(code == code.lower() and code.replace("_", "").isalnum() for code in ERROR_CODES)

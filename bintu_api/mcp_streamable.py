@@ -46,7 +46,6 @@ import json
 import logging
 import socket
 import time
-from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -65,6 +64,7 @@ from bintu_api.context import (
     extract_context,
     normalize_mode,
 )
+from bintu_api.errors.tool_errors import build_mcp_tool_error_result
 from bintu_api.mcp import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -153,21 +153,7 @@ def _rpc_error(request_id: Any, code: int, message: str, data: Any = None) -> di
 
 
 def _tool_error_result(error: ToolError) -> dict[str, Any]:
-    structured_error = asdict(error)
-    if error.hint is None:
-        structured_error.pop("hint")
-    if error.retry_with is None:
-        structured_error.pop("retry_with")
-
-    text = f"{error.code}: {error.message.rstrip('. ')}"
-    if error.hint:
-        text += f". Hint: {error.hint}"
-
-    return {
-        "content": [{"type": "text", "text": text}],
-        "structuredContent": {"error": structured_error},
-        "isError": True,
-    }
+    return build_mcp_tool_error_result(error)
 
 
 def _tool_error_for_http_exception(error: HTTPException) -> ToolError:
