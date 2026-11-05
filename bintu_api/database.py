@@ -7,7 +7,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-from bintu_api.settings import Settings
+from bintu_api.integrations.supabase import (
+    DATABASE_TIMEOUT_SECONDS,  # noqa: F401
+    close_supabase_client,  # noqa: F401
+    create_supabase_client,  # noqa: F401
+)
+from bintu_api.metering.supabase import (  # noqa: F401
+    increment_developer_usage,
+    increment_token_usage,
+)
 
 if TYPE_CHECKING:
     from supabase import AsyncClient  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
@@ -25,7 +33,6 @@ logger = logging.getLogger("bintu_api.database")
 # Bump when extracted Markdown or its stored metadata changes.
 EXTRACTOR_VERSION = "2026-10-30.1"
 CACHE_TTL = timedelta(hours=24)
-DATABASE_TIMEOUT_SECONDS = 2.0
 
 
 class CacheWriteFailed(RuntimeError):
@@ -40,35 +47,6 @@ class CachedMarkdown:
     tokens_saved_estimate: int = 0
     limiting_factor: str = "none"
     extracted_at: str = ""
-
-
-async def create_supabase_client(settings: Settings) -> AsyncClient | None:
-    """Create a server-side client only when the private database key is configured."""
-    if not settings.supabase_url or not settings.supabase_service_role_key:
-        return None
-
-    try:
-        from supabase import create_async_client  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]
-    except ImportError as exc:
-        raise RuntimeError(
-            "supabase package is not installed. Install it with `pip install supabase==2.33.0`."
-        ) from exc
-
-    return await create_async_client(settings.supabase_url, settings.supabase_service_role_key)
-
-
-async def close_supabase_client(client: AsyncClient) -> None:
-    """Shut down a Supabase client using the installed SDK's supported API."""
-    auth = getattr(client, "auth", None)
-    sign_out = getattr(auth, "sign_out", None)
-
-    if sign_out is None:
-        return
-
-    result = sign_out()
-
-    if hasattr(result, "__await__"):
-        await result
 
 
 async def get_cached_markdown(
@@ -198,31 +176,3 @@ def _safe_int(value: Any, *, default: int = 0) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return default
     return max(0, int(value))
-
-
-async def increment_developer_usage(client: AsyncClient, rapidapi_user: str) -> None:
-    """Increment usage atomically via the SQL function documented in the migration."""
-    await client.rpc(
-        "increment_developer_usage",
-        {"p_rapidapi_user": rapidapi_user},
-    ).execute()
-
-
-async def increment_token_usage(client: AsyncClient, rapidapi_user: str, tokens: int = 1, mode: str = "scrape") -> None:
-    """Count one billable MCP execution with its token volume.
-
-
-
-
-    Fire-and-forget with a 2s timeout at the call site (never blocks
-    extraction); counts even cache hits so dashboards can bill per token
-    slice. No tier caps enforced here — marketplaces own quota.
-    """
-    await client.rpc(
-        "increment_developer_usage",
-        {
-            "p_rapidapi_user": rapidapi_user,
-            "p_tokens": max(0, int(tokens)),
-            "p_mode": mode,
-        },
-    ).execute()

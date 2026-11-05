@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from bintu_api.usage import UsageMeteringMiddleware
 from bintu_api.auth import verify_api_access
 from bintu_api.cache import TTLCache
 from bintu_api.database import (
@@ -18,6 +17,7 @@ from bintu_api.database import (
 from bintu_api.discovery import router as discovery_router
 from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp_streamable import router as mcp_streamable_router
+from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
 from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.reader_routes import router as reader_router

@@ -34,10 +34,10 @@ from bintu_api.database import (
     DATABASE_TIMEOUT_SECONDS,
     CachedMarkdown,
     get_cached_markdown,
-    increment_developer_usage,
     upsert_cached_markdown,
 )
 from bintu_api.final_fixes import has_credential_params
+from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.observability import (
     log_cache_event,
     log_extraction_completed,
@@ -974,19 +974,14 @@ async def _scrape_text(
         if request.app.state.supabase_client is not None and has_valid_proxy_secret(request, settings):
             rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
             if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
-                try:
-                    await asyncio.wait_for(
-                        increment_developer_usage(
-                            request.app.state.supabase_client,
-                            rapidapi_user,
-                        ),
-                        timeout=DATABASE_TIMEOUT_SECONDS,
-                    )
-                except Exception as error:
-                    logger.warning(
-                        "supabase_usage_increment_failed error_type=%s",
-                        type(error).__name__,
-                    )
+                queue_usage_event(
+                    request,
+                    UsageEvent(
+                        identity=rapidapi_user,
+                        legacy_rpc=True,
+                        source="rest",
+                    ),
+                )
 
         response = _build_response(
             url,

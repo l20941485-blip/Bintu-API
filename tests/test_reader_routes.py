@@ -5,6 +5,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.rate_limit import BurstRateLimiter
 from bintu_api.reader_routes import router
 from bintu_api.reader_store import SnapshotStore
@@ -30,6 +31,7 @@ def env():
     app.state.rate_limiter = BurstRateLimiter(config)
     app.state.reader_store = SnapshotStore()
     app.state.supabase_client = None
+    app.add_middleware(UsageMeteringMiddleware)
     app.include_router(router)
 
     html = "<main>" + "<p>Documentation paragraph.</p>" * 500 + "<p>READER_END_MARKER</p></main>"
@@ -258,7 +260,7 @@ def test_gateway_usage_counts_successful_initial_and_continuation(env):
     env.app.state.supabase_client = database
 
     with patch(
-        "bintu_api.reader_routes.increment_developer_usage",
+        "bintu_api.metering.service.increment_developer_usage",
         new=AsyncMock(),
     ) as usage:
         first = initial(env, headers=gateway("alice"))
@@ -279,7 +281,7 @@ def test_usage_failure_does_not_fail_successful_read(env):
     env.app.state.supabase_client = object()
 
     with patch(
-        "bintu_api.reader_routes.increment_developer_usage",
+        "bintu_api.metering.service.increment_developer_usage",
         new=AsyncMock(side_effect=RuntimeError("private diagnostic")),
     ):
         response = initial(env, headers=gateway("alice"))

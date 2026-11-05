@@ -565,7 +565,7 @@ class ScraperApiTests(unittest.TestCase):
                 ),
             ),
             patch(
-                "bintu_api.routes.increment_developer_usage",
+                "bintu_api.metering.service.increment_developer_usage",
                 new=AsyncMock(),
             ) as increment,
         ):
