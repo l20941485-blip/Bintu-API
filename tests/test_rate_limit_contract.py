@@ -63,7 +63,7 @@ class RateLimitContractTests(unittest.TestCase):
         )
         self._assert_rate_limited(response)
 
-    def test_streamable_mcp_returns_429_with_retry_after(self) -> None:
+    def test_streamable_mcp_returns_structured_rate_limit_error(self) -> None:
         response = self.client.post(
             "/mcp",
             headers={
@@ -81,7 +81,15 @@ class RateLimitContractTests(unittest.TestCase):
                 },
             },
         )
-        self._assert_rate_limited(response)
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["result"]
+        self.assertTrue(result["isError"])
+        self.assertIn("upstream_rate_limited", result["content"][0]["text"])
+        error = result["structuredContent"]["error"]
+        self.assertEqual(error["code"], "upstream_rate_limited")
+        self.assertTrue(error["retryable"])
+        self.assertEqual(error["retry_with"], "retry_after_delay")
+        self.assertNotIn("identity", response.text.lower())
 
 
 if __name__ == "__main__":

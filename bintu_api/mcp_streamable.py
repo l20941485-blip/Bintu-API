@@ -46,6 +46,7 @@ import json
 import logging
 import socket
 import time
+from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -87,6 +88,7 @@ from bintu_api.scraper import (
     UpstreamRenderError,
 )
 from bintu_api.settings import Settings
+from bintu_api.tool_errors import ToolError
 
 logger = logging.getLogger("bintu_api.mcp_streamable")
 
@@ -150,8 +152,218 @@ def _rpc_error(request_id: Any, code: int, message: str, data: Any = None) -> di
     return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
 
-def _tool_error(message: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": message}], "isError": True}
+def _tool_error_result(error: ToolError) -> dict[str, Any]:
+    structured_error = asdict(error)
+    if error.hint is None:
+        structured_error.pop("hint")
+    if error.retry_with is None:
+        structured_error.pop("retry_with")
+
+    text = f"{error.code}: {error.message.rstrip('. ')}"
+    if error.hint:
+        text += f". Hint: {error.hint}"
+
+    return {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": {"error": structured_error},
+        "isError": True,
+    }
+
+
+def _tool_error_for_http_exception(error: HTTPException) -> ToolError:
+    detail = error.detail if isinstance(error.detail, dict) else {}
+    code = detail.get("code")
+    message = detail.get("message")
+    hint = detail.get("hint")
+
+    if code == "render_js_disabled":
+        return ToolError(
+            "render_js_disabled",
+            "JavaScript rendering is disabled on this service.",
+            "Retry with render_js=false for plain HTML extraction.",
+            retry_with="render_js=false",
+        )
+    if code == "invalid_or_unsafe_url":
+        return ToolError(
+            "invalid_or_unsafe_url",
+            "The target URL is invalid or unsafe.",
+            "Use an absolute public HTTP or HTTPS URL.",
+        )
+    if code == "robots_unreachable":
+        return ToolError(
+            "upstream_connection_error",
+            str(message or "The site's robots.txt could not be retrieved."),
+            str(hint or "Retry later or use another public URL."),
+            retryable=True,
+            retry_with="retry_later",
+        )
+    if code == "blocked_by_robots":
+        return ToolError(
+            "upstream_access_denied",
+            str(message or "The site does not permit this request."),
+            str(hint or "Respect the site's robots.txt rules."),
+        )
+    if code == "burst_rate_limit_exceeded":
+        return ToolError(
+            "upstream_rate_limited",
+            str(message or "The request rate limit was exceeded."),
+            "Wait for the Retry-After interval before retrying.",
+            retryable=True,
+            retry_with="retry_after_delay",
+        )
+
+    if isinstance(code, str) and code in {
+        "invalid_arguments",
+        "invalid_or_unsafe_url",
+        "unsupported_media_type",
+        "unsupported_content_encoding",
+        "payload_too_large",
+        "too_many_redirects",
+        "upstream_http_error",
+        "upstream_rate_limited",
+        "upstream_access_denied",
+        "upstream_timeout",
+        "upstream_connection_error",
+        "upstream_render_error",
+        "render_js_disabled",
+    }:
+        retryable = code in {
+            "upstream_rate_limited",
+            "upstream_timeout",
+            "upstream_connection_error",
+        } or (code == "upstream_http_error" and error.status_code >= 500)
+        retry_with = (
+            "retry_after_delay"
+            if code == "upstream_rate_limited"
+            else "retry_later"
+            if retryable
+            else "render_js=false"
+            if code in {"render_js_disabled", "upstream_render_error"}
+            else None
+        )
+        return ToolError(
+            code,
+            str(message or "The tool request could not be completed."),
+            str(hint) if hint else None,
+            retryable=retryable,
+            retry_with=retry_with,
+        )
+
+    if error.status_code == 413:
+        return ToolError("payload_too_large", "The page exceeds the 1 MiB size limit.")
+    if error.status_code == 415:
+        return ToolError(
+            "unsupported_media_type",
+            "Only HTML and XHTML pages are supported.",
+            "Use a public HTML page.",
+        )
+    if error.status_code == 429:
+        return ToolError(
+            "upstream_rate_limited",
+            "The target is rate limiting requests.",
+            "Retry after a short delay or use another public URL.",
+            retryable=True,
+            retry_with="retry_after_delay",
+        )
+    if error.status_code in {401, 402, 403}:
+        return ToolError(
+            "upstream_access_denied",
+            "The target denied access.",
+            "Try another public URL.",
+        )
+    if error.status_code == 504:
+        return ToolError(
+            "upstream_timeout",
+            "The target did not respond in time.",
+            "Retry later or use another public URL.",
+            retryable=True,
+            retry_with="retry_later",
+        )
+    if error.status_code == 400:
+        return ToolError(
+            "invalid_arguments",
+            str(message or "The tool request is invalid."),
+            str(hint) if hint else "Check the tool inputs and retry.",
+        )
+    return ToolError(
+        "upstream_connection_error",
+        "The target could not be reached.",
+        "Retry later or use another public URL.",
+        retryable=True,
+        retry_with="retry_later",
+    )
+
+
+def _tool_error_for_extraction_exception(error: Exception) -> ToolError:
+    if isinstance(error, UpstreamHTTPError):
+        if error.status_code == 429:
+            return ToolError(
+                "upstream_rate_limited",
+                f"The target returned HTTP {error.status_code} and is rate limiting requests.",
+                "Retry after a short delay or use another public URL.",
+                retryable=True,
+                retry_with="retry_after_delay",
+            )
+        if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
+            return ToolError(
+                "upstream_access_denied",
+                f"The target returned HTTP {error.status_code} and denied access.",
+                "Try another public URL.",
+            )
+        retryable = error.status_code >= 500
+        return ToolError(
+            "upstream_http_error",
+            f"The target returned HTTP {error.status_code}.",
+            "Retry later or use another public URL.",
+            retryable=retryable,
+            retry_with="retry_later" if retryable else None,
+        )
+    if isinstance(error, UnsupportedMediaType):
+        return ToolError(
+            "unsupported_media_type",
+            "Only HTML and XHTML pages are supported.",
+            "Use a public HTML page.",
+        )
+    if isinstance(error, UnsupportedContentEncoding):
+        return ToolError(
+            "unsupported_content_encoding",
+            "The target returned an unsupported or invalid compressed response.",
+            "Use a page served with a supported content encoding.",
+        )
+    if isinstance(error, PayloadTooLarge):
+        return ToolError(
+            "payload_too_large",
+            "The page exceeds the 1 MiB size limit.",
+            "Try a smaller page.",
+        )
+    if isinstance(error, TooManyRedirects):
+        return ToolError(
+            "too_many_redirects",
+            "The page has too many redirects.",
+            "Try the final destination URL.",
+        )
+    if isinstance(error, UpstreamRenderError):
+        return ToolError(
+            "upstream_render_error",
+            "The target page could not be rendered.",
+            "Retry with render_js=false for plain HTML extraction.",
+            retry_with="render_js=false",
+        )
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return ToolError(
+            "upstream_timeout",
+            "The target did not respond in time.",
+            "Retry later or use another public URL.",
+            retryable=True,
+            retry_with="retry_later",
+        )
+    return ToolError(
+        "upstream_connection_error",
+        "Could not connect to the target.",
+        "The target server may be unavailable; retry later or use another public URL.",
+        retryable=True,
+        retry_with="retry_later",
+    )
 
 
 async def _read_mcp_body(request: Request) -> bytes | None:
@@ -269,22 +481,6 @@ def _origin_is_allowed(request: Request) -> bool:
     return origin.strip().lower() == f"{scheme}://{host}"
 
 
-def _http_detail_text(detail: Any) -> str:
-    """Flatten an HTTPException detail dict into readable tool-error text."""
-    if isinstance(detail, dict):
-        code = detail.get("code")
-        message = detail.get("message")
-        prefix = f"{code}: {message}" if code and message else str(message or code or detail)
-        hint = detail.get("hint")
-        if hint:
-            return f"{prefix}. Hint: {hint}"
-        upgrade_url = detail.get("upgrade_url")
-        if upgrade_url:
-            return f"{prefix}. Subscribe: {upgrade_url}"
-        return str(prefix)
-    return str(detail)
-
-
 def _failure_code_for_error(error: Exception) -> str:
     """Map an upstream extraction exception to a stable privacy-safe code."""
     if isinstance(error, UpstreamHTTPError):
@@ -366,10 +562,15 @@ async def _tools_call_result(
             try:
                 raw_arguments["mode"] = normalize_mode(raw_arguments["mode"])
             except ValueError as error:
-                return _rpc_error(
+                return _rpc_result(
                     request_id,
-                    INVALID_PARAMS,
-                    f"Invalid arguments: mode: {error}",
+                    _tool_error_result(
+                        ToolError(
+                            "invalid_arguments",
+                            f"Invalid mode: {error}",
+                            "Use scrape, chunk, or summarize.",
+                        )
+                    ),
                 )
         if "chunk_token_budget" in raw_arguments:
             if "max_tokens" in raw_arguments:
@@ -383,10 +584,15 @@ async def _tools_call_result(
     except ValidationError as error:
         first = error.errors()[0]
         location = ".".join(str(part) for part in first.get("loc", ())) or "arguments"
-        return _rpc_error(
+        return _rpc_result(
             request_id,
-            INVALID_PARAMS,
-            f"Invalid arguments: {location}: {first['msg']}",
+            _tool_error_result(
+                ToolError(
+                    "invalid_arguments",
+                    f"Invalid value for {location}: {first['msg']}",
+                    "Check the tool input schema and retry.",
+                )
+            ),
         )
 
     if arguments.render_js and not settings.render_js_enabled:
@@ -399,16 +605,26 @@ async def _tools_call_result(
         )
         return _rpc_result(
             request_id,
-            _tool_error(
-                "render_js_disabled: JavaScript rendering is disabled on this service. "
-                "Hint: Retry with render_js=false for plain HTML extraction."
+            _tool_error_result(
+                ToolError(
+                    "render_js_disabled",
+                    "JavaScript rendering is disabled on this service.",
+                    "Retry with render_js=false for plain HTML extraction.",
+                    retry_with="render_js=false",
+                )
             ),
         )
 
-    await asyncio.to_thread(
-        request.app.state.rate_limiter.check,
-        mcp_rate_limit_identity(request, settings),
-    )
+    try:
+        await asyncio.to_thread(
+            request.app.state.rate_limiter.check,
+            mcp_rate_limit_identity(request, settings),
+        )
+    except HTTPException as error:
+        return _rpc_result(
+            request_id,
+            _tool_error_result(_tool_error_for_http_exception(error)),
+        )
 
     extraction_started_at = time.perf_counter()
 
@@ -444,18 +660,21 @@ async def _tools_call_result(
         logger.info("mcp_tool_error detail=%r", str(error))
         return _rpc_result(
             request_id,
-            _tool_error(
-                "invalid_or_unsafe_url: "
-                + str(error)
-                + ". Hint: URL must start with http:// or https:// and be publicly accessible."
+            _tool_error_result(
+                ToolError(
+                    "invalid_or_unsafe_url",
+                    "The target URL is invalid or unsafe.",
+                    "Use an absolute public HTTP or HTTPS URL.",
+                )
             ),
         )
     except HTTPException as error:
+        tool_error = _tool_error_for_http_exception(error)
         log_extraction_failed(
             request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
-            failure_code=(error.detail.get("code", "http_error") if isinstance(error.detail, dict) else "http_error"),
+            failure_code=tool_error.code,
             error_type=type(error).__name__,
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
             status_code=error.status_code,
@@ -463,7 +682,7 @@ async def _tools_call_result(
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(
             request_id,
-            _tool_error(_http_detail_text(error.detail)),
+            _tool_error_result(tool_error),
         )
     except (
         UnsupportedMediaType,
@@ -487,44 +706,10 @@ async def _tools_call_result(
         )
         logger.info("mcp_tool_error error_type=%s", type(error).__name__)
 
-        if isinstance(error, UpstreamHTTPError):
-            if error.status_code == 429:
-                message = (
-                    "upstream_rate_limited: The target returned HTTP 429. "
-                    "Hint: The target is rate limiting requests. "
-                    "Wait before retrying."
-                )
-            elif error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
-                message = (
-                    f"upstream_access_denied: The target returned HTTP "
-                    f"{error.status_code}. Hint: The target denied access; "
-                    "try another public URL."
-                )
-            else:
-                message = (
-                    f"upstream_http_error: The target returned HTTP "
-                    f"{error.status_code}. Hint: The target server returned "
-                    "an error. Try another public URL."
-                )
-        elif isinstance(error, UnsupportedMediaType):
-            message = "unsupported_media_type: Only HTML and XHTML pages are supported. Hint: Use a public HTML page."
-        elif isinstance(error, UnsupportedContentEncoding):
-            message = "unsupported_content_encoding: The target returned an unsupported or invalid compressed response."
-        elif isinstance(error, PayloadTooLarge):
-            message = "payload_too_large: The page exceeds the 1 MiB size limit."
-        elif isinstance(error, TooManyRedirects):
-            message = "too_many_redirects: The page has too many redirects."
-        elif isinstance(error, UpstreamRenderError):
-            message = "upstream_render_error: The target page could not be rendered. Hint: Retry with render_js=false."
-        elif isinstance(error, (TimeoutError, socket.timeout)):
-            message = "upstream_timeout: The target did not respond in time. Hint: Try again later or use another URL."
-        else:
-            message = (
-                "upstream_connection_error: Could not connect to the target. "
-                "Hint: The target server may be down or unreachable."
-            )
-
-        return _rpc_result(request_id, _tool_error(message))
+        return _rpc_result(
+            request_id,
+            _tool_error_result(_tool_error_for_extraction_exception(error)),
+        )
 
     # Preserve the original extraction economics when serving from the
     # persistent cache. The cached row no longer contains source HTML, so
@@ -562,13 +747,12 @@ async def _tools_call_result(
             extracted_at=cached.extracted_at,
         )
     except HTTPException as error:
+        tool_error = _tool_error_for_http_exception(error)
         log_extraction_failed(
             request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
             mode=arguments.mode,
-            failure_code=(
-                error.detail.get("code", "context_error") if isinstance(error.detail, dict) else "context_error"
-            ),
+            failure_code=tool_error.code,
             error_type=type(error).__name__,
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
             status_code=error.status_code,
@@ -576,7 +760,7 @@ async def _tools_call_result(
         logger.info("mcp_tool_error detail=%r", error.detail)
         return _rpc_result(
             request_id,
-            _tool_error(_http_detail_text(error.detail)),
+            _tool_error_result(tool_error),
         )
 
     log_extraction_completed(

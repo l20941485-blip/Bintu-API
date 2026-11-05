@@ -182,9 +182,8 @@ class McpModeContractTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertIn("error", payload)
-        self.assertEqual(payload["error"]["code"], -32602)
+        error = response.json()["result"]["structuredContent"]["error"]
+        self.assertEqual(error["code"], "invalid_arguments")
 
     def test_max_tokens_below_minimum_is_rejected(self) -> None:
         client = self._client()
@@ -212,10 +211,9 @@ class McpModeContractTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertIn("error", payload)
-        self.assertEqual(payload["error"]["code"], -32602)
-        self.assertIn("max_tokens", payload["error"]["message"])
+        error = response.json()["result"]["structuredContent"]["error"]
+        self.assertEqual(error["code"], "invalid_arguments")
+        self.assertIn("max_tokens", error["message"])
 
 
 if __name__ == "__main__":

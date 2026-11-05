@@ -219,7 +219,7 @@ class McpStreamableTests(unittest.TestCase):
         self.assertIn("render_js_disabled", payload["content"][0]["text"])
 
     def test_tools_call_rejects_invalid_mode(self) -> None:
-        """Invalid mode strings must map to JSON-RPC -32602 on the streamable endpoint."""
+        """Invalid mode strings use the stable tool argument error contract."""
         response = self.rpc(
             "tools/call",
             {
@@ -228,11 +228,11 @@ class McpStreamableTests(unittest.TestCase):
             },
         )
 
-        error = response.json()["error"]
-        self.assertEqual(error["code"], -32602)
+        error = response.json()["result"]["structuredContent"]["error"]
+        self.assertEqual(error["code"], "invalid_arguments")
 
     def test_tools_call_rejects_invalid_mode_case_variants(self) -> None:
-        """Case/whitespace variants of unknown modes map to -32602."""
+        """Case/whitespace variants of unknown modes use invalid_arguments."""
         for bad_mode in ("INVALID", "chunked!"):
             with self.subTest(mode=bad_mode):
                 response = self.rpc(
@@ -242,8 +242,8 @@ class McpStreamableTests(unittest.TestCase):
                         "arguments": {"url": "https://example.com", "mode": bad_mode},
                     },
                 )
-                error = response.json()["error"]
-                self.assertEqual(error["code"], -32602)
+                error = response.json()["result"]["structuredContent"]["error"]
+                self.assertEqual(error["code"], "invalid_arguments")
 
     def test_tools_call_accepts_whitespace_tolerant_valid_modes(self) -> None:
         """Whitespace/case-tolerant normalization of valid modes succeeds."""
@@ -292,9 +292,13 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_missing_url_is_invalid_params(self) -> None:
         response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {}})
 
-        error = response.json()["error"]
-        self.assertEqual(error["code"], -32602)
-        self.assertIn("url", error["message"])
+        result = response.json()["result"]
+        self.assertTrue(result["isError"])
+        self.assertEqual(
+            result["structuredContent"]["error"]["code"],
+            "invalid_arguments",
+        )
+        self.assertIn("url", result["structuredContent"]["error"]["message"])
 
     def test_unsafe_url_is_in_band_tool_error(self) -> None:
         response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {"url": "nota-url"}})

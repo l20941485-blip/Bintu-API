@@ -149,6 +149,9 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
         self.assertIn("upstream_rate_limited", text)
         self.assertIn("HTTP 429", text)
+        error = payload["result"]["structuredContent"]["error"]
+        self.assertEqual(error["code"], "upstream_rate_limited")
+        self.assertTrue(error["retryable"])
 
 
 if __name__ == "__main__":

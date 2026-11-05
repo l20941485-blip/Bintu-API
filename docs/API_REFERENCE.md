@@ -140,19 +140,26 @@ an AI-generated summary.
 ## Error behavior
 
 REST errors use a JSON `detail` object with a stable `code` and `message`.
-MCP tool execution failures use the corresponding code in the in-band error
-text.
+MCP tool execution failures set `isError: true`, include a stable error object
+at `structuredContent.error` (`code`, `message`, optional `hint`, `retryable`,
+and optional `retry_with`), and render the same code and message in
+`content[0].text`.
 
 | Condition | REST result | MCP tool error code |
 |---|---|---|
 | Invalid or unsafe target URL | HTTP 400, `invalid_or_unsafe_url` | `invalid_or_unsafe_url` |
-| Robots disallow or robots unavailable | HTTP 403, `blocked_by_robots` or `robots_unreachable` | Same code |
-| Caller burst limit | HTTP 429, `burst_rate_limit_exceeded` | Same code |
+| Robots disallow or robots unavailable | HTTP 403, `blocked_by_robots` or `robots_unreachable` | `upstream_access_denied` or `upstream_connection_error` |
+| Caller burst limit | HTTP 429, `burst_rate_limit_exceeded` | `upstream_rate_limited` |
 | Upstream returns HTTP 429 | HTTP 502, `upstream_rate_limited` | `upstream_rate_limited` |
 | Upstream returns HTTP 401, 402, or 403 | HTTP 502, `upstream_access_denied` | `upstream_access_denied` |
 | Other upstream HTTP error | HTTP 502, `upstream_http_error` | `upstream_http_error` |
 | Upstream body exceeds 1 MiB | HTTP 413, `payload_too_large` | `payload_too_large` |
 | Unsupported response media type | HTTP 415, `unsupported_media_type` | `unsupported_media_type` |
+| Invalid tool arguments | Not applicable | `invalid_arguments` |
+| Unsupported content encoding | HTTP 415, `unsupported_content_encoding` | `unsupported_content_encoding` |
+| Too many redirects | HTTP 502, `too_many_redirects` | `too_many_redirects` |
+| Upstream timeout or connection failure | HTTP 504 or 502 | `upstream_timeout` or `upstream_connection_error` |
+| JavaScript rendering failure or disabled feature | HTTP 400 or 502 | `render_js_disabled` or `upstream_render_error` |
 | Request body exceeds MCP limit | HTTP 413, JSON-RPC `-32600` | Not applicable |
 
 ## Service limits
