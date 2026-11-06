@@ -1,0 +1,1 @@
+"""Supabase mock helpers for metering and cache tests."""\n\nclass FakeSupabaseClient:\n    def __init__(self):\n        self.calls = []\n\n    async def rpc(self, *args, **kwargs):\n        self.calls.append((args, kwargs))\n        return {"success": True}\n
