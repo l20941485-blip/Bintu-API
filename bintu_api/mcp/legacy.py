@@ -32,6 +32,7 @@ from bintu_api.context import (
     _decode_source_text,
     extract_context,
 )
+from bintu_api.extraction.cache import build_cache_economics
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS as _TOOL_ANNOTATIONS,
 )
@@ -434,15 +435,7 @@ async def call_tool(
             )
         raise
 
-    cache_economics = None
-    if cache_layer == "persistent":
-        cache_economics = CacheEconomics(
-            html_tokens=cached.html_tokens,
-            tokens_saved_estimate=cached.tokens_saved_estimate,
-            limiting_factor=cached.limiting_factor,
-            truncated=cached.truncated,
-            extracted_at=cached.extracted_at,
-        )
+    cache_economics = build_cache_economics(document, cached, cache_layer)
 
     context = await extract_context(
         request,

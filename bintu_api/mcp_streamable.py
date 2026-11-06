@@ -592,15 +592,9 @@ async def _tools_call_result(
     # Preserve the original extraction economics when serving from the
     # persistent cache. The cached row no longer contains source HTML, so
     # recomputing these values would incorrectly report zero savings.
-    cache_economics = None
-    if cache_layer == "persistent":
-        cache_economics = CacheEconomics(
-            html_tokens=cached.html_tokens,
-            tokens_saved_estimate=cached.tokens_saved_estimate,
-            limiting_factor=cached.limiting_factor,
-            truncated=cached.truncated,
-            extracted_at=cached.extracted_at,
-        )
+    from bintu_api.extraction.cache import build_cache_economics
+
+    cache_economics = build_cache_economics(document, cached, cache_layer)
 
     try:
         context = await extract_context(

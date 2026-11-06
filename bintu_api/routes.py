@@ -36,6 +36,7 @@ from bintu_api.database import (
     get_cached_markdown,
     upsert_cached_markdown,
 )
+from bintu_api.extraction.cache import compute_saved_tokens
 from bintu_api.final_fixes import has_credential_params
 from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.observability import (
@@ -170,12 +171,7 @@ def _build_response(
     # Preserve the economics of the original extraction on cache hits. A
     # persistent-cache row no longer has the source HTML, so recomputing savings
     # would incorrectly report zero.
-    if cache_layer == "persistent" and result.tokens_saved_estimate > 0:
-        saved = result.tokens_saved_estimate
-    elif document is not None:
-        saved = _compute_tokens_saved_estimate(document.body, result.markdown)
-    else:
-        saved = 0
+    saved = compute_saved_tokens(document, result, cache_layer)
 
     assessment = assess_yield(approx_tokens, result.html_tokens)
 
