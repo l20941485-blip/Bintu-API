@@ -7,6 +7,10 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 from bintu_api.mcp_descriptions import (
     CACHE_DESCRIPTION,
+    CHUNK_TOKEN_BUDGET_DESCRIPTION,
+    FOOTNOTE_URL_POLICY_DESCRIPTION,
+    LINKS_DESCRIPTION,
+    MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION,
     MAX_TOKENS_DESCRIPTION,
     MODE_DESCRIPTION,
     OUTPUT_SCHEMA_EXTRA_PROPERTIES,
@@ -18,7 +22,6 @@ from bintu_api.mcp_descriptions import (
 
 TOOL_NAME = "bintu_scrape_text"
 TOOL_TITLE = "Bintu Scrape Text"
-TOOL_DESCRIPTION = TOOL_DESCRIPTION
 
 TOOL_ANNOTATIONS = {
     "title": TOOL_TITLE,
@@ -38,6 +41,7 @@ TOOL_OUTPUT_SCHEMA = {
         "mode": {
             "type": "string",
             "enum": ["scrape", "chunk", "summarize"],
+            "description": "Extraction mode: scrape returns readable text; chunk splits it into budgeted chunks; summarize selects leading text within a budget. The accepted chunked alias normalizes to chunk.",
         },
         "tokens": {
             "type": "integer",
@@ -47,42 +51,54 @@ TOOL_OUTPUT_SCHEMA = {
         "approx_tokens": {
             "type": "integer",
             "minimum": 0,
+            "description": "Approximate token count of the returned text: ceil(characters / 4). An estimate, not a tokenizer count.",
         },
         "html_tokens": {
             "type": "integer",
             "minimum": 0,
+            "description": "Approximate token count of the fetched source HTML, computed the same way as approx_tokens.",
         },
         "token_method": {
             "type": "string",
+            "description": "Method used to compute approx_tokens: ceil(characters / 4).",
         },
         "limiting_factor": {
             "type": "string",
+            "description": "Which limit bound the returned text: char_cap (extracted-text character ceiling) or token_budget (max_tokens), or none when no limit shortened the response.",
         },
         "chunk_count": {
             "type": "integer",
             "minimum": 0,
+            "description": "Number of chunks in the chunks array (1 for scrape and summarize modes when not split).",
         },
         "cache_hit": {
             "type": "boolean",
+            "description": "True when the response was served from memory or persistent cache.",
         },
         "cache_layer": {
             "type": "string",
+            "description": "Which cache served the response: none, memory, or persistent.",
         },
         "source_url": {
             "type": "string",
+            "description": "The requested URL with sensitive-looking query parameters removed, safe for logs and display.",
         },
         "extracted_at": {
             "type": "string",
+            "description": "UTC ISO 8601 timestamp of the extraction.",
         },
         "tokens_saved_estimate": {
             "type": "integer",
             "minimum": 0,
+            "description": "Estimated tokens saved by extraction: source-HTML approximate tokens minus returned-text approximate tokens, floored at 0.",
         },
         "truncated": {
             "type": "boolean",
+            "description": "True when extracted content exceeded a limit and the returned text was shortened.",
         },
         "split": {
             "type": "boolean",
+            "description": "True when content spans multiple chunks (chunk mode only; not truncation).",
         },
         "chunks": {
             "type": "array",
@@ -209,12 +225,12 @@ TOOL_INPUT_SCHEMA = {
             "minimum": 100,
             "maximum": 50000,
             "description": (
-                "Approximate token budget for chunk/summarize modes; "
-                "ignored in scrape mode. Accepted alias: "
-                "chunk_token_budget. The extracted-text character cap "
-                "applies first. Indivisible units in chunk mode, and a "
-                "first oversized sentence in summarize mode, may exceed "
-                "the budget."
+                "Approximate token budget, enforced in every mode: scrape "
+                "trims to it, chunk makes each chunk fit it, summarize returns "
+                "the leading text within it. Range 100 to 50000, default 6000. "
+                "Accepted alias: chunk_token_budget. A single indivisible unit "
+                "in chunk mode, and a first oversized sentence in summarize "
+                "mode, may exceed the budget."
             ),
         },
         "cache": {
@@ -242,7 +258,11 @@ TOOL_INPUT_SCHEMA = {
 TOOL_INPUT_SCHEMA["properties"]["url"]["description"] = URL_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["mode"]["description"] = MODE_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["max_tokens"]["description"] = MAX_TOKENS_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["chunk_token_budget"]["description"] = CHUNK_TOKEN_BUDGET_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["cache"]["description"] = CACHE_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["persist"]["description"] = PERSIST_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["render_js"]["description"] = RENDER_JS_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["links"]["description"] = LINKS_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["footnote_url_policy"]["description"] = FOOTNOTE_URL_POLICY_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["max_footnote_url_length"]["description"] = MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION
 TOOL_OUTPUT_SCHEMA["properties"].update(OUTPUT_SCHEMA_EXTRA_PROPERTIES)
