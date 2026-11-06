@@ -1,3 +1,10 @@
+"""Supabase persistence for metering events in Bintu.
+
+This module performs the exact RPC calls required by the metering contract and keeps persistence logic separate from request identity and policy code.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import logging
 from typing import Any
 

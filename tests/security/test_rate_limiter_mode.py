@@ -1,3 +1,10 @@
+"""Rate limiting helpers for Bintu.
+
+This module centralizes limiter state and policy enforcement without coupling to HTML parsing or response shaping.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from unittest.mock import patch
 
 import pytest

@@ -1,3 +1,10 @@
+"""Configuration settings for the Bintu API service.
+
+This module owns runtime configuration, defaults, and validation without mixing in route behavior or extraction logic.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import logging
 import os
 from dataclasses import dataclass

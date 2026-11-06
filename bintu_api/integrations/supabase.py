@@ -1,3 +1,10 @@
+"""Integration boundaries for external Bintu services.
+
+This module isolates upstream integration code so application logic does not directly couple to external service details.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from bintu_api.settings import Settings

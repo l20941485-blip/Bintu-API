@@ -1,3 +1,10 @@
+"""Test Chunk Budget for Bintu.
+
+This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from __future__ import annotations
 
 from bintu_api.context_chunking import split_into_chunks

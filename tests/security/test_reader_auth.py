@@ -1,3 +1,10 @@
+"""Authentication and authorization for Bintu.
+
+This module enforces API and MCP access control while keeping request validation independent from extraction logic.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request

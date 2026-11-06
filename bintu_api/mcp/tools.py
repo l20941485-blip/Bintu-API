@@ -1,3 +1,10 @@
+"""Tool validation and invocation helpers for Bintu MCP.
+
+This module owns argument normalization and dispatch logic without importing storage or network concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import logging
 from typing import Any, Literal
 

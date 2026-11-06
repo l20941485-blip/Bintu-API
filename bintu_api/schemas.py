@@ -1,3 +1,10 @@
+"""Shared data schemas for Bintu responses and requests.
+
+This module defines the public contract used by API and MCP surfaces while avoiding direct business logic.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field

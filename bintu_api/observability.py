@@ -1,3 +1,10 @@
+"""Observability and telemetry for Bintu.
+
+This module records extraction, cache, and request events without owning business logic or external API behavior.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import hashlib
 import logging
 import re

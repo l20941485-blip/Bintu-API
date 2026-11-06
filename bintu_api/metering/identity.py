@@ -1,3 +1,10 @@
+"""Metering identity resolution for Bintu requests.
+
+This module determines the billable identity used by the metering pipeline and keeps identity logic separate from persistence or policy decisions.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import hashlib
 
 from starlette.requests import Request

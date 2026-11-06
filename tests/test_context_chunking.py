@@ -1,3 +1,10 @@
+"""Context extraction pipeline for Bintu.
+
+This module transforms fetched text into the normalized context objects consumed by REST and MCP responses.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import re
 
 from bintu_api import context_baseline as old

@@ -1,3 +1,10 @@
+"""Web fetching and HTML extraction for Bintu.
+
+This module owns network fetching, safety checks, and article extraction without making metering or HTTP route decisions.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import gzip
 import io
 import socket

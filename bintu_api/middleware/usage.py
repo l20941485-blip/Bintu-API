@@ -1,3 +1,10 @@
+"""HTTP middleware for Bintu request processing.
+
+This module owns cross-cutting request concerns such as metering and context tracking without performing extraction or HTML parsing.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import logging
 
 from fastapi import Request

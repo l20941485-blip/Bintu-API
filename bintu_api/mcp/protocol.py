@@ -1,3 +1,10 @@
+"""JSON-RPC protocol helpers for the Bintu MCP surface.
+
+This module owns transport mechanics, protocol negotiation, and request validation without handling extraction or persistence.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import socket
 from typing import Any
 

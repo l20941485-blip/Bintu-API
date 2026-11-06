@@ -1,3 +1,10 @@
+"""Stable error codes and tool error helpers for Bintu.
+
+This module owns the canonical machine-readable error taxonomy and keeps MCP and REST error handling consistent without coupling to transport details.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from dataclasses import asdict, dataclass
 from typing import Any
 

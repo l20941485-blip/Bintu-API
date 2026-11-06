@@ -1,3 +1,10 @@
+"""Usage policy and event handling for Bintu metering.
+
+This module owns usage intent, event scheduling, and the service boundary between request handling and Supabase persistence.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import asyncio
 import logging
 from dataclasses import dataclass

@@ -1,3 +1,10 @@
+"""Test Mcp Error Contract for Bintu.
+
+This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 
