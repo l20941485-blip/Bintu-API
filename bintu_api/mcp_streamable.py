@@ -660,54 +660,9 @@ async def _tools_call_result(
     # `token_method` names the counter; `html_tokens` is the fetched-document
     # baseline for `tokens_saved_estimate`; `limiting_factor` says which cap bound.
     # provenance is added additively (Phase D): same shape as REST response.
-    provenance_dict: dict[str, object] = {}
-    if context.request_id is not None:
-        provenance_dict["request_id"] = context.request_id
-    if context.fetched_at is not None:
-        provenance_dict["fetched_at"] = context.fetched_at
-    if context.requested_url is not None:
-        provenance_dict["requested_url"] = context.requested_url
-    if context.final_url is not None:
-        provenance_dict["final_url"] = context.final_url
-    if context.content_type is not None:
-        provenance_dict["content_type"] = context.content_type
-    if context.bytes_fetched is not None:
-        provenance_dict["bytes_fetched"] = context.bytes_fetched
-    if context.content_sha256 is not None:
-        provenance_dict["content_sha256"] = context.content_sha256
-    if context.cache is not None:
-        provenance_dict["cache"] = {
-            "hit": context.cache.hit,
-            "layer": context.cache.layer,
-            "age_seconds": context.cache.age_seconds,
-        }
-    if context.extractor_version is not None:
-        provenance_dict["extractor_version"] = context.extractor_version
+    from bintu_api.extraction.response import build_mcp_envelope
 
-    safe_source_url = routes.sanitize_url(arguments.url)
-
-    envelope = {
-        "mode": context.mode,
-        "tokens": context.tokens,
-        "approx_tokens": context.approx_tokens,
-        "html_tokens": context.html_tokens,
-        "token_method": context.token_method,
-        "limiting_factor": context.limiting_factor,
-        "chunk_count": context.chunk_count,
-        "cache_hit": context.cache_hit,
-        "cache_layer": context.cache_layer,
-        "source_url": safe_source_url,
-        "extracted_at": context.extracted_at,
-        "tokens_saved_estimate": context.tokens_saved_estimate,
-        "deduplicated_count": context.deduplicated_count,
-        "low_yield": context.low_yield,
-        **({"yield_hint": context.yield_hint} if context.low_yield else {}),
-        "truncated": context.truncated,
-        "split": context.split,
-        "chunks": context.chunks,
-        # Add provenance additively (Phase D)
-        **provenance_dict,
-    }
+    envelope = build_mcp_envelope(context, arguments.url)
     return _rpc_result(
         request_id,
         {

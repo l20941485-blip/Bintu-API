@@ -483,26 +483,9 @@ async def call_tool(
         limiting_factor=context.limiting_factor,
     )
 
-    envelope = {
-        "mode": context.mode,
-        "tokens": context.tokens,
-        "approx_tokens": context.approx_tokens,
-        "html_tokens": context.html_tokens,
-        "token_method": context.token_method,
-        "limiting_factor": context.limiting_factor,
-        "chunk_count": context.chunk_count,
-        "cache_hit": context.cache_hit,
-        "cache_layer": context.cache_layer,
-        "source_url": routes.sanitize_url(arguments.url),
-        "extracted_at": context.extracted_at,
-        "tokens_saved_estimate": context.tokens_saved_estimate,
-        "deduplicated_count": context.deduplicated_count,
-        "low_yield": context.low_yield,
-        **({"yield_hint": context.yield_hint} if context.low_yield else {}),
-        "truncated": context.truncated,
-        "split": context.split,
-        "chunks": context.chunks,
-    }
+    from bintu_api.extraction.response import build_mcp_envelope
+
+    envelope = build_mcp_envelope(context, arguments.url)
 
     return {
         "content": [
