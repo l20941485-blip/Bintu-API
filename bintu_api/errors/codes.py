@@ -5,6 +5,8 @@ This module owns the canonical machine-readable error taxonomy and keeps MCP and
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
+import re
+
 ERROR_CODES = frozenset(
     {
         "auth_misconfiguration",
@@ -43,3 +45,16 @@ ERROR_CODES = frozenset(
         "upstream_timeout",
     }
 )
+
+
+def normalize_error_code(code: str | None) -> str:
+    """Normalize a caller-provided error code to Bintu's canonical snake_case form."""
+    if not isinstance(code, str) or not code.strip():
+        raise ValueError("error code must be a non-empty string")
+
+    normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", code.strip())
+    normalized = normalized.replace("-", "_").replace(" ", "_")
+    normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", normalized).lower()
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized
+

@@ -5,7 +5,7 @@ This module owns a focused responsibility within the service and must remain iso
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api.errors.codes import ERROR_CODES
+from bintu_api.errors.codes import ERROR_CODES, normalize_error_code
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
 from bintu_api.tool_errors import ToolError as LegacyToolError
 
@@ -57,3 +57,11 @@ def test_error_code_catalog_contains_existing_application_codes():
         "reader_snapshot_unavailable",
     } <= ERROR_CODES
     assert all(code == code.lower() and code.replace("_", "").isalnum() for code in ERROR_CODES)
+
+
+def test_error_code_normalization_preserves_stable_snake_case_contract():
+    assert normalize_error_code("UpstreamRateLimited") == "upstream_rate_limited"
+    assert normalize_error_code("upstream-rate-limited") == "upstream_rate_limited"
+    assert normalize_error_code("invalidOrUnsafeUrl") == "invalid_or_unsafe_url"
+    assert normalize_error_code("  RENDER-JS Disabled  ") == "render_js_disabled"
+    assert ToolError("UpstreamRateLimited", "message").code == "upstream_rate_limited"
