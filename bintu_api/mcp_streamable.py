@@ -597,7 +597,9 @@ async def _tools_call_result(
     cache_economics = build_cache_economics(document, cached, cache_layer)
 
     try:
-        context = await extract_context(
+        from bintu_api.extraction.pipeline import run_extraction
+
+        context = await run_extraction(
             request,
             arguments.url,
             mode=arguments.mode,

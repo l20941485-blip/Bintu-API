@@ -16,6 +16,8 @@ __all__ = [
     "build_response_provenance",
     "build_rest_response",
     "compute_saved_tokens",
+    "extract_document",
+    "run_extraction",
 ]
 
 
@@ -40,5 +42,13 @@ def __getattr__(name: str) -> Any:
             "build_mcp_envelope": build_mcp_envelope,
             "build_rest_response": build_rest_response,
             "build_response_provenance": build_response_provenance,
+        }[name]
+    if name in {"run_extraction", "extract_document"}:
+        from .pipeline import extract_document as pipeline_extract_document
+        from .pipeline import run_extraction as pipeline_run_extraction
+
+        return {
+            "run_extraction": pipeline_run_extraction,
+            "extract_document": pipeline_extract_document,
         }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
