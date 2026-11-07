@@ -11,8 +11,7 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import (
     parse_qsl,
     urlencode,
