@@ -23,6 +23,7 @@ from urllib.parse import (
 
 from fastapi import APIRouter, HTTPException, Query, Request, Security
 
+from bintu_api.extraction.sections import select_sections
 from bintu_api.auth import (
     api_key_scheme,
     bearer_scheme,
@@ -326,6 +327,7 @@ async def scrape_text(
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
+    sections: list[str] | None = Query(default=None),
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
@@ -338,6 +340,33 @@ async def scrape_text(
                 "message": "max_tokens must be between 100 and 50000.",
             },
         )
+    if sections is not None:
+        if any(not isinstance(item, str) for item in sections):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_arguments",
+                    "message": "sections must be an array of strings.",
+                },
+            )
+
+        if any(not item.strip() for item in sections):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_arguments",
+                    "message": "sections cannot contain empty or whitespace-only values.",
+                },
+            )
+
+        if any(len(item) > 200 for item in sections):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_arguments",
+                    "message": "Each section selector must be 200 characters or fewer.",
+                },
+            )
 
     if render_js and not settings.render_js_enabled:
         raise HTTPException(
@@ -363,6 +392,7 @@ async def scrape_text(
         max_tokens,
         footnote_url_policy=footnote_url_policy,
         max_footnote_url_length=max_footnote_url_length,
+        sections=sections,
     )
 
 
@@ -757,6 +787,7 @@ async def _fetch_and_extract(
     max_tokens: int = 6000,
     footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
+    sections: list[str] | None = None,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Shared fetch -> robots -> cache -> extract boundary for REST and MCP.
 
@@ -794,7 +825,13 @@ async def _fetch_and_extract(
     request_id = getattr(getattr(request, "state", None), "request_id", None)
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
-    if database_client is not None and persistent_cache_enabled and cacheable and not skip_cache:
+    if (
+        database_client is not None
+        and persistent_cache_enabled
+        and cacheable
+        and not skip_cache
+        and sections is None
+    ):
         try:
             result = await asyncio.wait_for(
                 get_cached_markdown(
@@ -830,8 +867,7 @@ async def _fetch_and_extract(
         return document, result, cache_layer
 
     cache = request.app.state.cache
-    document = None if skip_cache else cache.get(cache_key)
-
+    document = None if skip_cache or sections is not None else cache.get(cache_key)
     if document is not None:
         cache_layer = "memory"
         log_cache_event(
@@ -949,6 +985,7 @@ async def _scrape_text(
     max_tokens: int = 6000,
     footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
+    sections: list[str] | None = None,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -972,6 +1009,7 @@ async def _scrape_text(
             max_tokens=max_tokens,
             footnote_url_policy=footnote_url_policy,
             max_footnote_url_length=max_footnote_url_length,
+            sections=sections,
         )
 
         if request.app.state.supabase_client is not None and has_valid_proxy_secret(request, settings):
@@ -995,21 +1033,41 @@ async def _scrape_text(
             settings,
         )
 
-        text, token_truncated = truncate_to_token_budget(
-            response.text,
-            max_tokens,
-        )
+        if sections is not None:
+            selection = select_sections(
+                response.text,
+                sections,
+                max_tokens,
+            )
 
-        if token_truncated:
-            response.text = text
-            response.truncated = True
-            response.limiting_factor = "token_budget"
-            response.approx_tokens = max(0, -(-len(text) // 4))
+            response.selected_sections = selection.sections
+            response.text = selection.text
+            response.truncated = selection.truncated
+            response.limiting_factor = (
+                "token_budget" if selection.truncated else "none"
+            )
+            response.approx_tokens = _compute_approx_tokens(selection.text)
             response.tokens = response.approx_tokens
             response.tokens_saved_estimate = max(
                 0,
                 result.html_tokens - response.approx_tokens,
             )
+        else:
+            text, token_truncated = truncate_to_token_budget(
+                response.text,
+                max_tokens,
+            )
+
+            if token_truncated:
+                response.text = text
+                response.truncated = True
+                response.limiting_factor = "token_budget"
+                response.approx_tokens = max(0, -(-len(text) // 4))
+                response.tokens = response.approx_tokens
+                response.tokens_saved_estimate = max(
+                    0,
+                    result.html_tokens - response.approx_tokens,
+                )
         log_extraction_completed(
             request_id=request_id,
             url=url,
