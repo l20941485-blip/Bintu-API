@@ -165,6 +165,46 @@ class McpStreamableTests(unittest.TestCase):
             "# Alpha\nAlpha body\n\n# Beta\nBeta body",
         )
 
+    def test_tools_call_rejects_whitespace_only_sections(self) -> None:
+        response = self.rpc(
+            "tools/call",
+            {
+                "name": TOOL_NAME,
+                "arguments": {
+                    "url": "https://example.com",
+                    "sections": "   \n\n   ",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(payload["isError"])
+        self.assertEqual(
+            payload["structuredContent"]["error"]["code"],
+            "invalid_arguments",
+        )
+
+    def test_tools_call_rejects_overlong_section_selector(self) -> None:
+        response = self.rpc(
+            "tools/call",
+            {
+                "name": TOOL_NAME,
+                "arguments": {
+                    "url": "https://example.com",
+                    "sections": "A" * 201,
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(payload["isError"])
+        self.assertEqual(
+            payload["structuredContent"]["error"]["code"],
+            "invalid_arguments",
+        )
+
     def test_notification_returns_202_with_empty_body(self) -> None:
         response = self.client.post(
             "/mcp",

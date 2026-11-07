@@ -1,6 +1,4 @@
-from bintu_api.extraction.sections import select_sections
-
-
+﻿from bintu_api.extraction.sections import select_sections
 SAMPLE = """# Alpha
 Alpha body
 
@@ -77,3 +75,4 @@ def test_clips_long_sections():
 
     assert result.truncated is True
     assert len(result.text) <= 40
+

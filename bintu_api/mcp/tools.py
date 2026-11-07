@@ -61,13 +61,42 @@ class ToolArguments(BaseModel):
 
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:
-                logger.warning("mcp_alias_conflict canonical=max_tokens wins over chunk_token_budget")
+                logger.warning(
+                    "mcp_alias_conflict canonical=max_tokens wins over "
+                    "chunk_token_budget"
+                )
                 normalized.pop("chunk_token_budget")
             else:
-                normalized["max_tokens"] = normalized.pop("chunk_token_budget")
+                normalized["max_tokens"] = normalized.pop(
+                    "chunk_token_budget"
+                )
 
         max_tokens = normalized.get("max_tokens", 6000)
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
             raise ValueError("max_tokens must be an integer")
 
         return normalized
+
+    @model_validator(mode="after")
+    def _validate_sections(self) -> "ToolArguments":
+        if self.sections is None:
+            return self
+
+        selectors = [
+            selector.strip()
+            for selector in self.sections.split("\n")
+            if selector.strip()
+        ]
+
+        if not selectors:
+            raise ValueError(
+                "sections must contain at least one non-empty heading "
+                "selector."
+            )
+
+        if any(len(selector) > 200 for selector in selectors):
+            raise ValueError(
+                "Each section selector must be 200 characters or fewer."
+            )
+
+        return self

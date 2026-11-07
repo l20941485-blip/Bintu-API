@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -135,7 +135,7 @@ def select_sections(
             remaining = 0
             truncated = True
 
-    for section, clipped_text in zip(selected, clipped):
+    for section, clipped_text in zip(selected, clipped, strict=False):
         section["text"] = clipped_text
 
     return SectionSelection(

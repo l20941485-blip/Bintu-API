@@ -1,4 +1,4 @@
-"""HTTP route orchestration for the Bintu API.
+﻿"""HTTP route orchestration for the Bintu API.
 
 This module coordinates API request handling while keeping business logic in the service and extraction layers.
 
@@ -23,7 +23,6 @@ from urllib.parse import (
 
 from fastapi import APIRouter, HTTPException, Query, Request, Security
 
-from bintu_api.extraction.sections import select_sections
 from bintu_api.auth import (
     api_key_scheme,
     bearer_scheme,
@@ -45,6 +44,7 @@ from bintu_api.database import (
     upsert_cached_markdown,
 )
 from bintu_api.extraction.cache import compute_saved_tokens
+from bintu_api.extraction.sections import select_sections
 from bintu_api.final_fixes import has_credential_params
 from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.observability import (
@@ -1284,3 +1284,4 @@ async def _scrape_text(
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).
 scrape_text = _scrape_text  # noqa: F811 -- intentional public alias for the route handler
+

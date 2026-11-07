@@ -1,1 +1,1 @@
-"""Reusable Bintu fixtures and factories for tests."""\n
+﻿"""Reusable Bintu fixtures and factories for tests."""
