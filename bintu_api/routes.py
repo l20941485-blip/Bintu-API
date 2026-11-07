@@ -12,6 +12,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
+from typing import Annotated
 from urllib.parse import (
     parse_qsl,
     urlencode,
@@ -327,7 +328,7 @@ async def scrape_text(
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
-    sections: list[str] | None = Query(default=None),
+    sections: Annotated[list[str] | None, Query()] = None,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     verify_api_access(request, settings)
