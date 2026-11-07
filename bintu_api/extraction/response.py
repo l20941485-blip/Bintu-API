@@ -94,6 +94,11 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "low_yield": context.low_yield,
         **({"yield_hint": context.yield_hint} if context.low_yield else {}),
+        **(
+            {"selected_sections": context.selected_sections}
+            if context.selected_sections is not None
+            else {}
+        ),
         "provenance": provenance,
     }
 
