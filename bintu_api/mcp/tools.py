@@ -87,17 +87,18 @@ class ToolArguments(BaseModel):
         else:
             raw_selectors = self.sections
 
-        selectors = [
-            selector.strip()
-            for selector in raw_selectors
-            if isinstance(selector, str) and selector.strip()
-        ]
+        if not isinstance(raw_selectors, list):
+            raise ValueError("sections must be a string or an array of strings.")
 
-        if not selectors:
+        if any(not isinstance(selector, str) for selector in raw_selectors):
+            raise ValueError("sections must contain only strings.")
+
+        if any(not selector.strip() for selector in raw_selectors):
             raise ValueError(
-                "sections must contain at least one non-empty heading "
-                "selector."
+                "sections cannot contain empty or whitespace-only selectors."
             )
+
+        selectors = [selector.strip() for selector in raw_selectors]
 
         if any(len(selector) > 200 for selector in selectors):
             raise ValueError(
