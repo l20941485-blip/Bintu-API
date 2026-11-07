@@ -49,6 +49,7 @@ Extracts readable text from a public HTML or XHTML page.
 |---|---|---:|---|
 | `url` | string | required | Absolute public HTTP(S) URL |
 | `max_tokens` | integer | 6000 | Approximate response budget; 100–50,000 |
+| `sections` | array of strings | none | Optional exact heading selectors. Applies only to text extraction; selectors are whitespace- and case-normalized, deduplicated, and returned in document order. |
 | `include_nav` | boolean | false | Preserve navigation elements |
 | `include_header` | boolean | false | Preserve header elements |
 | `include_footer` | boolean | false | Preserve footer elements |
@@ -130,12 +131,18 @@ the tool and requires MCP authentication.
 
 `url` is required. Optional inputs include `mode` (`scrape`, `chunk`, or
 `summarize`; `chunked` is an alias), `max_tokens` (default 6000, range
-100–50,000), `links`, `footnote_url_policy` (`full` or `truncated`, default
-`truncated`), `max_footnote_url_length` (positive integer, default 100),
+100–50,000), `sections`, `links`, `footnote_url_policy` (`full` or `truncated`,
+default `truncated`), `max_footnote_url_length` (positive integer, default 100),
 `render_js`, `cache`, and `persist`. The footnote URL options apply only when
 `links=footnotes`; truncated destinations are non-clickable abbreviated text.
 Token counts are approximate. `summarize` selects leading text; it is not
 an AI-generated summary.
+
+`sections` is a newline-separated list of exact heading selectors for scrape
+mode. Whitespace and case are normalized for matching; duplicate selectors are
+deduplicated, and selected sections are returned in document order. Empty or
+whitespace-only selectors, or selectors longer than 200 characters, return
+`invalid_arguments`.
 
 ## Error behavior
 
