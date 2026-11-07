@@ -45,7 +45,7 @@ class ToolArguments(BaseModel):
     )
     cache: bool = True
     persist: bool = True
-    sections: str | None = None
+    sections: str | list[str] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -82,10 +82,15 @@ class ToolArguments(BaseModel):
         if self.sections is None:
             return self
 
+        if isinstance(self.sections, str):
+            raw_selectors = self.sections.split("\n")
+        else:
+            raw_selectors = self.sections
+
         selectors = [
             selector.strip()
-            for selector in self.sections.split("\n")
-            if selector.strip()
+            for selector in raw_selectors
+            if isinstance(selector, str) and selector.strip()
         ]
 
         if not selectors:
