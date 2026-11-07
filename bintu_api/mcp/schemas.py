@@ -16,6 +16,7 @@ from bintu_api.mcp_descriptions import (
     OUTPUT_SCHEMA_EXTRA_PROPERTIES,
     PERSIST_DESCRIPTION,
     RENDER_JS_DESCRIPTION,
+    SECTIONS_DESCRIPTION,
     URL_DESCRIPTION,
 )
 from bintu_api.mcp_descriptions import TOOL_DESCRIPTION as TOOL_DESCRIPTION
@@ -268,25 +269,15 @@ TOOL_INPUT_SCHEMA["properties"]["sections"] = {
     "oneOf": [
         {
             "type": "string",
-            "description": (
-                "Newline-separated heading selectors to include in the response."
-            ),
+            "description": SECTIONS_DESCRIPTION,
         },
         {
             "type": "array",
             "items": {"type": "string"},
-            "description": (
-                "Heading selectors to include in the response."
-            ),
+            "description": SECTIONS_DESCRIPTION,
         },
     ],
-    "description": (
-        "Heading selectors to include in the response. Accepts either a "
-        "newline-separated string or an array of strings. Whitespace and "
-        "case are normalized for matching. Empty or whitespace-only "
-        "selectors return invalid_arguments. Each selector must be 200 "
-        "characters or fewer."
-    ),
+    "description": SECTIONS_DESCRIPTION,
 }
 TOOL_INPUT_SCHEMA["properties"]["max_footnote_url_length"]["description"] = MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION
 TOOL_OUTPUT_SCHEMA["properties"].update(OUTPUT_SCHEMA_EXTRA_PROPERTIES)

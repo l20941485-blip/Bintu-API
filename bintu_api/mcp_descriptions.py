@@ -90,6 +90,17 @@ CHUNK_TOKEN_BUDGET_DESCRIPTION = (
     "Accepted alias for max_tokens; max_tokens wins on conflict. Range 100 to 50000."
 )
 
+SECTIONS_DESCRIPTION = (
+    "Optional heading selectors for scrape mode. Accepts either a "
+    "newline-separated string (for example \"Alpha\\nBeta\") or an array "
+    "of strings (for example [\"Alpha\", \"Beta\"]). Whitespace and case "
+    "are normalized for exact heading matching. Empty or whitespace-only "
+    "selectors return invalid_arguments. Each selector must be 200 "
+    "characters or fewer. When provided, the persistent and memory caches "
+    "are bypassed for reads; a fresh extraction may still be written when "
+    "persist is true."
+)
+
 OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
     "deduplicated_count": {
         "type": "integer",
