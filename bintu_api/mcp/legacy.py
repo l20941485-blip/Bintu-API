@@ -399,11 +399,7 @@ async def call_tool(
         mcp_rate_limit_identity(request, settings),
     )
 
-    sections = (
-        arguments.sections.split("\n")
-        if arguments.sections is not None
-        else None
-    )
+    sections = arguments.sections
 
     try:
         document, cached, cache_layer = await routes._fetch_and_extract(

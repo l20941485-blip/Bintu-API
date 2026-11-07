@@ -366,6 +366,56 @@ class ScraperApiTests(unittest.TestCase):
         )
         self.assertIn("tokens", envelope)
 
+
+    def test_mcp_tool_call_returns_selected_sections(self) -> None:
+        html = (
+            b"<html><body>"
+            b"<h1>Alpha</h1><p>Alpha body</p>"
+            b"<h1>Beta</h1><p>Beta body</p>"
+            b"</body></html>"
+        )
+
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=html, charset=None),
+        ):
+            response = self.client.post(
+                "/mcp/tools/call",
+                json={
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "sections": ["Alpha"],
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload.get("isError", False))
+
+        envelope = json.loads(payload["content"][0]["text"])
+        structured = payload["structuredContent"]
+
+        self.assertEqual(envelope["mode"], "scrape")
+        self.assertEqual(envelope["text"], "Alpha body")
+        self.assertEqual(
+            envelope["selected_sections"],
+            [
+                {
+                    "heading": "Alpha",
+                    "level": 1,
+                    "index": 0,
+                    "text": "Alpha body",
+                }
+            ],
+        )
+        self.assertEqual(
+            structured["selected_sections"],
+            envelope["selected_sections"],
+        )
+
+
     def test_mcp_rejects_unknown_tool_names(self) -> None:
         response = self.client.post(
             "/mcp/tools/call",
