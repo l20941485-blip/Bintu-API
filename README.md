@@ -474,6 +474,66 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 
 **Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
 
+### Section selection
+
+For `mode=scrape`, supply `sections` to return only selected Markdown
+sections instead of the full extracted page.
+
+MCP accepts either an array of strings or newline-separated selectors:
+
+```json
+{
+  "name": "bintu_scrape_text",
+  "arguments": {
+    "url": "[https://example.com](https://example.com)",
+    "sections": ["Alpha", "Beta"]
+  }
+}
+```
+
+```json
+{
+  "name": "bintu_scrape_text",
+  "arguments": {
+    "url": "[https://example.com](https://example.com)",
+    "sections": "Alpha\nBeta"
+  }
+}
+```
+
+REST accepts repeated `sections` query parameters:
+
+```http
+GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com&sections=Alpha&sections=Beta
+```
+
+Selectors are matched exactly against normalized Markdown heading text:
+whitespace is collapsed and matching is case-insensitive. Each selector
+must be 200 characters or fewer. Empty or whitespace-only selectors return
+`invalid_arguments`.
+
+When `sections` is supplied, cache reads are bypassed so selection uses
+freshly extracted Markdown. A fresh result may still be written to the
+persistent cache when `persist=true`.
+
+The response includes `selected_sections` only for scrape requests that
+supply selectors. Each selected section contains:
+
+| Field | Meaning |
+|---|---|
+| `heading` | Original heading text |
+| `level` | Markdown heading level, 1–6 |
+| `index` | Zero-based position of the heading in the document’s full heading sequence |
+| `text` | Selected section body after sequential token-budget clipping |
+
+If no heading matches, `selected_sections` is an empty array, `text` is
+empty, and `low_yield` is `false`.
+
+`max_tokens` applies to the combined selected text. When the budget is
+exceeded, sections are clipped sequentially in document order,
+`truncated` becomes `true`, and `limiting_factor` becomes
+`token_budget`.
+
 ### Chunk mode limits
 
 Chunk mode preserves up to 200,000 extracted characters, approximately
