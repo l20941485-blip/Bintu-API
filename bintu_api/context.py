@@ -1,11 +1,11 @@
-﻿"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
+"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
 
 Modes:
-    scrape    â€” plain readable text (existing behavior), with token count + provenance
-    chunk     â€” text split into max_tokens-sized chunks, each with token count,
+    scrape    — plain readable text (existing behavior), with token count + provenance
+    chunk     — text split into max_tokens-sized chunks, each with token count,
                 ready to drop straight into a vector database
-    summarize â€” condensed text truncated to max_tokens (sentence-aware)
+    summarize — condensed text truncated to max_tokens (sentence-aware)
 
 
 Designed for AI-agent context engineering: instead of returning a raw blob of
@@ -157,7 +157,7 @@ def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
 
 
-    The baseline deliberately counts the raw document â€” markup included â€” so
+    The baseline deliberately counts the raw document — markup included — so
     `tokens_saved_estimate` is approximately "fetched HTML tokens minus
     delivered text tokens", the all-in number the cost-reduction story needs.
     """
@@ -235,7 +235,7 @@ async def extract_context(
     """Fetch, extract, and transform a page into a context-ready document.
 
 
-    Reuses the existing fetch â†' extract â†' cache pipeline from
+    Reuses the existing fetch → extract → cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
     """
@@ -434,7 +434,3 @@ async def extract_context(
         extractor_version=None,
         selected_sections=selected_sections,
     )
-
-
-
-

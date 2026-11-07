@@ -43,11 +43,16 @@ def _parse_headings(text: str) -> list[dict[str, Any]]:
     return headings
 
 
-def normalize_selectors(sections: list[str]) -> list[str]:
+def normalize_selectors(sections: str | list[str]) -> list[str]:
+    if isinstance(sections, str):
+        raw_values = sections.split("\n")
+    else:
+        raw_values = sections
+
     seen: set[str] = set()
     result: list[str] = []
 
-    for raw in sections:
+    for raw in raw_values:
         normalized = _normalize(raw)
         if normalized and normalized not in seen:
             seen.add(normalized)
@@ -58,7 +63,7 @@ def normalize_selectors(sections: list[str]) -> list[str]:
 
 def select_sections(
     text: str,
-    sections: list[str],
+    sections: str | list[str],
     max_tokens: int,
 ) -> SectionSelection:
     selectors = normalize_selectors(sections)
@@ -80,7 +85,7 @@ def select_sections(
                 matched_ordinals.add(heading["ordinal"])
                 break
 
-    matched.sort(key=lambda heading: heading["ordinal"])
+    matched.sort(key=lambda heading: heading["ordinal"])    
 
     if not matched:
         return SectionSelection(sections=[], text="", truncated=False)
