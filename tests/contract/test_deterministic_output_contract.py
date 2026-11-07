@@ -1,4 +1,4 @@
-"""Deterministic output contract tests for Bintu's current behavior.
+﻿"""Deterministic output contract tests for Bintu's current behavior.
 
 Locks the existing, shipped contract without implementing new features:
 
@@ -513,17 +513,17 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
         return response.json()["result"]
 
     def _base_context_kwargs(self):
-        return dict(
-            mode="scrape",
-            text="Extracted readable text.",
-            approx_tokens=7,
-            html_tokens=50,
-            token_method="ceil(characters/4)",
-            limiting_factor="none",
-            chunk_count=1,
-            cache_hit=False,
-            cache_layer="none",
-            chunks=[
+        return {
+            "mode": "scrape",
+            "text": "Extracted readable text.",
+            "approx_tokens": 7,
+            "html_tokens": 50,
+            "token_method": "ceil(characters/4)",
+            "limiting_factor": "none",
+            "chunk_count": 1,
+            "cache_hit": False,
+            "cache_layer": "none",
+            "chunks": [
                 {
                     "index": 0,
                     "text": "Extracted readable text.",
@@ -531,15 +531,15 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
                     "tokens": 7,
                 }
             ],
-            source_url="https://example.com",
-            extracted_at="2024-01-01T00:00:00+00:00",
-            tokens=7,
-            tokens_saved_estimate=43,
-            truncated=False,
-            split=False,
-            deduplicated_count=0,
-            low_yield=False,
-        )
+            "source_url": "https://example.com",
+            "extracted_at": "2024-01-01T00:00:00+00:00",
+            "tokens": 7,
+            "tokens_saved_estimate": 43,
+            "truncated": False,
+            "split": False,
+            "deduplicated_count": 0,
+            "low_yield": False,
+        }
 
     def test_mcp_envelope_contains_contract_fields(self):
         context = ContextResult(**self._base_context_kwargs())
