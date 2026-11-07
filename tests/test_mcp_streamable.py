@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from bintu_api.database import CachedMarkdown
 from bintu_api.mcp import (
     TOOL_ANNOTATIONS,
     TOOL_INPUT_SCHEMA,
@@ -124,6 +125,45 @@ class McpStreamableTests(unittest.TestCase):
         self.assertTrue(tools[0]["annotations"]["readOnlyHint"])
         self.assertTrue(tools[0]["description"])
         self.assertIn("url", tools[0]["inputSchema"]["properties"])
+
+    def test_tools_call_selects_multiple_sections(self) -> None:
+        cached = CachedMarkdown(
+            markdown="# Alpha\nAlpha body\n\n# Beta\nBeta body",
+            truncated=False,
+            html_tokens=100,
+            tokens_saved_estimate=0,
+            limiting_factor="none",
+            extracted_at="2026-01-01T00:00:00+00:00",
+        )
+
+        with patch(
+            "bintu_api.routes._fetch_and_extract",
+            new=mock.AsyncMock(return_value=(None, cached, "none")),
+        ):
+            response = self.rpc(
+                "tools/call",
+                {
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "sections": "Alpha\nBeta",
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertFalse(payload["isError"])
+
+        data = json.loads(payload["content"][0]["text"])
+        self.assertEqual(
+            [section["heading"] for section in data["selected_sections"]],
+            ["Alpha", "Beta"],
+        )
+        self.assertEqual(
+            data["text"],
+            "# Alpha\nAlpha body\n\n# Beta\nBeta body",
+        )
 
     def test_notification_returns_202_with_empty_body(self) -> None:
         response = self.client.post(

@@ -64,7 +64,13 @@ def build_mcp_envelope(context: ContextResult, source_url: str) -> dict[str, Any
         "deduplicated_count": context.deduplicated_count,
         "low_yield": context.low_yield,
         **({"yield_hint": context.yield_hint} if context.low_yield else {}),
+        "text": context.text,
         "truncated": context.truncated,
+        **(
+            {"selected_sections": context.selected_sections}
+            if context.selected_sections is not None
+            else {}
+        ),
         "split": context.split,
         "chunks": context.chunks,
         **provenance,

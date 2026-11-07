@@ -26,6 +26,7 @@ from fastapi import Request
 from bintu_api.auth import rate_limit_identity
 from bintu_api.context_chunking import split_into_chunks, summarize_text
 from bintu_api.final_fixes import delivered_savings
+from bintu_api.extraction.sections import select_sections
 from bintu_api.observability import (
     log_cache_lookup_completed,
     record_cache_tokens_saved,
@@ -308,26 +309,40 @@ async def extract_context(
     limiting_factor = "char_cap" if content_truncated else "none"
 
     transformation_truncated = False
+    selected_sections = None
 
     if mode == "scrape":
-        final_text, token_truncated = truncate_to_token_budget(
-            raw_text,
-            max_tokens,
-        )
-        chunks = [
-            {
-                "index": 0,
-                "text": final_text,
-                "approx_tokens": count_tokens(final_text),
-                "tokens": count_tokens(final_text),
-            }
-        ]
-        scrape_baseline_tokens = count_tokens(raw_text)
-        approx_tokens = count_tokens(final_text)
-        transformation_truncated = content_truncated or token_truncated
+        if sections:
+            selection = select_sections(raw_text, sections, max_tokens)
+            final_text = selection.text
+            chunks = []
+            selected_sections = selection.sections
+            token_truncated = selection.truncated
+            scrape_baseline_tokens = count_tokens(raw_text)
+            approx_tokens = count_tokens(final_text)
+            transformation_truncated = content_truncated or selection.truncated
 
-        if token_truncated:
-            limiting_factor = "token_budget"
+            if selection.truncated:
+                limiting_factor = "token_budget"
+        else:
+            final_text, token_truncated = truncate_to_token_budget(
+                raw_text,
+                max_tokens,
+            )
+            chunks = [
+                {
+                    "index": 0,
+                    "text": final_text,
+                    "approx_tokens": count_tokens(final_text),
+                    "tokens": count_tokens(final_text),
+                }
+            ]
+            scrape_baseline_tokens = count_tokens(raw_text)
+            approx_tokens = count_tokens(final_text)
+            transformation_truncated = content_truncated or token_truncated
+
+            if token_truncated:
+                limiting_factor = "token_budget"
 
     elif mode == "chunk":
         chunk_strings = split_into_chunks(raw_text, max_tokens)
@@ -417,5 +432,5 @@ async def extract_context(
         content_sha256=None,
         cache=None,
         extractor_version=None,
-        selected_sections=selected_sections if sections else None,
+        selected_sections=selected_sections,
     )

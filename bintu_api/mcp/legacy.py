@@ -401,6 +401,12 @@ async def call_tool(
         mcp_rate_limit_identity(request, settings),
     )
 
+    sections = (
+        arguments.sections.split("\n")
+        if arguments.sections is not None
+        else None
+    )
+
     try:
         document, cached, cache_layer = await routes._fetch_and_extract(
             request,
@@ -415,7 +421,8 @@ async def call_tool(
             links=arguments.links,
             footnote_url_policy=arguments.footnote_url_policy,
             max_footnote_url_length=arguments.max_footnote_url_length,
-        )
+            )
+
     except TargetURLRejected as error:
         return _mcp_error_response(
             "invalid_or_unsafe_url",
@@ -444,6 +451,7 @@ async def call_tool(
         arguments.url,
         mode=arguments.mode,
         max_tokens=arguments.max_tokens,
+        sections=sections,
         cache=arguments.cache,
         render_js=arguments.render_js,
         include_nav=False,

@@ -511,6 +511,13 @@ async def _tools_call_result(
         # and extractor pipeline as the REST endpoint. Call through the routes
         # module so tests can patch the shared network boundary at
         # bintu_api.routes.fetch_html_document.
+
+        sections = (
+            arguments.sections.split("\n")
+            if arguments.sections is not None
+            else None
+        )
+
         document, cached, cache_layer = await routes._fetch_and_extract(
             request,
             arguments.url,
@@ -525,6 +532,7 @@ async def _tools_call_result(
             max_tokens=arguments.max_tokens,
             footnote_url_policy=arguments.footnote_url_policy,
             max_footnote_url_length=arguments.max_footnote_url_length,
+            sections=sections,
         )
     except TargetURLRejected as error:
         log_extraction_failed(
@@ -604,6 +612,7 @@ async def _tools_call_result(
             arguments.url,
             mode=arguments.mode,
             max_tokens=arguments.max_tokens,
+            sections=sections,
             cache=arguments.cache,
             render_js=arguments.render_js,
             include_nav=False,
