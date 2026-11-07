@@ -51,7 +51,7 @@ def cache_key():
     return hashlib.sha256(f"0:inline:{URL}".encode()).hexdigest()
 
 
-def run(request, skip_cache=False):
+def run(request, skip_cache=False, sections=None):
     return asyncio.run(
         routes._scrape_text(
             request,
@@ -63,9 +63,9 @@ def run(request, skip_cache=False):
             False,
             links="inline",
             skip_cache=skip_cache,
+            sections=sections,
         )
     )
-
 
 class CacheBypassTests(unittest.TestCase):
     def patches(self):
