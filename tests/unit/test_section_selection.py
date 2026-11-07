@@ -1,4 +1,5 @@
 ﻿from bintu_api.extraction.sections import select_sections
+
 SAMPLE = """# Alpha
 Alpha body
 

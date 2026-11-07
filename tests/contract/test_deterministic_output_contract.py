@@ -29,8 +29,8 @@ from bintu_api.errors.codes import ERROR_CODES, normalize_error_code
 from bintu_api.errors.tool_errors import build_mcp_tool_error_result
 from bintu_api.extraction.response import (
     build_mcp_envelope,
-    build_rest_response,
     build_response_provenance,
+    build_rest_response,
 )
 from bintu_api.mcp import (
     TOOL_ANNOTATIONS,
@@ -614,9 +614,9 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
     def test_mcp_streamable_envelope_fields_via_live_call(self):
         """Exercise the full streamable path to lock the live envelope fields."""
         document_html = (
-            "<html><body><main><h1>Example</h1><p>Readable content here.</p>"
-            "</main></body></html>"
-        ).encode("utf-8")
+            b"<html><body><main><h1>Example</h1><p>Readable content here.</p>"
+            b"</main></body></html>"
+        )
 
         class _FetchResult:
             def __init__(self, body, charset, final_url):

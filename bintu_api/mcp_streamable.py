@@ -59,9 +59,7 @@ from bintu_api.auth import (
     verify_mcp_execution_access,
 )
 from bintu_api.context import (
-    CacheEconomics,
     _decode_source_text,
-    extract_context,
     normalize_mode,
 )
 from bintu_api.errors.tool_errors import build_mcp_tool_error_result
@@ -69,12 +67,14 @@ from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,
     INVALID_REQUEST,
-    MAX_MCP_BODY_BYTES as _PROTOCOL_MAX_MCP_BODY_BYTES,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
     PUBLIC_MCP_METHODS,
     SUPPORTED_PROTOCOL_VERSIONS,
     UPSTREAM_ACCESS_DENIED_STATUSES,
+)
+from bintu_api.mcp.protocol import (
+    MAX_MCP_BODY_BYTES as _PROTOCOL_MAX_MCP_BODY_BYTES,
 )
 from bintu_api.mcp.protocol import (
     _accept_header_serves_json as _protocol_accept_header_serves_json,

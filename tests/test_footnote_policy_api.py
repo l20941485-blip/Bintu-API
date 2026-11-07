@@ -17,7 +17,6 @@ from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
 
-
 LONG_URL = "https://example.com/" + ("very/long/path/" * 44) + ("x" * 13)
 PAGE_URL = "https://example.com/source"
 LONG_URL_HTML = (

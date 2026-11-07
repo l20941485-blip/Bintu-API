@@ -28,9 +28,7 @@ from bintu_api.auth import (
     verify_mcp_api_access,
 )
 from bintu_api.context import (
-    CacheEconomics,
     _decode_source_text,
-    extract_context,
 )
 from bintu_api.extraction.cache import build_cache_economics
 from bintu_api.mcp.schemas import (

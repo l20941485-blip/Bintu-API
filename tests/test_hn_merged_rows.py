@@ -4,7 +4,6 @@ from pathlib import Path
 
 from bintu_api.scraper import extract_text_result
 
-
 FIXTURE = Path(__file__).parent / "fixtures" / "hn_merged_rows_synthetic.html"
 
 
