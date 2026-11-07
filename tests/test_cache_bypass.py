@@ -80,6 +80,27 @@ class CacheBypassTests(unittest.TestCase):
             mock.patch.object(routes, "has_valid_proxy_secret", return_value=False),
         )
 
+    def test_sections_bypass_persistent_and_memory_cache(self):
+        cache = FakeCache({cache_key(): fake_document()})
+        request = make_request(cache, db_client=object())
+        fetch, get_cached, upsert, proxy = self.patches()
+
+        with (
+            fetch as fetch_m,
+            get_cached as get_m,
+            upsert as upsert_m,
+            proxy,
+        ):
+            response = run(request, sections=["Hello world"])
+
+        get_m.assert_not_called()
+        self.assertEqual(cache.get_calls, 0)
+        fetch_m.assert_called_once()
+        upsert_m.assert_called_once()
+        self.assertEqual(response.cache_layer, "none")
+        self.assertIsNotNone(response.selected_sections)
+        self.assertEqual(response.text, "Hello world")
+
     def test_skip_cache_reads_no_cache_but_still_writes(self):
         cache = FakeCache({cache_key(): fake_document()})
         request = make_request(cache, db_client=object())

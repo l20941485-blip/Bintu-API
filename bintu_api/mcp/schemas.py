@@ -265,12 +265,27 @@ TOOL_INPUT_SCHEMA["properties"]["render_js"]["description"] = RENDER_JS_DESCRIPT
 TOOL_INPUT_SCHEMA["properties"]["links"]["description"] = LINKS_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["footnote_url_policy"]["description"] = FOOTNOTE_URL_POLICY_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["sections"] = {
-    "type": "string",
+    "oneOf": [
+        {
+            "type": "string",
+            "description": (
+                "Newline-separated heading selectors to include in the response."
+            ),
+        },
+        {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Heading selectors to include in the response."
+            ),
+        },
+    ],
     "description": (
-        "Newline-separated list of heading selectors to include in the response. "
-        "Whitespace and case are normalized for matching. "
-        "Empty or whitespace-only sections returns invalid_arguments. "
-        "Sections longer than 200 characters return invalid_arguments."
+        "Heading selectors to include in the response. Accepts either a "
+        "newline-separated string or an array of strings. Whitespace and "
+        "case are normalized for matching. Empty or whitespace-only "
+        "selectors return invalid_arguments. Each selector must be 200 "
+        "characters or fewer."
     ),
 }
 TOOL_INPUT_SCHEMA["properties"]["max_footnote_url_length"]["description"] = MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION

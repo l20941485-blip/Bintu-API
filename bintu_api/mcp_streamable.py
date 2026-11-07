@@ -512,11 +512,7 @@ async def _tools_call_result(
         # module so tests can patch the shared network boundary at
         # bintu_api.routes.fetch_html_document.
 
-        sections = (
-            arguments.sections.split("\n")
-            if arguments.sections is not None
-            else None
-        )
+        sections = arguments.sections
 
         document, cached, cache_layer = await routes._fetch_and_extract(
             request,

@@ -18,7 +18,7 @@ def make_arguments(sections):
 def test_accepts_newline_separated_string():
     arguments = make_arguments("Alpha\nBeta")
 
-    assert arguments.sections == "Alpha\nBeta"
+    assert arguments.sections == ["Alpha", "Beta"]
 
 
 def test_accepts_array_of_strings():
@@ -46,3 +46,14 @@ def test_accepts_selector_exactly_200_characters():
     arguments = make_arguments(["a" * 200])
 
     assert arguments.sections == ["a" * 200]
+
+
+def test_mcp_dispatch_receives_normalized_section_list():
+    arguments = ToolArguments.model_validate(
+        {
+            "url": "https://example.com",
+            "sections": "Alpha\nBeta",
+        }
+    )
+
+    assert arguments.sections == ["Alpha", "Beta"]

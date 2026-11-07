@@ -84,11 +84,12 @@ class ToolArguments(BaseModel):
 
         if isinstance(self.sections, str):
             raw_selectors = self.sections.split("\n")
-        else:
+        elif isinstance(self.sections, list):
             raw_selectors = self.sections
-
-        if not isinstance(raw_selectors, list):
-            raise ValueError("sections must be a string or an array of strings.")
+        else:
+            raise ValueError(
+                "sections must be a string or an array of strings."
+            )
 
         if any(not isinstance(selector, str) for selector in raw_selectors):
             raise ValueError("sections must contain only strings.")
@@ -105,4 +106,5 @@ class ToolArguments(BaseModel):
                 "Each section selector must be 200 characters or fewer."
             )
 
+        self.sections = selectors
         return self
