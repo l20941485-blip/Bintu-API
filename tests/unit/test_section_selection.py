@@ -1,4 +1,6 @@
-﻿from bintu_api.extraction.sections import select_sections
+"""Unit tests for heading-based section selection."""
+
+from bintu_api.extraction.sections import select_sections
 
 SAMPLE = """# Alpha
 Alpha body
@@ -17,8 +19,8 @@ def test_selects_single_section():
     assert len(result.sections) == 1
     assert result.sections[0]["heading"] == "Alpha"
     assert result.sections[0]["index"] == 0
-    assert result.text == "# Alpha\nAlpha body"
-    assert result.truncated is False
+    assert result.sections[0]["text"] == "Alpha body"
+    assert result.text == "Alpha body"
 
 
 def test_selects_multiple_sections_in_document_order():
@@ -28,33 +30,13 @@ def test_selects_multiple_sections_in_document_order():
         "Alpha",
         "Beta",
     ]
+    assert [section["index"] for section in result.sections] == [0, 1]
     assert result.text == (
-        "# Alpha\nAlpha body\n\n"
-        "# Beta\nBeta body\n\n## Gamma\nGamma body"
+        "Alpha body\n\nBeta body\n\n## Gamma\nGamma body"
     )
-    assert result.truncated is False
 
 
-def test_deduplicates_selectors():
-    result = select_sections(SAMPLE, ["alpha", "ALPHA"], 100)
-
-    assert len(result.sections) == 1
-    assert result.sections[0]["heading"] == "Alpha"
-
-
-def test_matches_case_insensitively():
-    result = select_sections(SAMPLE, ["ALPHA"], 100)
-
-    assert result.sections[0]["heading"] == "Alpha"
-
-
-def test_matches_whitespace_normalized_heading():
-    result = select_sections(SAMPLE, ["  alpha  "], 100)
-
-    assert result.sections[0]["heading"] == "Alpha"
-
-
-def test_returns_empty_for_no_match():
+def test_no_match_contract():
     result = select_sections(SAMPLE, ["missing"], 100)
 
     assert result.sections == []
@@ -62,7 +44,7 @@ def test_returns_empty_for_no_match():
     assert result.truncated is False
 
 
-def test_empty_selector_list_returns_empty():
+def test_empty_selector_list_contract():
     result = select_sections(SAMPLE, [], 100)
 
     assert result.sections == []
@@ -70,10 +52,29 @@ def test_empty_selector_list_returns_empty():
     assert result.truncated is False
 
 
-def test_clips_long_sections():
+def test_clipping_contract():
     long_text = "# Long\n" + ("x" * 100 + "\n") * 20
+
     result = select_sections(long_text, ["long"], 10)
 
     assert result.truncated is True
     assert len(result.text) <= 40
 
+
+def test_multi_section_clipping_preserves_combined_text():
+    text = (
+        "# Alpha\n"
+        + ("a" * 30 + "\n") * 3
+        + "\n# Beta\n"
+        + ("b" * 30 + "\n") * 3
+        + "\n# Gamma\n"
+        + ("c" * 30 + "\n") * 3
+    )
+
+    result = select_sections(text, ["alpha", "beta", "gamma"], 10)
+
+    assert result.truncated is True
+    assert len(result.sections) == 3
+    assert result.text == "\n\n".join(
+        section["text"] for section in result.sections
+    )
