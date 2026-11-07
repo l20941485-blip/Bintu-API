@@ -63,3 +63,21 @@ def test_clipping_contract():
 
     assert result.truncated is True
     assert len(result.text) <= 40
+
+def test_multi_section_clipping_preserves_combined_text():
+    text = (
+        "# Alpha\n"
+        + ("a" * 30 + "\n") * 3
+        + "\n# Beta\n"
+        + ("b" * 30 + "\n") * 3
+        + "\n# Gamma\n"
+        + ("c" * 30 + "\n") * 3
+    )
+
+    result = select_sections(text, ["alpha", "beta", "gamma"], 10)
+
+    assert result.truncated is True
+    assert len(result.sections) == 3
+    assert result.text == "\n\n".join(
+        section["text"] for section in result.sections
+    )

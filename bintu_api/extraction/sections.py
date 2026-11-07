@@ -135,6 +135,9 @@ def select_sections(
             remaining = 0
             truncated = True
 
+    for section, clipped_text in zip(selected, clipped):
+        section["text"] = clipped_text
+
     return SectionSelection(
         sections=selected,
         text="\n\n".join(clipped),
