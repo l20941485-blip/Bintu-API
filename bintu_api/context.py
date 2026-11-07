@@ -235,7 +235,7 @@ async def extract_context(
     """Fetch, extract, and transform a page into a context-ready document.
 
 
-    Reuses the existing fetch â†’ extract â†’ cache pipeline from
+    Reuses the existing fetch â†' extract â†' cache pipeline from
     ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
     """
@@ -434,4 +434,7 @@ async def extract_context(
         extractor_version=None,
         selected_sections=selected_sections,
     )
+
+
+
 
