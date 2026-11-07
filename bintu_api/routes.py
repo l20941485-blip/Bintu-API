@@ -1046,6 +1046,11 @@ async def _scrape_text(
             response.limiting_factor = (
                 "token_budget" if selection.truncated else "none"
             )
+
+            if not selection.sections:
+                response.low_yield = False
+                response.yield_hint = None
+            
             response.approx_tokens = _compute_approx_tokens(selection.text)
             response.tokens = response.approx_tokens
             response.tokens_saved_estimate = max(
