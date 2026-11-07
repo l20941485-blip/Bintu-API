@@ -1,3 +1,5 @@
+"""Tests for heading-based section selection in the Bintu extraction pipeline."""
+
 from bintu_api.extraction.sections import SectionSelection, select_sections
 
 
@@ -16,7 +18,7 @@ def test_section_selection_shape():
     assert result.sections[0]["heading"] == "Alpha"
     assert result.sections[0]["level"] == 1
     assert result.sections[0]["index"] == 0
-    assert result.sections[0]["text"] == "# Alpha\nAlpha body"
+    assert result.sections[0]["text"] == "Alpha body"
 
 
 def test_no_match_contract():
@@ -51,9 +53,7 @@ def test_document_order_contract():
     )
 
     assert [section["index"] for section in result.sections] == [0, 1]
-    assert result.text == (
-        "# Alpha\nAlpha body\n\n# Beta\nBeta body"
-    )
+    assert result.text == "Alpha body\n\nBeta body"
 
 
 def test_clipping_contract():
@@ -63,6 +63,7 @@ def test_clipping_contract():
 
     assert result.truncated is True
     assert len(result.text) <= 40
+
 
 def test_multi_section_clipping_preserves_combined_text():
     text = (

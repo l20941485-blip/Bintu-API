@@ -90,7 +90,7 @@ def select_sections(
     selected_texts: list[str] = []
 
     for heading in matched:
-        start = heading["line_index"]
+        start = heading["line_index"] + 1
         end = len(lines)
 
         for later_heading in headings:
