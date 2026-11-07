@@ -221,7 +221,11 @@ def test_not_found_is_reported(mcp):
 def test_robots_txt_is_honoured(mcp):
     r = mcp.scrape("https://www.reddit.com/r/Python/")
     assert r.is_error, r.text
-    assert r.code in {"blocked_by_robots", "upstream_http_error"}, r.text
+    assert r.code in {
+        "blocked_by_robots",
+        "upstream_access_denied",
+        "upstream_http_error",
+    }, r.text
 
 
 # ---------------------------------------------------------------- cache

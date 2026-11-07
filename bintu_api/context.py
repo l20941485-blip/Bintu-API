@@ -139,7 +139,7 @@ class ContextResult:
     content_sha256: str | None = None
     cache: CacheInfo | None = None
     extractor_version: str | None = None
-
+    selected_sections: list[dict[str, Any]] | None = None
 
 @dataclass(frozen=True)
 class CacheEconomics:
@@ -212,7 +212,10 @@ async def extract_context(
     url: str,
     mode: ContextMode = "scrape",
     max_tokens: int = 6000,
+    sections: str | None = None,
+    selected_sections: list[dict[str, Any]] | None = None,
     cache: bool = True,
+    persist: bool = True,
     render_js: bool = False,
     include_nav: bool = False,
     include_header: bool = False,
@@ -414,4 +417,5 @@ async def extract_context(
         content_sha256=None,
         cache=None,
         extractor_version=None,
+        selected_sections=selected_sections if sections else None,
     )

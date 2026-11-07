@@ -11,7 +11,7 @@ import pytest
 import requests
 
 BASE_URL = os.getenv("BINTU_BASE_URL", "https://bintu-api.onrender.com")
-MCP_URL = os.getenv("BINTU_MCP_URL", "https://bintu-web-reader.mcpize.run/mcp")
+MCP_URL = os.environ.get("BINTU_MCP_URL", f"{BASE_URL}/mcp")
 TOKEN = os.getenv("BINTU_TOKEN", "")
 REST_API_KEY = os.getenv("BINTU_API_KEY", "")
 

@@ -264,5 +264,14 @@ TOOL_INPUT_SCHEMA["properties"]["persist"]["description"] = PERSIST_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["render_js"]["description"] = RENDER_JS_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["links"]["description"] = LINKS_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["footnote_url_policy"]["description"] = FOOTNOTE_URL_POLICY_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["sections"] = {
+    "type": "string",
+    "description": (
+        "Newline-separated list of heading selectors to include in the response. "
+        "Whitespace and case are normalized for matching. "
+        "Empty or whitespace-only sections returns invalid_arguments. "
+        "Sections longer than 200 characters return invalid_arguments."
+    ),
+}
 TOOL_INPUT_SCHEMA["properties"]["max_footnote_url_length"]["description"] = MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION
 TOOL_OUTPUT_SCHEMA["properties"].update(OUTPUT_SCHEMA_EXTRA_PROPERTIES)
