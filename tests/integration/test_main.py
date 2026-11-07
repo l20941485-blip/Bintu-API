@@ -207,6 +207,44 @@ class ScraperApiTests(unittest.TestCase):
             "test-trace-42",
         )
 
+    def test_scrape_text_returns_selected_sections(self) -> None:
+        html = (
+            b"<html><body>"
+            b"<h1>Alpha</h1><p>Alpha body</p>"
+            b"<h1>Beta</h1><p>Beta body</p>"
+            b"</body></html>"
+        )
+
+        with patch(
+            "bintu_api.routes.fetch_html_document",
+            return_value=FetchedHTML(body=html, charset=None),
+        ):
+            response = self.client.get(
+                "/api/v1/scrape/text",
+                params={
+                    "url": "https://example.com/page",
+                    "sections": ["Alpha"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["text"], "Alpha body")
+        self.assertEqual(
+            payload["selected_sections"],
+            [
+                {
+                    "heading": "Alpha",
+                    "level": 1,
+                    "index": 0,
+                    "text": "Alpha body",
+                }
+            ],
+        )
+        self.assertEqual(payload["limiting_factor"], "none")
+        self.assertFalse(payload["truncated"])
+
     def test_http_charset_is_used_and_retained_in_cache(self) -> None:
         fetched = FetchedHTML(
             body=b"<p>caf\xe9</p>",

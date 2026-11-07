@@ -49,8 +49,6 @@ MODE_DESCRIPTION = (
     "'chunked' is accepted as an alias for chunk."
 )
 
-"For scrape mode, optional sections selects matching Markdown headings and returns their clipped bodies in selected_sections."
-
 MAX_TOKENS_DESCRIPTION = (
     "Estimated-token budget, enforced in every mode: scrape trims to it, chunk makes each chunk fit it, "
     "summarize returns the leading text within it. Range 100 to 50000, default 6000. "
