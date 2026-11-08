@@ -45,7 +45,6 @@ from bintu_api.database import (
 )
 from bintu_api.extraction.cache import compute_saved_tokens
 from bintu_api.extraction.sections import select_sections
-from bintu_api.final_fixes import has_credential_params
 from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.observability import (
     log_cache_event,
@@ -65,6 +64,7 @@ from bintu_api.schemas import (
     ScrapeTextResponse,
     VersionResponse,
 )
+from bintu_api.security.credentials import has_credential_params
 from bintu_api.scraper import (
     FetchedHTML,
     PayloadTooLarge,
@@ -82,7 +82,7 @@ from bintu_api.scraper import (
     fetch_rendered_html_document,
 )
 from bintu_api.settings import Settings
-from bintu_api.yield_check import assess_yield
+from bintu_api.extraction.quality import assess_yield
 
 logger = logging.getLogger("bintu_api.scrape")
 router = APIRouter()
@@ -542,137 +542,12 @@ async def _scrape_chunks(
 
     except HTTPException:
         raise
-    except RedirectedToPrivateNetwork as error:
-        log_upstream_error(
-            error_type="redirect_to_private_network",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "redirect_to_private_network",
-                "message": "A redirect attempted to access a private network address",
-                "hint": "Use a public HTTPS URL",
-            },
-        ) from error
-    except TargetURLRejected as error:
-        log_upstream_error(
-            error_type="invalid_or_unsafe_url",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "invalid_or_unsafe_url",
-                "message": str(error),
-                "hint": "URL must start with http:// or https:// and be publicly accessible",
-            },
-        ) from error
-    except UnsupportedMediaType as error:
-        log_upstream_error(
-            error_type="unsupported_media_type",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=415,
-            detail={
-                "code": "unsupported_media_type",
-                "message": str(error),
-                "hint": "Only HTML and XHTML pages are supported",
-            },
-        ) from error
-    except PayloadTooLarge as error:
-        log_upstream_error(
-            error_type="payload_too_large",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=413,
-            detail={
-                "code": "payload_too_large",
-                "message": "The page exceeds the 1 MiB size limit",
-                "hint": "The page exceeds the 1 MiB size limit",
-            },
-        ) from error
-    except UpstreamHTTPError as error:
-        log_upstream_error(
-            error_type="upstream_http_error",
-            url=url,
-            request_id=request_id,
-            status_code=error.status_code,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "upstream_http_error",
-                "message": f"The target returned HTTP {error.status_code}.",
-                "hint": "The target server returned an error. Try again later.",
-            },
-        ) from error
-    except TooManyRedirects as error:
-        log_upstream_error(
-            error_type="too_many_redirects",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "too_many_redirects",
-                "message": str(error),
-                "hint": "The page has too many redirects",
-            },
-        ) from error
-    except TimeoutError as error:
-        log_upstream_error(
-            error_type="upstream_timeout",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=504,
-            detail={
-                "code": "upstream_timeout",
-                "message": "The target did not respond in time.",
-                "hint": "The target server is slow or unresponsive. Try again later.",
-            },
-        ) from error
-    except OSError as error:
-        log_upstream_error(
-            error_type="upstream_connection_error",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "upstream_connection_error",
-                "message": "Could not connect to the target.",
-                "hint": "The target server may be down or unreachable.",
-            },
-        ) from error
     except Exception as error:
-        log_upstream_error(
-            error_type="internal_error",
+        raise translate_upstream_error(
+            error,
             url=url,
             request_id=request_id,
-        )
-        logger.error(
-            "chunk_scrape_failed error_type=%s",
-            type(error).__name__,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "code": "internal_error",
-                "message": "An internal extraction error occurred.",
-            },
         ) from error
-
 
 @router.post(
     "/api/v1/mobile/scrape/text",
@@ -968,7 +843,7 @@ async def _fetch_and_extract(
     return document, result, cache_layer
 
 
-from bintu_api.extraction_quality import truncate_to_token_budget
+from bintu_api.extraction.token_budget import truncate_to_token_budget
 
 
 async def _scrape_text(
@@ -1090,203 +965,14 @@ async def _scrape_text(
 
     except HTTPException:
         raise
-    except RedirectedToPrivateNetwork as error:
-        log_upstream_error(
-            error_type="redirect_to_private_network",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "redirect_to_private_network",
-                "message": "A redirect attempted to access a private network address",
-                "hint": "Use a public HTTPS URL",
-            },
-        ) from error
-    except TargetURLRejected as error:
-        log_upstream_error(
-            error_type="invalid_or_unsafe_url",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "invalid_or_unsafe_url",
-                "message": str(error),
-                "hint": "URL must start with http:// or https:// and be publicly accessible",
-            },
-        ) from error
-    except UnsupportedMediaType as error:
-        log_upstream_error(
-            error_type="unsupported_media_type",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=415,
-            detail={
-                "code": "unsupported_media_type",
-                "message": str(error),
-                "hint": "Only HTML and XHTML pages are supported",
-            },
-        ) from error
-    except UnsupportedContentEncoding as error:
-        log_upstream_error(
-            error_type="unsupported_content_encoding",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "unsupported_content_encoding",
-                "message": str(error),
-                "hint": "The target returned an unsupported or invalid compressed response",
-            },
-        ) from error
-    except PayloadTooLarge as error:
-        log_upstream_error(
-            error_type="payload_too_large",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=413,
-            detail={
-                "code": "payload_too_large",
-                "message": "The page exceeds the 1 MiB size limit",
-                "hint": "The page exceeds the 1 MiB size limit",
-            },
-        ) from error
-    except UpstreamHTTPError as error:
-        log_upstream_error(
-            error_type="upstream_http_error",
-            url=url,
-            request_id=request_id,
-            status_code=error.status_code,
-        )
-        logger.warning(
-            "upstream_http_error status=%d reason=%s",
-            error.status_code,
-            error.reason,
-        )
-
-        if error.status_code == 429:
-            # Returned as 502 so a target's rate limit is distinguishable from
-            # access denial and other upstream failures.
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "code": "upstream_rate_limited",
-                    "message": "The target returned HTTP 429.",
-                    "hint": "The target is rate limiting requests. Wait before retrying.",
-                    "upstream_status": error.status_code,
-                },
-            ) from error
-
-        if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
-            # Returned as 502 so a target's 401/403 is never mistaken for a problem
-            # with the caller's own API key. No retries, no workarounds.
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "code": "upstream_access_denied",
-                    "message": f"The target refused access (HTTP {error.status_code}).",
-                    "hint": "Bintu does not retry, log in, solve CAPTCHAs or work around blocks.",
-                    "upstream_status": error.status_code,
-                },
-            ) from error
-
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "upstream_http_error",
-                "message": f"The target returned HTTP {error.status_code}.",
-                "hint": "The target server returned an error. Try again later.",
-                "upstream_status": error.status_code,
-            },
-        ) from error
-    except TooManyRedirects as error:
-        log_upstream_error(
-            error_type="too_many_redirects",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "too_many_redirects",
-                "message": str(error),
-                "hint": "The page has too many redirects",
-            },
-        ) from error
-    except UpstreamRenderError as error:
-        log_upstream_error(
-            error_type="upstream_render_error",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "upstream_render_error",
-                "message": str(error),
-                "hint": "The target page could not be rendered.",
-            },
-        ) from error
-    except TimeoutError as error:
-        log_upstream_error(
-            error_type="upstream_timeout",
-            url=url,
-            request_id=request_id,
-        )
-        raise HTTPException(
-            status_code=504,
-            detail={
-                "code": "upstream_timeout",
-                "message": "The target did not respond in time.",
-                "hint": "The target server is slow or unresponsive. Try again later.",
-            },
-        ) from error
-    except OSError as error:
-        log_upstream_error(
-            error_type="upstream_connection_error",
-            url=url,
-            request_id=request_id,
-        )
-        logger.warning(
-            "upstream_connection_error error_type=%s",
-            type(error).__name__,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "upstream_connection_error",
-                "message": "Could not connect to the target.",
-                "hint": "The target server may be down or unreachable.",
-            },
-        ) from error
     except Exception as error:
-        log_upstream_error(
-            error_type="internal_error",
+        raise translate_upstream_error(
+            error,
             url=url,
             request_id=request_id,
-        )
-        logger.error(
-            "scrape_failed error_type=%s",
-            type(error).__name__,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "code": "internal_error",
-                "message": "An internal extraction error occurred.",
-            },
         ) from error
-
 
 # Public alias for consumers outside routes.py (context.py, mcp.py).
 scrape_text = _scrape_text  # noqa: F811 -- intentional public alias for the route handler
+
 
