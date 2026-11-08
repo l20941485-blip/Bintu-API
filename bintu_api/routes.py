@@ -65,6 +65,7 @@ from bintu_api.schemas import (
     VersionResponse,
 )
 from bintu_api.security.credentials import has_credential_params
+from bintu_api.extraction.html_extract import extract_text_result
 from bintu_api.scraper import (
     FetchedHTML,
     PayloadTooLarge,
@@ -77,7 +78,6 @@ from bintu_api.scraper import (
     UpstreamRenderError,
     _compute_approx_tokens,
     _compute_tokens_saved_estimate,
-    extract_text_result,
     fetch_html_document,
     fetch_rendered_html_document,
 )

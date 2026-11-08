@@ -21,12 +21,12 @@ from dataclasses import dataclass
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
 
+from bintu_api.settings import Settings
 from bintu_api.extraction.html_extract import (
     ExtractedText,
     extract_text,
     extract_text_result,
 )
-from bintu_api.settings import Settings
 
 logger = logging.getLogger(__name__)
 READ_CHUNK_BYTES = 4096

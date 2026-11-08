@@ -1,10 +1,11 @@
-"""Extract retained reader documents without changing scrape limits."""
+﻿"""Extract retained reader documents without changing scrape limits."""
 
 from bintu_api.reader import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     DocumentSnapshot,
 )
-from bintu_api.scraper import FetchedHTML, extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
+from bintu_api.scraper import FetchedHTML
 
 
 class ReaderDocumentTooLarge(ValueError):
