@@ -38,6 +38,7 @@ EXPECTED_TEXT = "Cross-surface contract text"
 PARITY_URL = "https://example.com/parity"
 
 MCP_ENVELOPE_FIELDS = {
+    "text",
     "deduplicated_count",
     "low_yield",
     "mode",
@@ -320,3 +321,5 @@ class CrossSurfaceContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
