@@ -19,7 +19,7 @@ from bintu_api.scraper import (
     UpstreamRenderError,
 )
 from bintu_api.settings import Settings
-from bintu_api.tool_errors import ToolError
+from bintu_api.errors.tool_errors import ToolError
 from main import create_app
 
 
@@ -227,3 +227,5 @@ class McpStreamableErrorContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+

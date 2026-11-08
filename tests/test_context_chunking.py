@@ -280,3 +280,5 @@ def test_intro_is_left_alone_when_moving_would_break_the_budget():
     budget = count(big_fence) + 2  # fence fits alone; fence + intro line does not
     chunks = new.split_into_chunks(text, budget)
     assert all(count(c) <= budget for c in chunks)
+
+

@@ -636,3 +636,5 @@ def test_rest_rejects_max_tokens_below_minimum():
 
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_max_tokens"
+
+

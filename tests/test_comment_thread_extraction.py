@@ -33,3 +33,5 @@ def test_comment_thread_prefers_comments_and_title() -> None:
     assert "Guidelines" not in text
     assert "FAQ" not in text
     assert "Apply to YC" not in text
+
+

@@ -363,3 +363,5 @@ def test_healthz_endpoint():
     except httpx.HTTPError as exc:
         pytest.skip(f"BINTU_URL {BASE_URL!r} is not reachable in this environment: {exc}")
     assert response.status_code == 200
+
+

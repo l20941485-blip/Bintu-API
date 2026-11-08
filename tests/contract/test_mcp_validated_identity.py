@@ -99,3 +99,5 @@ def test_valid_bearer_identity_is_unchanged_by_invalid_api_key():
     )
 
     assert mcp_rate_limit_identity(bearer_only, config) == mcp_rate_limit_identity(mixed, config) == fingerprint(SCOPED)
+
+

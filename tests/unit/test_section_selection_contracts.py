@@ -82,3 +82,4 @@ def test_multi_section_clipping_preserves_combined_text():
     assert result.text == "\n\n".join(
         section["text"] for section in result.sections
     )
+

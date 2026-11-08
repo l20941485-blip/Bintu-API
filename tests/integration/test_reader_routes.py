@@ -367,3 +367,5 @@ def test_reader_through_real_application():
 
             fetch.assert_called_once()
             startup.assert_awaited_once_with(config)
+
+

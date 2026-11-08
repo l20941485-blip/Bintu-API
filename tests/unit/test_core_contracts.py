@@ -34,3 +34,5 @@ def test_inline_links_are_separated():
         base_url="https://example.com/",
     )
     assert ")salt" not in result.text
+
+

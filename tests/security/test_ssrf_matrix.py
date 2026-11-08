@@ -517,3 +517,5 @@ class SSRFMatrixTests(unittest.TestCase):
         response = FakeResponse(headers={"Content-Type": "text/html", "Content-Encoding": "br"}, body=b"x")
         with self.assertRaises(UnsupportedContentEncoding):
             _read_html_response(response, 1024)
+
+

@@ -133,3 +133,5 @@ def test_small_first_request_does_not_shorten_persistent_extraction():
 
 def test_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode():
     asyncio.run(_check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode())
+
+

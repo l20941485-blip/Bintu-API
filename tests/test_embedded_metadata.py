@@ -83,3 +83,5 @@ def test_public_answer_does_not_hide_embedded_metadata(address):
         pytest.raises(TargetURLRejected),
     ):
         resolve_public_addresses("metadata-wrapper.example", 80)
+
+

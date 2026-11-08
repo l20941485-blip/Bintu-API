@@ -47,3 +47,5 @@ def test_truncation_closes_open_fence():
     assert result.truncated is True
     assert len(result.text) <= 120
     assert result.text.count("```") % 2 == 0
+
+

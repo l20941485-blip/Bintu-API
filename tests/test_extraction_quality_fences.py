@@ -5,12 +5,9 @@ This module owns a focused responsibility within the service and must remain iso
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api.extraction_quality import (
-    dedupe_blocks,
-    normalize_markdown,
-    truncate_to_token_budget,
-)
-
+from bintu_api.extraction.dedupe import dedupe_blocks
+from bintu_api.extraction.token_budget import truncate_to_token_budget
+from bintu_api.extraction.cleaner import normalize_markdown
 
 def test_truncation_closes_cut_code_fence():
     text = "```python\nprint('one')\nprint('two')\nprint('three')\n```"
@@ -33,3 +30,5 @@ def test_dedupe_does_not_treat_python_comment_as_heading():
 
     assert removed == 0
     assert "# Real Heading" in result
+
+

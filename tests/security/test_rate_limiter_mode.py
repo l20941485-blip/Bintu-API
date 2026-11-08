@@ -148,3 +148,5 @@ def test_redis_recovery_restores_redis_mode(over_limit):
 
     assert recovered.values["rate_limit:caller"] == (3 if over_limit else 1)
     assert gauge_value() == 1
+
+

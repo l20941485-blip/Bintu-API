@@ -1,4 +1,4 @@
-﻿"""Supabase mock helpers for metering and cache tests."""
+"""Supabase mock helpers for metering and cache tests."""
 
 
 class FakeSupabaseClient:
@@ -8,3 +8,5 @@ class FakeSupabaseClient:
     async def rpc(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         return {"success": True}
+
+

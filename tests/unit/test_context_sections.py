@@ -77,3 +77,4 @@ async def test_chunk_mode_ignores_sections():
         )
 
         assert result.selected_sections is None
+

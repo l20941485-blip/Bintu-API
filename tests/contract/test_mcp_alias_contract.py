@@ -151,3 +151,5 @@ def test_input_schema_advertises_chunked_alias():
         "chunked",
     ]
     assert "chunk_token_budget" in TOOL_INPUT_SCHEMA["properties"]
+
+

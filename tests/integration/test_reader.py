@@ -146,3 +146,5 @@ def test_rejects_oversized_document_without_silent_truncation():
 def test_rejects_non_string_documents(text):
     with pytest.raises(ValueError, match="string"):
         DocumentSnapshot(text)
+
+

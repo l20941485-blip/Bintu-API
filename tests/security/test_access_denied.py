@@ -71,3 +71,5 @@ class UpstreamAccessDeniedTests(unittest.TestCase):
         error = self._run(500)
         self.assertEqual(error.status_code, 502)
         self.assertEqual(error.detail["code"], "upstream_http_error")
+
+

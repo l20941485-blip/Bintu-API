@@ -239,3 +239,5 @@ def test_mcp_rejects_invalid_footnote_policy_arguments(client, field, value):
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "invalid_tool_arguments"
+
+

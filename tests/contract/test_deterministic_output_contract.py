@@ -1,4 +1,4 @@
-﻿"""Deterministic output contract tests for Bintu's current behavior.
+"""Deterministic output contract tests for Bintu's current behavior.
 
 Locks the existing, shipped contract without implementing new features:
 
@@ -660,3 +660,5 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+

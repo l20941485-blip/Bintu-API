@@ -47,3 +47,5 @@ class SanitizeUrlTests(unittest.TestCase):
 
         result = sanitize_url("https://example.com/page?")
         self.assertEqual(result, "https://example.com/page")
+
+

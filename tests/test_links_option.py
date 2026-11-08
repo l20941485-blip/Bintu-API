@@ -281,3 +281,5 @@ def test_links_inline_preserves_urls():
     )
 
     assert "Flour (https://en.wikipedia.org/wiki/Flour)" in result.text
+
+

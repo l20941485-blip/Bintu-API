@@ -131,7 +131,7 @@ from bintu_api.scraper import (
     UpstreamRenderError,
 )
 from bintu_api.settings import Settings
-from bintu_api.tool_errors import ToolError
+from bintu_api.errors.tool_errors import ToolError
 
 MAX_MCP_BODY_BYTES = _PROTOCOL_MAX_MCP_BODY_BYTES
 
