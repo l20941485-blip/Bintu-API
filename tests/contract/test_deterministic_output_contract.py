@@ -1,4 +1,4 @@
-"""Deterministic output contract tests for Bintu's current behavior.
+﻿"""Deterministic output contract tests for Bintu's current behavior.
 
 Locks the existing, shipped contract without implementing new features:
 
@@ -84,6 +84,7 @@ class McpToolMetadataContractTests(unittest.TestCase):
             "max_tokens",
             "cache",
             "persist",
+            "sections",
         }
         self.assertEqual(set(TOOL_INPUT_SCHEMA["properties"].keys()), expected)
 
@@ -660,5 +661,6 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

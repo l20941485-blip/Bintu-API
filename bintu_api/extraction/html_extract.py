@@ -655,7 +655,7 @@ def extract_text_result(
                 row.replace_with(NavigableString(f"{boundary}{row_text}{boundary}"))
 
         for node in root.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
-            level = int(node.name)[1]
+            level = int(node.name[1])
             heading = re.sub(
                 r"\s+",
                 " ",
@@ -739,3 +739,4 @@ def extract_text_result(
         text,
         max_characters,
     )
+
