@@ -716,7 +716,6 @@ def extract_text_result(
     text = restore_pre_placeholders(text)
 
     bs4_text = text.strip()
-    minimum_useful_text = min(120, max_characters)
 
     fallback_text = None
     if len(bs4_text) == 0 and comment_thread_root is None:
