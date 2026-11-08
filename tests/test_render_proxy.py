@@ -1,4 +1,4 @@
-"""Unit tests for rendering-proxy connection primitives."""
+﻿"""Unit tests for rendering-proxy connection primitives."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
 
     def test_invalid_scheme_does_not_create_socket(self) -> None:
-        with patch("bintu_api.render_proxy.socket.socket") as factory, self.assertRaises(TargetURLRejected):
+        with patch("bintu_api.render.proxy.socket.socket") as factory, self.assertRaises(TargetURLRejected):
             open_validated_socket("file:///etc/passwd", self.settings)
 
         factory.assert_not_called()
@@ -28,7 +28,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 "bintu_api.scraper.resolve_public_addresses",
                 side_effect=TargetURLRejected("Non-public destination"),
             ),
-            patch("bintu_api.render_proxy.socket.socket") as factory,
+            patch("bintu_api.render.proxy.socket.socket") as factory,
             self.assertRaises(TargetURLRejected),
         ):
             open_validated_socket(
@@ -47,7 +47,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 return_value=("93.184.216.34",),
             ) as resolve,
             patch(
-                "bintu_api.render_proxy.socket.socket",
+                "bintu_api.render.proxy.socket.socket",
                 return_value=candidate,
             ) as factory,
         ):
@@ -72,7 +72,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 return_value=("2606:4700::1111",),
             ),
             patch(
-                "bintu_api.render_proxy.socket.socket",
+                "bintu_api.render.proxy.socket.socket",
                 return_value=candidate,
             ) as factory,
         ):
@@ -96,7 +96,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 return_value=("93.184.216.34", "1.1.1.1"),
             ) as resolve,
             patch(
-                "bintu_api.render_proxy.socket.socket",
+                "bintu_api.render.proxy.socket.socket",
                 side_effect=[first, second],
             ),
         ):
@@ -121,7 +121,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 return_value=("93.184.216.34",),
             ),
             patch(
-                "bintu_api.render_proxy.socket.socket",
+                "bintu_api.render.proxy.socket.socket",
                 return_value=candidate,
             ),
             self.assertRaises(OSError),
@@ -143,7 +143,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
                 with (
                     patch("bintu_api.scraper.resolve_public_addresses") as resolve,
-                    patch("bintu_api.render_proxy.socket.socket") as factory,
+                    patch("bintu_api.render.proxy.socket.socket") as factory,
                 ):
                     with self.assertRaises(ValueError):
                         open_validated_socket(
@@ -165,7 +165,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 return_value=("93.184.216.34",),
             ),
             patch(
-                "bintu_api.render_proxy.socket.socket",
+                "bintu_api.render.proxy.socket.socket",
                 return_value=candidate,
             ),
             self.assertRaises(RuntimeError) as raised,
@@ -200,7 +200,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 return_value=("93.184.216.34", "1.1.1.1"),
             ),
             patch(
-                "bintu_api.render_proxy.socket.socket",
+                "bintu_api.render.proxy.socket.socket",
                 side_effect=make_socket,
             ),
         ):
