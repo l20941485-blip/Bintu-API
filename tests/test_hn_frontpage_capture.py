@@ -39,3 +39,5 @@ def test_saved_hn_capture_keeps_story_rows_and_metadata_separate():
     assert first_title < first_metadata < second_title < second_metadata
     assert first_title != first_metadata
     assert second_title != second_metadata
+
+

@@ -46,3 +46,5 @@ def test_legacy_mcp_tool_call_requires_auth():
     )
 
     assert response.status_code == 401
+
+

@@ -1,4 +1,4 @@
-"""Streamable MCP must expose the same stable tool-error contract."""
+﻿"""Streamable MCP must expose the same stable tool-error contract."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from bintu_api.errors.tool_errors import ToolError
 from bintu_api.mcp import TOOL_NAME
 from bintu_api.scraper import (
     PayloadTooLarge,
@@ -19,7 +20,6 @@ from bintu_api.scraper import (
     UpstreamRenderError,
 )
 from bintu_api.settings import Settings
-from bintu_api.tool_errors import ToolError
 from main import create_app
 
 
@@ -78,7 +78,7 @@ class McpStreamableErrorContractTests(unittest.TestCase):
 
     def test_unsafe_url_is_in_band(self) -> None:
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=TargetURLRejected("private address"),
         ):
             result = self._call({"url": "http://127.0.0.1/"})
@@ -89,7 +89,7 @@ class McpStreamableErrorContractTests(unittest.TestCase):
 
     def test_robots_block_is_in_band(self) -> None:
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=HTTPException(
                 status_code=403,
                 detail={
@@ -106,7 +106,7 @@ class McpStreamableErrorContractTests(unittest.TestCase):
 
     def test_robots_unreachable_is_in_band(self) -> None:
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=HTTPException(
                 status_code=403,
                 detail={
@@ -168,7 +168,7 @@ class McpStreamableErrorContractTests(unittest.TestCase):
         for exception, expected_code in cases:
             with self.subTest(expected_code=expected_code):
                 with patch(
-                    "bintu_api.routes._fetch_and_extract",
+                    "bintu_api.api.routes.common._fetch_and_extract",
                     side_effect=exception,
                 ):
                     result = self._call({"url": "https://example.com/page"})
@@ -213,7 +213,7 @@ class McpStreamableErrorContractTests(unittest.TestCase):
         for exception, expected_code in cases:
             with self.subTest(expected_code=expected_code):
                 with patch(
-                    "bintu_api.routes._fetch_and_extract",
+                    "bintu_api.api.routes.common._fetch_and_extract",
                     side_effect=exception,
                 ):
                     result = self._call({"url": "https://example.com/page"})
@@ -227,3 +227,6 @@ class McpStreamableErrorContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+

@@ -7,15 +7,9 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 import pytest
 
-from bintu_api.extraction_quality import (
-    dedupe_blocks,
-    estimate_tokens,
-    normalize_markdown,
-    normalize_url,
-    split_sentences,
-    strip_noise_lines,
-    truncate_to_token_budget,
-)
+from bintu_api.extraction.cleaner import normalize_markdown, split_sentences, strip_noise_lines
+from bintu_api.extraction.dedupe import dedupe_blocks, normalize_url
+from bintu_api.extraction.token_budget import estimate_tokens, truncate_to_token_budget
 
 LONG_TEXT = "\n".join(
     f"## Story {i}\nThis is the blurb for story number {i}, long enough to matter.\n"

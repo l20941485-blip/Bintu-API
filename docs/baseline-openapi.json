@@ -1,0 +1,1593 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Bintu Data Extraction API",
+    "description": "Extract readable text from public HTML pages. JavaScript rendering is disabled unless explicitly enabled. Responses are bounded, requests are rate-limited, and outbound connections are validated against public IP addresses.",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "1.4.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Gateway Check",
+        "operationId": "gateway_check__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "summary": "Version Info",
+        "description": "Return service configuration (no secrets).",
+        "operationId": "version_info_version_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scrape/text": {
+      "get": {
+        "summary": "Extract readable text from a public web page",
+        "description": "Fetches a public HTML or XHTML page and returns readable text. The service prefers article or main content, formats headings and tables, and reports whether the configured text limit truncated the result. The service checks the site's robots.txt first. JavaScript rendering is disabled unless the service enables it.",
+        "operationId": "scrape_text_api_v1_scrape_text_get",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Url"
+            }
+          },
+          {
+            "name": "include_nav",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Nav"
+            }
+          },
+          {
+            "name": "include_header",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Header"
+            }
+          },
+          {
+            "name": "include_footer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Footer"
+            }
+          },
+          {
+            "name": "render_js",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Render Js"
+            }
+          },
+          {
+            "name": "links",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "inline",
+                "footnotes",
+                "false"
+              ],
+              "type": "string",
+              "default": "inline",
+              "title": "Links"
+            }
+          },
+          {
+            "name": "footnote_url_policy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "full",
+                "truncated"
+              ],
+              "type": "string",
+              "default": "truncated",
+              "title": "Footnote Url Policy"
+            }
+          },
+          {
+            "name": "max_footnote_url_length",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "default": 100,
+              "title": "Max Footnote Url Length"
+            }
+          },
+          {
+            "name": "skip_cache",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Skip Cache"
+            }
+          },
+          {
+            "name": "persist",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Persist"
+            }
+          },
+          {
+            "name": "max_tokens",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 6000,
+              "title": "Max Tokens"
+            }
+          },
+          {
+            "name": "sections",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sections"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeTextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scrape/chunks": {
+      "post": {
+        "summary": "Extract readable text as approximately token-budgeted chunks",
+        "description": "Fetches a public HTML or XHTML page, extracts readable text, and returns fence-aware chunks sized to the requested token budget. The extraction character ceiling applies before chunking.",
+        "operationId": "scrape_chunks_api_v1_scrape_chunks_post",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "max_tokens",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 6000,
+              "title": "Max Tokens"
+            }
+          },
+          {
+            "name": "links",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "inline",
+                "footnotes",
+                "false"
+              ],
+              "type": "string",
+              "default": "inline",
+              "title": "Links"
+            }
+          },
+          {
+            "name": "skip_cache",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Skip Cache"
+            }
+          },
+          {
+            "name": "persist",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Persist"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileScrapeTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeChunksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mobile/scrape/text": {
+      "post": {
+        "summary": "Extract readable text for a signed-in mobile app user",
+        "description": "Requires an Authorization Bearer token from the configured Supabase project. Only users with verified email addresses can use this endpoint.",
+        "operationId": "mobile_scrape_text_api_v1_mobile_scrape_text_post",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "links",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "inline",
+                "footnotes",
+                "false"
+              ],
+              "type": "string",
+              "default": "inline",
+              "title": "Links"
+            }
+          },
+          {
+            "name": "skip_cache",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Skip Cache"
+            }
+          },
+          {
+            "name": "persist",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Persist"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileScrapeTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeTextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reader/read": {
+      "post": {
+        "tags": [
+          "Reader"
+        ],
+        "summary": "Read Document",
+        "operationId": "read_document_api_v1_reader_read_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reader/continue": {
+      "post": {
+        "tags": [
+          "Reader"
+        ],
+        "summary": "Continue Document",
+        "operationId": "continue_document_api_v1_reader_continue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/mcp/tools": {
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "List Tools",
+        "operationId": "list_tools_mcp_tools_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Tools Mcp Tools Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp/tools/call": {
+      "post": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Call Tool",
+        "operationId": "call_tool_mcp_tools_call_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Call Tool Mcp Tools Call Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CacheInfo": {
+        "properties": {
+          "hit": {
+            "type": "boolean",
+            "title": "Hit",
+            "description": "Whether the response was served from cache."
+          },
+          "layer": {
+            "type": "string",
+            "title": "Layer",
+            "description": "Cache layer: 'none', 'memory' or 'persistent'."
+          },
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Seconds",
+            "description": "Age of the cached entry in seconds, when known."
+          }
+        },
+        "type": "object",
+        "required": [
+          "hit",
+          "layer"
+        ],
+        "title": "CacheInfo"
+      },
+      "ContinueRequest": {
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Cursor"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 6000.0,
+            "minimum": 1.0,
+            "title": "Max Tokens",
+            "default": 1000
+          }
+        },
+        "type": "object",
+        "required": [
+          "cursor"
+        ],
+        "title": "ContinueRequest"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse"
+      },
+      "GatewayResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "docs": {
+            "type": "string",
+            "title": "Docs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "service",
+          "docs"
+        ],
+        "title": "GatewayResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MobileScrapeTextRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "include_nav": {
+            "type": "boolean",
+            "title": "Include Nav",
+            "default": false
+          },
+          "include_header": {
+            "type": "boolean",
+            "title": "Include Header",
+            "default": false
+          },
+          "include_footer": {
+            "type": "boolean",
+            "title": "Include Footer",
+            "default": false
+          },
+          "render_js": {
+            "type": "boolean",
+            "title": "Render Js",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "MobileScrapeTextRequest"
+      },
+      "Provenance": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "description": "Identifier of the request."
+          },
+          "fetched_at": {
+            "type": "string",
+            "title": "Fetched At",
+            "description": "UTC ISO 8601 timestamp of the fetch."
+          },
+          "requested_url": {
+            "type": "string",
+            "title": "Requested Url",
+            "description": "The requested URL with sensitive-looking query parameters removed."
+          },
+          "final_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Url",
+            "description": "URL after redirects. Absent for cache hits."
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Url",
+            "description": "Canonical URL, if the page declares one."
+          },
+          "upstream_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Status",
+            "description": "Upstream HTTP status. Absent for cache hits."
+          },
+          "redirect_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Count",
+            "description": "Redirects followed. Absent for cache hits."
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type",
+            "description": "Content type of the fetched response."
+          },
+          "bytes_fetched": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes Fetched",
+            "description": "Bytes fetched from the upstream source."
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256",
+            "description": "SHA-256 hash of the returned text."
+          },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cache metadata."
+          },
+          "extractor_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extractor Version",
+            "description": "Extractor version."
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "fetched_at",
+          "requested_url"
+        ],
+        "title": "Provenance"
+      },
+      "ReadRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 6000.0,
+            "minimum": 1.0,
+            "title": "Max Tokens",
+            "default": 1000
+          },
+          "include_nav": {
+            "type": "boolean",
+            "title": "Include Nav",
+            "default": false
+          },
+          "include_header": {
+            "type": "boolean",
+            "title": "Include Header",
+            "default": false
+          },
+          "include_footer": {
+            "type": "boolean",
+            "title": "Include Footer",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ReadRequest"
+      },
+      "ReaderResponse": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "start_offset": {
+            "type": "integer",
+            "title": "Start Offset"
+          },
+          "end_offset": {
+            "type": "integer",
+            "title": "End Offset"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "approx_tokens": {
+            "type": "integer",
+            "title": "Approx Tokens"
+          },
+          "token_method": {
+            "type": "string",
+            "title": "Token Method"
+          },
+          "boundary_split": {
+            "type": "boolean",
+            "title": "Boundary Split"
+          },
+          "budget_scope": {
+            "type": "string",
+            "title": "Budget Scope",
+            "default": "page_text_only"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "start_offset",
+          "end_offset",
+          "has_more",
+          "next_cursor",
+          "approx_tokens",
+          "token_method",
+          "boundary_split"
+        ],
+        "title": "ReaderResponse"
+      },
+      "RestChunk": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "approx_tokens": {
+            "type": "integer",
+            "title": "Approx Tokens"
+          },
+          "tokens": {
+            "type": "integer",
+            "title": "Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "text",
+          "approx_tokens",
+          "tokens"
+        ],
+        "title": "RestChunk"
+      },
+      "ScrapeChunksResponse": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "mode": {
+            "type": "string",
+            "const": "chunk",
+            "title": "Mode"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "title": "Max Tokens"
+          },
+          "tokens": {
+            "type": "integer",
+            "title": "Tokens"
+          },
+          "approx_tokens": {
+            "type": "integer",
+            "title": "Approx Tokens"
+          },
+          "html_tokens": {
+            "type": "integer",
+            "title": "Html Tokens"
+          },
+          "token_method": {
+            "type": "string",
+            "title": "Token Method"
+          },
+          "limiting_factor": {
+            "type": "string",
+            "title": "Limiting Factor"
+          },
+          "chunk_count": {
+            "type": "integer",
+            "title": "Chunk Count"
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit"
+          },
+          "cache_layer": {
+            "type": "string",
+            "enum": [
+              "none",
+              "memory",
+              "persistent"
+            ],
+            "title": "Cache Layer"
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url"
+          },
+          "extracted_at": {
+            "type": "string",
+            "title": "Extracted At"
+          },
+          "tokens_saved_estimate": {
+            "type": "integer",
+            "title": "Tokens Saved Estimate"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "split": {
+            "type": "boolean",
+            "title": "Split"
+          },
+          "chunks": {
+            "items": {
+              "$ref": "#/components/schemas/RestChunk"
+            },
+            "type": "array",
+            "title": "Chunks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "mode",
+          "max_tokens",
+          "tokens",
+          "approx_tokens",
+          "html_tokens",
+          "token_method",
+          "limiting_factor",
+          "chunk_count",
+          "cache_hit",
+          "cache_layer",
+          "source_url",
+          "extracted_at",
+          "tokens_saved_estimate",
+          "truncated",
+          "split",
+          "chunks"
+        ],
+        "title": "ScrapeChunksResponse"
+      },
+      "ScrapeTextResponse": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Readable extracted text, limited by the service's configured character cap."
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "True when extracted content exceeded the character cap and text was shortened."
+          },
+          "limiting_factor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limiting Factor",
+            "description": "Which limit bound the returned text: character cap or token budget."
+          },
+          "deduplicated_count": {
+            "type": "integer",
+            "title": "Deduplicated Count",
+            "description": "Number of duplicate blocks removed during extraction quality normalization.",
+            "default": 0
+          },
+          "low_yield": {
+            "type": "boolean",
+            "title": "Low Yield",
+            "description": "True when a large source page produced very little readable text, often because it requires JavaScript or authentication.",
+            "default": false
+          },
+          "yield_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yield Hint",
+            "description": "Optional operator-facing explanation when low_yield is true."
+          },
+          "selected_sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Sections",
+            "description": "Selected sections returned only when a scrape request supplies section selectors. Each item includes heading, level, index, and text."
+          },
+          "cache_layer": {
+            "type": "string",
+            "enum": [
+              "none",
+              "memory",
+              "persistent"
+            ],
+            "title": "Cache Layer",
+            "description": "Which cache served the response: 'none' (fresh fetch), 'memory' or 'persistent'.",
+            "default": "none"
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit",
+            "description": "True when the response came from the memory or persistent cache.",
+            "default": false
+          },
+          "approx_tokens": {
+            "type": "integer",
+            "title": "Approx Tokens",
+            "description": "Approximate token count of the returned text: ceil(characters / 4). An estimate, not a tokenizer count.",
+            "default": 0
+          },
+          "token_method": {
+            "type": "string",
+            "title": "Token Method",
+            "description": "Method used to compute approx_tokens.",
+            "default": "ceil(characters/4)"
+          },
+          "tokens": {
+            "type": "integer",
+            "title": "Tokens",
+            "description": "DEPRECATED: same value as approx_tokens, kept for one release for backward compatibility.",
+            "default": 0
+          },
+          "tokens_saved_estimate": {
+            "type": "integer",
+            "title": "Tokens Saved Estimate",
+            "description": "Estimated tokens saved by extraction: approximate tokens of the fetched HTML minus approximate tokens of the returned text, floored at 0. An estimate.",
+            "default": 0
+          },
+          "truncated_split": {
+            "type": "boolean",
+            "title": "Truncated Split",
+            "description": "Reserved: true when content spans multiple chunks (not truncation).",
+            "default": false
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Provenance"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Request provenance. May be absent while this feature is rolled out."
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "text",
+          "truncated"
+        ],
+        "title": "ScrapeTextResponse"
+      },
+      "ToolCallRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Arguments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "arguments"
+        ],
+        "title": "ToolCallRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VersionResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "max_html_bytes": {
+            "type": "integer",
+            "title": "Max Html Bytes"
+          },
+          "max_redirects": {
+            "type": "integer",
+            "title": "Max Redirects"
+          },
+          "max_text_characters": {
+            "type": "integer",
+            "title": "Max Text Characters"
+          },
+          "rate_limit_requests": {
+            "type": "integer",
+            "title": "Rate Limit Requests"
+          },
+          "rate_limit_window_seconds": {
+            "type": "integer",
+            "title": "Rate Limit Window Seconds"
+          },
+          "cache_ttl_seconds": {
+            "type": "integer",
+            "title": "Cache Ttl Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service",
+          "version",
+          "max_html_bytes",
+          "max_redirects",
+          "max_text_characters",
+          "rate_limit_requests",
+          "rate_limit_window_seconds",
+          "cache_ttl_seconds"
+        ],
+        "title": "VersionResponse"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "description": "Service API key.",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "description": "Supabase session token.",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

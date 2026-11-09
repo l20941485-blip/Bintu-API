@@ -64,3 +64,4 @@ def test_rest_response_omits_selected_sections_when_absent():
     response = build_rest_response(context, "https://example.com")
 
     assert "selected_sections" not in response
+

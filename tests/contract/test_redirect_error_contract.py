@@ -1,4 +1,4 @@
-"""Test Redirect Error Contract for Bintu.
+﻿"""Test Redirect Error Contract for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 
-from bintu_api.routes import _scrape_chunks
+from bintu_api.api.routes.chunk import _scrape_chunks
 from bintu_api.scraper import RedirectedToPrivateNetwork
 
 
@@ -44,7 +44,7 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes._fetch_and_extract",
+                "bintu_api.api.routes.common._fetch_and_extract",
                 new=AsyncMock(side_effect=_raise_redirect_to_private_network),
             ),
             self.assertRaises(HTTPException) as caught,
@@ -72,3 +72,6 @@ class RedirectErrorContractTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

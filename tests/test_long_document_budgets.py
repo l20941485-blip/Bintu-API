@@ -50,3 +50,5 @@ class McpTokenBudgetExtractionTests(unittest.TestCase):
     def test_mcp_forwards_max_tokens_to_extraction(self):
         source = inspect.getsource(bintu_api.mcp)
         self.assertIn("max_tokens=arguments.max_tokens", source)
+
+

@@ -25,3 +25,4 @@ def test_sections_schema_documents_both_formats():
     assert "newline-separated string" in description
     assert "array of strings" in description
     assert "200" in description
+

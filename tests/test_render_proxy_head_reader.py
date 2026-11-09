@@ -1,4 +1,4 @@
-"""Bounded CONNECT head-reader tests; no network access."""
+﻿"""Bounded CONNECT head-reader tests; no network access."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class FakeSocket:
 class ConnectHeadReaderTests(unittest.TestCase):
     def read(self, client, *, timeout_seconds=5.0):
         with patch(
-            "bintu_api.render_proxy.time.monotonic",
+            "bintu_api.render.proxy.time.monotonic",
             return_value=100.0,
         ):
             return read_connect_request_head(
@@ -169,7 +169,7 @@ class ConnectHeadReaderTests(unittest.TestCase):
         client.max_chunk = 1
         with (
             patch(
-                "bintu_api.render_proxy.time.monotonic",
+                "bintu_api.render.proxy.time.monotonic",
                 side_effect=[100.0, 100.0, 101.0, 102.0, 105.0],
             ),
             self.assertRaisesRegex(
@@ -185,7 +185,7 @@ class ConnectHeadReaderTests(unittest.TestCase):
         client = FakeSocket(HEAD, timeout=9.0)
         with (
             patch(
-                "bintu_api.render_proxy.time.monotonic",
+                "bintu_api.render.proxy.time.monotonic",
                 side_effect=[100.0, 105.0],
             ),
             self.assertRaises(ProxyRequestRejected),
@@ -197,3 +197,5 @@ class ConnectHeadReaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

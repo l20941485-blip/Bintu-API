@@ -5,11 +5,9 @@ This module owns a focused responsibility within the service and must remain iso
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api.extraction_quality import (
-    dedupe_blocks,
-    normalize_markdown,
-    truncate_to_token_budget,
-)
+from bintu_api.extraction.cleaner import normalize_markdown
+from bintu_api.extraction.dedupe import dedupe_blocks
+from bintu_api.extraction.token_budget import truncate_to_token_budget
 
 
 def test_truncation_closes_cut_code_fence():

@@ -213,3 +213,5 @@ def test_actual_chunker_keeps_wide_table_row_intact():
     )
     assert sum(chunk.count(target_row) for chunk in chunks) == 1
     assert all(count_tokens(chunk) <= budget for chunk in chunks)
+
+

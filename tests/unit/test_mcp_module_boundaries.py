@@ -29,3 +29,5 @@ def test_streamable_protocol_envelopes_remain_canonical():
         "error": {"code": -32600, "message": "invalid request"},
     }
     assert {"initialize", "tools/list", "ping"} == protocol.PUBLIC_MCP_METHODS
+
+

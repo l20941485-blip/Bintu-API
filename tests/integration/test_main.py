@@ -1,4 +1,4 @@
-"""Test Main for Bintu.
+﻿"""Test Main for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -23,7 +23,7 @@ from bintu_api.settings import Settings
 from main import create_app
 
 _robots_patch = mock.patch(
-    "bintu_api.routes.robots_decision",
+    "bintu_api.api.routes.common.robots_decision",
     return_value=RobotsDecision(
         allowed=True,
         reason="disabled in tests",
@@ -188,7 +188,7 @@ class ScraperApiTests(unittest.TestCase):
             b"<nav>Navigation noise</nav></body></html>"
         )
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=html, charset=None),
         ):
             response = self.client.get(
@@ -216,7 +216,7 @@ class ScraperApiTests(unittest.TestCase):
         )
 
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=html, charset=None),
         ):
             response = self.client.get(
@@ -251,7 +251,7 @@ class ScraperApiTests(unittest.TestCase):
             charset="iso-8859-1",
         )
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=fetched,
         ) as fetch:
             first = self.client.get(
@@ -277,7 +277,7 @@ class ScraperApiTests(unittest.TestCase):
             final_url="https://example.com/final/page",
         )
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=fetched,
         ):
             response = self.client.get(
@@ -318,7 +318,7 @@ class ScraperApiTests(unittest.TestCase):
             charset="utf-8",
         )
         with patch(
-            "bintu_api.routes.fetch_rendered_html_document",
+            "bintu_api.api.routes.common.fetch_rendered_html_document",
             new=AsyncMock(return_value=rendered),
         ) as fetch:
             response = client.get(
@@ -344,7 +344,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         client = TestClient(create_app(settings))
         with patch(
-            "bintu_api.routes.fetch_rendered_html_document",
+            "bintu_api.api.routes.common.fetch_rendered_html_document",
             new=AsyncMock(side_effect=TimeoutError),
         ):
             response = client.get(
@@ -378,7 +378,7 @@ class ScraperApiTests(unittest.TestCase):
 
     def test_mcp_tool_call_returns_the_mcp_text_content_shape(self) -> None:
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(
                 body=b"<main>MCP output</main>",
                 charset=None,
@@ -414,7 +414,7 @@ class ScraperApiTests(unittest.TestCase):
         )
 
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=html, charset=None),
         ):
             response = self.client.post(
@@ -467,7 +467,7 @@ class ScraperApiTests(unittest.TestCase):
 
     def test_render_js_true_is_rejected_when_disabled(self) -> None:
         with patch(
-            "bintu_api.routes.fetch_rendered_html_document",
+            "bintu_api.api.routes.common.fetch_rendered_html_document",
             new=AsyncMock(),
         ) as fetch:
             response = self.client.get(
@@ -497,7 +497,7 @@ class ScraperApiTests(unittest.TestCase):
             charset="utf-8",
         )
         with patch(
-            "bintu_api.routes.fetch_rendered_html_document",
+            "bintu_api.api.routes.common.fetch_rendered_html_document",
             new=AsyncMock(return_value=rendered),
         ) as fetch:
             response = client.get(
@@ -517,7 +517,7 @@ class ScraperApiTests(unittest.TestCase):
 
     def test_mcp_render_js_is_rejected_when_disabled(self) -> None:
         with patch(
-            "bintu_api.routes.fetch_rendered_html_document",
+            "bintu_api.api.routes.common.fetch_rendered_html_document",
             new=AsyncMock(),
         ) as fetch:
             response = self.client.post(
@@ -564,7 +564,7 @@ class ScraperApiTests(unittest.TestCase):
                 return_value=auth_response,
             ) as verify,
             patch(
-                "bintu_api.routes.fetch_rendered_html_document",
+                "bintu_api.api.routes.common.fetch_rendered_html_document",
                 new=AsyncMock(),
             ) as fetch,
         ):
@@ -591,11 +591,11 @@ class ScraperApiTests(unittest.TestCase):
         self.app.state.supabase_client = object()
         with (
             patch(
-                "bintu_api.routes.get_cached_markdown",
+                "bintu_api.api.routes.common.get_cached_markdown",
                 new=AsyncMock(side_effect=RuntimeError("database unavailable")),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 return_value=FetchedHTML(
                     body=b"<main>Live fallback</main>",
                     charset=None,
@@ -618,7 +618,7 @@ class ScraperApiTests(unittest.TestCase):
         self.app.state.supabase_client = object()
         with (
             patch(
-                "bintu_api.routes.get_cached_markdown",
+                "bintu_api.api.routes.common.get_cached_markdown",
                 new=AsyncMock(
                     return_value=CachedMarkdown(
                         markdown="Persistent result",
@@ -626,7 +626,7 @@ class ScraperApiTests(unittest.TestCase):
                     )
                 ),
             ),
-            patch("bintu_api.routes.fetch_html_document") as fetch,
+            patch("bintu_api.api.routes.common.fetch_html_document") as fetch,
         ):
             response = self.client.get(
                 "/api/v1/scrape/text",
@@ -651,7 +651,7 @@ class ScraperApiTests(unittest.TestCase):
         client = TestClient(app)
         with (
             patch(
-                "bintu_api.routes.get_cached_markdown",
+                "bintu_api.api.routes.common.get_cached_markdown",
                 new=AsyncMock(
                     return_value=CachedMarkdown(
                         markdown="Cached success",
@@ -753,7 +753,7 @@ class ScraperApiTests(unittest.TestCase):
         html = f"<main><p>{scraped_marker}</p></main>".encode()
         with (
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 return_value=FetchedHTML(
                     body=html,
                     charset=None,
@@ -796,7 +796,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         client = TestClient(app)
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(
                 body=b"<p>ok</p>",
                 charset=None,
@@ -827,7 +827,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         client = TestClient(app)
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(
                 body=b"<p>ok</p>",
                 charset=None,
@@ -854,7 +854,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         client = TestClient(app)
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(
                 body=b"<p>ok</p>",
                 charset=None,
@@ -877,7 +877,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         client = TestClient(app)
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(
                 body=b"<p>ok</p>",
                 charset=None,
@@ -945,7 +945,7 @@ class ScraperApiTests(unittest.TestCase):
                 return_value=auth_response,
             ) as verify,
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 return_value=FetchedHTML(
                     body=b"<main>mobile text</main>",
                     charset=None,
@@ -1025,7 +1025,7 @@ class ScraperApiTests(unittest.TestCase):
 
     def test_upstream_http_error_maps_to_502(self) -> None:
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             side_effect=UpstreamHTTPError(404, "Not Found"),
         ):
             response = self.client.get(
@@ -1057,3 +1057,7 @@ class ScraperApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+
+

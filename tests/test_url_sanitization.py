@@ -1,10 +1,10 @@
-"""Provenance URLs must never expose sensitive query parameters."""
+﻿"""Provenance URLs must never expose sensitive query parameters."""
 
 from __future__ import annotations
 
 import unittest
 
-from bintu_api.routes import sanitize_url
+from bintu_api.security.url_safety import sanitize_url
 
 
 class UrlSanitizationTests(unittest.TestCase):
@@ -68,3 +68,6 @@ class UrlSanitizationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+

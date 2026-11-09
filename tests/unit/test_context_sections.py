@@ -1,4 +1,4 @@
-"""Tests for section selection integration in context extraction."""
+﻿"""Tests for section selection integration in context extraction."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -10,7 +10,7 @@ from bintu_api.context import extract_context
 @pytest.mark.asyncio
 async def test_scrape_mode_returns_selected_sections():
     with patch(
-        "bintu_api.context.rate_limit_identity",
+        "bintu_api.extraction.context.rate_limit_identity",
         return_value="test-identity",
     ):
         result = await extract_context(
@@ -36,7 +36,7 @@ async def test_scrape_mode_returns_selected_sections():
 @pytest.mark.asyncio
 async def test_scrape_mode_no_match_returns_empty_sections():
     with patch(
-        "bintu_api.context.rate_limit_identity",
+        "bintu_api.extraction.context.rate_limit_identity",
         return_value="test-identity",
     ):
         result = await extract_context(
@@ -62,7 +62,7 @@ async def test_scrape_mode_no_match_returns_empty_sections():
 @pytest.mark.asyncio
 async def test_chunk_mode_ignores_sections():
     with patch(
-        "bintu_api.context.rate_limit_identity",
+        "bintu_api.extraction.context.rate_limit_identity",
         return_value="test-identity",
     ):
         result = await extract_context(
@@ -77,3 +77,5 @@ async def test_chunk_mode_ignores_sections():
         )
 
         assert result.selected_sections is None
+
+

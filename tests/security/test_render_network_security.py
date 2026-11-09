@@ -53,3 +53,5 @@ class RenderPreflightSecurityTests(unittest.IsolatedAsyncioTestCase):
 
         resolve.assert_called_once_with("private.example", 443)
         start_playwright.assert_not_called()
+
+

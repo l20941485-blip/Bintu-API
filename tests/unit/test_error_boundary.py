@@ -7,7 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 from bintu_api.errors.codes import ERROR_CODES, normalize_error_code
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
-from bintu_api.tool_errors import ToolError as LegacyToolError
+from bintu_api.errors.tool_errors import ToolError as LegacyToolError
 
 
 def test_legacy_tool_error_import_is_backward_compatible():
@@ -65,3 +65,5 @@ def test_error_code_normalization_preserves_stable_snake_case_contract():
     assert normalize_error_code("invalidOrUnsafeUrl") == "invalid_or_unsafe_url"
     assert normalize_error_code("  RENDER-JS Disabled  ") == "render_js_disabled"
     assert ToolError("UpstreamRateLimited", "message").code == "upstream_rate_limited"
+
+

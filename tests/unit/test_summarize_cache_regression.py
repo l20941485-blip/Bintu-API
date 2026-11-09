@@ -121,3 +121,5 @@ def test_scrape_mode_enforces_max_tokens_and_reports_token_budget() -> None:
     assert result.chunks[0]["approx_tokens"] == result.approx_tokens
     # The delivered text must respect the requested token budget.
     assert len(result.text) <= 20 * 4
+
+

@@ -1,4 +1,4 @@
-"""Route-level regression tests for robots enforcement.
+﻿"""Route-level regression tests for robots enforcement.
 
 These tests exercise the real robots decision and route enforcement code.
 Robots.txt retrieval, page fetching, and persistent-cache access are mocked.
@@ -79,7 +79,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
 
                 with (
                     patch(
-                        "bintu_api.routes.robots_mode",
+                        "bintu_api.api.routes.common.robots_mode",
                         return_value="enforce",
                     ),
                     patch(
@@ -87,7 +87,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                         return_value="enforce",
                     ),
                     patch(
-                        "bintu_api.routes.robots_decision",
+                        "bintu_api.api.routes.common.robots_decision",
                         side_effect=robots_decision,
                     ) as decision_call,
                     patch(
@@ -95,19 +95,19 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                         new=robots_fetch,
                     ),
                     patch(
-                        "bintu_api.routes.get_cached_markdown",
+                        "bintu_api.api.routes.common.get_cached_markdown",
                         new=persistent_read,
                     ),
                     patch(
-                        "bintu_api.routes.upsert_cached_markdown",
+                        "bintu_api.api.routes.common.upsert_cached_markdown",
                         new=persistent_write,
                     ),
                     patch(
-                        "bintu_api.routes.fetch_html_document",
+                        "bintu_api.api.routes.common.fetch_html_document",
                         new=plain_fetch,
                     ),
                     patch(
-                        "bintu_api.routes.fetch_rendered_html_document",
+                        "bintu_api.api.routes.common.fetch_rendered_html_document",
                         new=rendered_fetch,
                     ),
                 ):
@@ -213,17 +213,17 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.routes.robots_decision",
+                "bintu_api.api.routes.common.robots_decision",
             ) as decision_call,
             patch(
-                "bintu_api.routes.get_cached_markdown",
+                "bintu_api.api.routes.common.get_cached_markdown",
                 new=AsyncMock(return_value=cached),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
             ) as plain_fetch,
             patch(
-                "bintu_api.routes.fetch_rendered_html_document",
+                "bintu_api.api.routes.common.fetch_rendered_html_document",
             ) as rendered_fetch,
         ):
             response = client.get(
@@ -250,3 +250,6 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+

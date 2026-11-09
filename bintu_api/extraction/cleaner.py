@@ -1,34 +1,8 @@
-"""Remove three kinds of documentation noise from Bintu's extracted text.
+﻿"""Shared markdown/text cleanup and documentation-noise removal.
 
-1. Permalink links on headings and signatures:   "## Basic Usage ¶ (https://...)"
-2. A duplicated title line:  "# json — ... — Python 3.15.2 documentation" followed by
-   the page's own "# json — JSON encoder and decoder"
-3. Same-page links that all turn into the page URL, e.g. "[1] (https://docs.python.org/3/library/json.html)"
-   (the fragment is dropped, so every in-page link looks like a self-link)
-
-Why it happens in bintu_api/scraper.py (extract_text_result):
-  * Sphinx/MkDocs/etc. put <a class="headerlink" href="#x">¶</a> inside headings. The anchor
-    loop rewrites it to "¶ (url)" BEFORE the heading text is read, so the heading becomes
-    "json — JSON encoder and decoder ¶ (url)".
-  * The title is dropped only when it EQUALS the first heading. Here it is
-    "<heading> — Python 3.15.2 documentation", so it survives.
-
-Integration (three small edits in extract_text_result):
-
-    from bintu_api.page_noise import same_document, should_drop_title, strip_permalinks
-
-    # (1) right after:  for node in soup(tags_to_remove): node.decompose()
-    strip_permalinks(soup)
-
-    # (2) replace   normalized_title == normalized_heading   with
-    should_drop_title(normalized_title, normalized_heading)
-    #     i.e.  if normalized_title and should_drop_title(normalized_title, normalized_heading):
-    #               normalized_title = ""
-
-    # (3) in the anchor loop, right after `resolved = urlsplit(urljoin(base_url, href))`
-    if same_document(base_url, resolved):
-        anchor.replace_with(NavigableString(label))
-        continue
+This module owns small, pure text transformations used by both the scraper
+and extraction-quality layers. It never performs network access or owns
+business policy.
 """
 
 from __future__ import annotations
@@ -36,6 +10,93 @@ from __future__ import annotations
 import re
 import unicodedata
 from urllib.parse import urlsplit
+
+_CLOSE_UP = re.compile(r"\s+([,.;:!?)\]])(?![\w/])")
+
+
+def close_up_punctuation(line: str) -> str:
+    """Close up whitespace before closing punctuation without damaging filenames or code."""
+    return _CLOSE_UP.sub(r"\1", line)
+
+
+def drop_empty_fences(text: str) -> str:
+    """Remove fenced blocks that contain no body."""
+    lines = text.split("\n")
+    kept: list[str] = []
+    in_fence = False
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+
+        if not in_fence and line.startswith("```"):
+            next_line = lines[index + 1] if index + 1 < len(lines) else None
+            if next_line is not None and next_line.startswith("```") and next_line.strip() == "```":
+                index += 2
+                continue
+            in_fence = True
+        elif in_fence and line.startswith("```"):
+            in_fence = False
+
+        kept.append(line)
+        index += 1
+
+    return "\n".join(kept)
+
+NOISE_LINE_PATTERNS = [
+    re.compile(r"^list \d+ of \d+$", re.IGNORECASE),
+    re.compile(r"^(?:slide|item|page) \d+ of \d+$", re.IGNORECASE),
+    re.compile(r"^skip to (?:main )?content$", re.IGNORECASE),
+    re.compile(r"may contain flashing|photosensitiv", re.IGNORECASE),
+    re.compile(r"^\u0627\u0644\u0645\u062d\u062a\u0648\u0649 \u0627\u0644\u0631\u0626\u064a\u0633\u064a$"),
+    re.compile(r"^\u0642\u062f \u064a\u062d\u062a\u0648\u064a \u0647\u0630\u0627 \u0627\u0644\u0641\u064a\u062f\u064a\u0648"),
+]
+
+
+def strip_noise_lines(text: str) -> str:
+    """Remove known carousel counters, skip links, and video warnings."""
+    kept = [
+        line for line in text.split("\n") if not any(pattern.search(line.strip()) for pattern in NOISE_LINE_PATTERNS)
+    ]
+    return "\n".join(kept)
+
+_INLINE_HEADING_RE = re.compile(r"(?<=[.!?)\]\u201d\"']) +(?=#{1,6} \S)")
+
+
+def normalize_markdown(text: str) -> str:
+    """Place glued Markdown headings on their own line without altering code."""
+    parts = re.split(r"(```.*?(?:```|\Z))", text, flags=re.DOTALL)
+
+    for index in range(0, len(parts), 2):
+        part = _INLINE_HEADING_RE.sub("\n", parts[index])
+        part = re.sub(r"[ \t]+\n", "\n", part)
+        parts[index] = re.sub(r"\n{3,}", "\n\n", part)
+
+    return "".join(parts).strip()
+
+_DOT = "\u2024"
+
+_PROTECT_RE = re.compile(
+    r"https?://[^\s)]+"
+    r"|\b(?:[A-Za-z0-9-]+\.)+(?:[A-Za-z]{2,})\b"
+    r"|\b(?:[A-Z][a-z]?\.){1,3}"
+    r"|\b(?:Mr|Mrs|Ms|Dr|Prof|St|vs|etc|No|Fig)\."
+)
+
+
+def split_sentences(text: str) -> list[str]:
+    """Split sentences without breaking URLs, domains, or abbreviations."""
+    protected = _PROTECT_RE.sub(
+        lambda match: match.group(0).replace(".", _DOT),
+        text,
+    )
+
+    parts = re.split(
+        r"(?<=[.!?])\s+(?=[\"\u201c\u2018(\[]?[A-Z0-9#\u0600-\u06FF])",
+        protected,
+    )
+
+    return [part.replace(_DOT, ".").strip() for part in parts if part.strip()]
 
 PERMALINK_SELECTOR = ", ".join(
     [

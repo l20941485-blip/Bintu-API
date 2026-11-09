@@ -141,3 +141,5 @@ def test_preserves_existing_heading_and_table_extraction():
     assert "# Reference" in snapshot.text
     assert "Name | Value" in snapshot.text
     assert "Alpha | 1" in snapshot.text
+
+

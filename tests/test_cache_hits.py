@@ -1,12 +1,12 @@
-"""Persistent cache hit behavior and empty-row rejection."""
+﻿"""Persistent cache hit behavior and empty-row rejection."""
 
 from __future__ import annotations
 
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from bintu_api.api.routes.common import _fetch_and_extract
 from bintu_api.database import CachedMarkdown, get_cached_markdown
-from bintu_api.routes import _fetch_and_extract
 from bintu_api.settings import Settings
 
 
@@ -36,15 +36,15 @@ class PersistentCacheHitTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.get_cached_markdown",
+                "bintu_api.api.routes.common.get_cached_markdown",
                 new=AsyncMock(return_value=cached),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 side_effect=AssertionError("persistent cache hit must not fetch"),
             ),
             patch(
-                "bintu_api.routes.fetch_rendered_html_document",
+                "bintu_api.api.routes.common.fetch_rendered_html_document",
                 side_effect=AssertionError("persistent cache hit must not render"),
             ),
         ):
@@ -104,3 +104,6 @@ class PersistentCacheHitTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+

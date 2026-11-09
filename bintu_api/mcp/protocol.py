@@ -1,4 +1,4 @@
-"""JSON-RPC protocol helpers for the Bintu MCP surface.
+﻿"""JSON-RPC protocol helpers for the Bintu MCP surface.
 
 This module owns transport mechanics, protocol negotiation, and request validation without handling extraction or persistence.
 
@@ -42,16 +42,17 @@ SERVER_INSTRUCTIONS = (
     "and cookie banners are dropped; repeated story blocks are removed "
     "(deduplicated_count); links appear as 'label (url)'; code is returned in "
     "fenced blocks with indentation kept; tables are pipe-delimited.\n\n"
-    "Modes: scrape (default) returns the text trimmed to max_tokens; chunk splits "
+    "Modes: scrape (default) returns text for the selected mode and max_tokens budget; chunk splits "
     "the whole page into chunks that each fit max_tokens (headings stay with "
     "their text, table header rows repeat in continuation chunks, one indivisible "
     "unit such as a very long table row can exceed the budget); summarize returns "
     "the leading lines and whole sentences that fit max_tokens (it is not an "
     "AI-written summary). 'chunked' is accepted as an alias for chunk.\n\n"
-    "Pages are read up to about 200,000 characters (~50,000 tokens). "
+    "Pages are read up to a 200,000-character ceiling by default "
+    "(~50,000 tokens). "
     "truncated=true with limiting_factor=char_cap means that ceiling was hit; "
     "limiting_factor=token_budget means max_tokens was; none means no limit "
-    "shortened the response. tokens and approx_tokens are approximate estimates "
+    "shortened the response. Token counts are approximate. tokens and approx_tokens are approximate estimates "
     "(ceil(characters / 4)), not tokenizer counts. tokens_saved_estimate is the "
     "source-HTML estimate minus the tokens delivered in this response.\n\n"
     "Results may come from a cache (cache_hit, cache_layer). Set cache=false to "
@@ -61,7 +62,7 @@ SERVER_INSTRUCTIONS = (
     "call fails with render_js_disabled, retry with render_js=false.\n\n"
     "Every mode returns the unified JSON envelope "
     "{mode, tokens, approx_tokens, html_tokens, token_method, limiting_factor, "
-    "chunk_count, cache_hit, cache_layer, source_url, extracted_at, "
+    "chunk_count, cache_hit, cache_layer, source_url, extracted_at,    "
     "tokens_saved_estimate, truncated, split, chunks} plus optional provenance "
     "fields (request_id, fetched_at, requested_url, final_url, content_type, "
     "bytes_fetched, content_sha256, cache, extractor_version) when available.\n\n"
@@ -73,8 +74,8 @@ SERVER_INSTRUCTIONS = (
     "invalid_arguments) and render the same code in content[0].text. "
     "upstream_rate_limited marks retryable=true with retry_with=retry_after_delay; "
     "other errors are not retryable.\n\n"
-    "This server is stateless: no MCP sessions, no subscriptions, no SSE streams. "
-    "POST one JSON-RPC message per request; GET returns an empty SSE stream. "
+    "This server is stateless: no MCP sessions, no subscriptions, no SSE streams; POST "
+    "one JSON-RPC message per request; GET returns an empty SSE stream. "
     "Discovery (initialize, tools/list, ping) is public; tools/call requires "
     "X-API-Key or Authorization: Bearer."
 )
@@ -240,3 +241,6 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
             ]
         },
     )
+
+
+

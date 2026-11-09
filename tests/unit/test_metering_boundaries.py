@@ -73,3 +73,5 @@ class MeteringBoundaryTests(unittest.IsolatedAsyncioTestCase):
             "increment_developer_usage",
             {"p_rapidapi_user": "subscriber-7"},
         )
+
+

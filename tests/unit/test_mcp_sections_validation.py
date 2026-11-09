@@ -46,3 +46,4 @@ def test_accepts_selector_exactly_200_characters():
     arguments = make_arguments(["a" * 200])
 
     assert arguments.sections == ["a" * 200]
+

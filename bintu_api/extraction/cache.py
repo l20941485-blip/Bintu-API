@@ -1,4 +1,4 @@
-"""Cache-economics helpers for extraction results.
+﻿"""Cache-economics helpers for extraction results.
 
 This module keeps persisted cache savings and provenance-sensitive metadata in a
 single place so the REST and MCP surfaces preserve the same economics without
@@ -39,3 +39,4 @@ def compute_saved_tokens(document: FetchedHTML | None, cached: CachedMarkdown, c
     if document is not None:
         return _compute_tokens_saved_estimate(document.body, cached.markdown)
     return 0
+

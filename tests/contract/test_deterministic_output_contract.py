@@ -84,6 +84,7 @@ class McpToolMetadataContractTests(unittest.TestCase):
             "max_tokens",
             "cache",
             "persist",
+            "sections",
         }
         self.assertEqual(set(TOOL_INPUT_SCHEMA["properties"].keys()), expected)
 
@@ -258,7 +259,7 @@ class StreamableMcpToolErrorContractTests(unittest.TestCase):
 
     def test_streamable_upstream_429_returns_http_200_not_429(self):
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=self._raise_upstream_429,
         ):
             response = self.client.post(
@@ -278,7 +279,7 @@ class StreamableMcpToolErrorContractTests(unittest.TestCase):
 
     def test_streamable_upstream_429_is_error_true(self):
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=self._raise_upstream_429,
         ):
             result = self._call_tool({"url": "https://example.com"})
@@ -286,7 +287,7 @@ class StreamableMcpToolErrorContractTests(unittest.TestCase):
 
     def test_streamable_upstream_429_structured_code_is_upstream_rate_limited(self):
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=self._raise_upstream_429,
         ):
             result = self._call_tool({"url": "https://example.com"})
@@ -295,7 +296,7 @@ class StreamableMcpToolErrorContractTests(unittest.TestCase):
 
     def test_streamable_upstream_429_structured_retryable_true(self):
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=self._raise_upstream_429,
         ):
             result = self._call_tool({"url": "https://example.com"})
@@ -305,7 +306,7 @@ class StreamableMcpToolErrorContractTests(unittest.TestCase):
 
     def test_streamable_upstream_429_content_text_mentions_code(self):
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=self._raise_upstream_429,
         ):
             result = self._call_tool({"url": "https://example.com"})
@@ -314,7 +315,7 @@ class StreamableMcpToolErrorContractTests(unittest.TestCase):
 
     def test_streamable_tool_error_envelope_shape(self):
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             side_effect=self._raise_upstream_429,
         ):
             response = self.client.post(
@@ -628,7 +629,7 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
             return _FetchResult(document_html, "utf-8", "https://example.com/")
 
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             new=_fake_fetch,
         ):
             result = self._call_tool({"url": "https://example.com/"})
@@ -660,3 +661,7 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+
+

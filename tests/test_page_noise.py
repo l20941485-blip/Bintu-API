@@ -12,7 +12,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString
 
-from bintu_api.page_noise import same_document, should_drop_title, strip_permalinks
+from bintu_api.extraction.cleaner import same_document, should_drop_title, strip_permalinks
 
 BLOCK_TAGS = {
     "address",
@@ -297,3 +297,5 @@ def test_real_extractor_preserves_heading_inside_same_document_link():
     out = _real_extract("<main><a href='#install'><h2>Install guide</h2></a><p>Installation instructions.</p></main>")
     assert "## Install guide" in out.splitlines()
     assert f"({BASE})" not in out
+
+

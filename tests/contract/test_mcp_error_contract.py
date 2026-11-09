@@ -64,3 +64,5 @@ def test_invalid_arguments_uses_error_contract(client):
     assert detail["message"] == "The tool arguments are invalid."
     assert detail["hint"] == "Check the tool input schema and retry."
     assert isinstance(detail["errors"], list)
+
+

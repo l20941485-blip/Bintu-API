@@ -1,4 +1,4 @@
-"""Phase 2 cross-surface contract tests.
+﻿"""Phase 2 cross-surface contract tests.
 
 REST, legacy MCP, and Streamable MCP intentionally expose different transport
 shapes, but they must agree on the shared extraction semantics: text, URL,
@@ -20,7 +20,7 @@ from bintu_api.settings import Settings
 from main import create_app
 
 _robots_patch = mock.patch(
-    "bintu_api.routes.robots_decision",
+    "bintu_api.api.routes.common.robots_decision",
     return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
 )
 
@@ -38,6 +38,7 @@ EXPECTED_TEXT = "Cross-surface contract text"
 PARITY_URL = "https://example.com/parity"
 
 MCP_ENVELOPE_FIELDS = {
+    "text",
     "deduplicated_count",
     "low_yield",
     "mode",
@@ -70,7 +71,7 @@ class CrossSurfaceContractTests(unittest.TestCase):
     def _rest_response(self, url: str) -> dict:
         self._reset_caches()
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=HTML, charset=None),
         ):
             response = self.client.get(
@@ -86,7 +87,7 @@ class CrossSurfaceContractTests(unittest.TestCase):
     def _legacy_mcp_envelope(self, url: str) -> dict:
         self._reset_caches()
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=HTML, charset=None),
         ):
             response = self.client.post(
@@ -105,7 +106,7 @@ class CrossSurfaceContractTests(unittest.TestCase):
     def _streamable_mcp_envelope(self, url: str) -> dict:
         self._reset_caches()
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=HTML, charset=None),
         ):
             response = self.client.post(
@@ -240,10 +241,10 @@ class CrossSurfaceContractTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.routes.get_cached_markdown",
+                "bintu_api.api.routes.common.get_cached_markdown",
                 new=AsyncMock(return_value=cached),
             ),
-            patch("bintu_api.routes.fetch_html_document") as fetch,
+            patch("bintu_api.api.routes.common.fetch_html_document") as fetch,
         ):
             response = self.client.post(
                 "/mcp",
@@ -294,7 +295,7 @@ class CrossSurfaceContractTests(unittest.TestCase):
         )
 
         with patch(
-            "bintu_api.routes.get_cached_markdown",
+            "bintu_api.api.routes.common.get_cached_markdown",
             new=AsyncMock(return_value=cached),
         ):
             response = self.client.post(
@@ -320,3 +321,6 @@ class CrossSurfaceContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+

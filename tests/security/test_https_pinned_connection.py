@@ -44,3 +44,5 @@ def test_https_connects_to_validated_ip_and_preserves_tls_hostname(address):
         assert connection.sock is tls_socket
     finally:
         connection.close()
+
+

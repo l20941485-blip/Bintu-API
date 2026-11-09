@@ -1,4 +1,4 @@
-"""Test Cache Bypass for Bintu.
+﻿"""Test Cache Bypass for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -11,7 +11,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from bintu_api import routes
+from bintu_api.api.routes import common as routes
 from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 
@@ -144,3 +144,6 @@ class CacheBypassTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

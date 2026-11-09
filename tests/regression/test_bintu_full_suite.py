@@ -138,3 +138,5 @@ def test_error_unauthorized():
         timeout=10,
     )
     assert response.status_code == 401
+
+

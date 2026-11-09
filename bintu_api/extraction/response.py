@@ -1,4 +1,4 @@
-"""Extraction response shaping for REST and MCP surfaces.
+﻿"""Extraction response shaping for REST and MCP surfaces.
 
 This module centralizes the final envelope construction used after extraction,
 without changing the underlying behavior or cache semantics. It preserves the
@@ -12,7 +12,7 @@ import json
 from typing import Any
 
 from bintu_api.context import ContextResult
-from bintu_api.routes import sanitize_url
+from bintu_api.security.url_safety import sanitize_url
 
 
 def build_response_provenance(context: ContextResult) -> dict[str, Any]:
@@ -43,7 +43,29 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
     return provenance
 
 
-def build_mcp_envelope(context: ContextResult, source_url: str) -> dict[str, Any]:
+def _mcp_selected_text(context: ContextResult) -> str:
+    """Return MCP text with selected-section headings restored."""
+    if context.selected_sections is None:
+        return context.text
+    parts = []
+    for section in context.selected_sections:
+        level = max(int(section.get("level", 0)), 0)
+        heading = str(section.get("heading", ""))
+        text = str(section.get("text", ""))
+        heading_line = f"{'#' * level} {heading}".strip()
+        if heading and text.startswith(heading_line):
+            parts.append(text)
+        else:
+            parts.append(f"{heading_line}\n{text}".strip())
+    return "\n\n".join(parts)
+
+
+def build_mcp_envelope(
+    context: ContextResult,
+    source_url: str,
+    *,
+    restore_section_headings: bool = False,
+) -> dict[str, Any]:
     """Build the public MCP structured output envelope without altering semantics."""
     provenance = build_response_provenance(context)
     safe_source_url = sanitize_url(source_url)
@@ -64,7 +86,11 @@ def build_mcp_envelope(context: ContextResult, source_url: str) -> dict[str, Any
         "deduplicated_count": context.deduplicated_count,
         "low_yield": context.low_yield,
         **({"yield_hint": context.yield_hint} if context.low_yield else {}),
-        "text": context.text,
+        "text": (
+            _mcp_selected_text(context)
+            if restore_section_headings
+            else context.text
+        ),
         "truncated": context.truncated,
         **(
             {"selected_sections": context.selected_sections}
@@ -106,3 +132,4 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
 def build_mcp_text_payload(envelope: dict[str, Any]) -> str:
     """Serialize the MCP envelope exactly as the existing endpoint does."""
     return json.dumps(envelope)
+

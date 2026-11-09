@@ -6,7 +6,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 """
 
 from bintu_api import mcp_descriptions as d
-from bintu_api.yield_check import (
+from bintu_api.extraction.quality import (
     HINT_JAVASCRIPT,
     HINT_LITTLE_TEXT,
     LOW_YIELD_MAX_TEXT_TOKENS,
@@ -147,3 +147,5 @@ def test_output_schema_additions_are_optional_and_typed():
     assert props["low_yield"]["type"] == "boolean"
     assert props["yield_hint"]["type"] == "string"
     assert props["deduplicated_count"]["type"] == "integer"
+
+
