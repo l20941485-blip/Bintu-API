@@ -1,4 +1,4 @@
-﻿"""MCP-compatible tool discovery and invocation helpers.
+"""MCP-compatible tool discovery and invocation helpers.
 
 
 Two surfaces intentionally share the same tool definitions:
@@ -402,7 +402,7 @@ async def call_tool(
     sections = arguments.sections
 
     try:
-        document, cached, cache_layer = await routes_common._fetch_and_extract(
+        document, cached, cache_layer = await routes_common.fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
