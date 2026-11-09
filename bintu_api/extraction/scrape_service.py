@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Literal
 
 from bintu_api.database import (
     CachedMarkdown,
@@ -38,6 +37,7 @@ from bintu_api.extraction.request_policy import (
     resolve_fetch_strategy,
     validate_link_mode,
 )
+from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.scraper import FetchedHTML
 
 logger = logging.getLogger("bintu_api.scrape")
@@ -92,21 +92,20 @@ class ScrapeService:
         self,
         context: ScrapeRequestContext,
         url: str,
-        *,
-        include_nav: bool,
-        include_header: bool,
-        include_footer: bool,
-        render_js: bool,
-        links: Literal["inline", "footnotes", "false"] = "inline",
-        skip_cache: bool = False,
-        persist: bool = True,
-        mode: str = "scrape",
-        max_tokens: int = 6000,
-        footnote_url_policy: Literal["full", "truncated"] = "truncated",
-        max_footnote_url_length: int = 100,
-        sections: list[str] | None = None,
+        options: ScrapeOptions,
     ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
         """Fetch, enforce robots, consult caches, and extract markdown."""
+        include_nav = options.include_nav
+        include_header = options.include_header
+        include_footer = options.include_footer
+        render_js = options.render_js
+        links = options.links
+        skip_cache = options.skip_cache
+        persist = options.persist
+        footnote_url_policy = options.footnote_url_policy
+        max_footnote_url_length = options.max_footnote_url_length
+        sections = options.sections
+
         validate_link_mode(links)
 
         settings = context.settings
@@ -137,7 +136,7 @@ class ScrapeService:
                 request_id=request_id,
             )
 
-        cache_key = compute_cache_key(render_js=render_js, links=links, url=url)
+        cache_key = compute_cache_key(render_js=options.render_js, links=options.links, url=url)
 
         if result is not None:
             cache_layer = "persistent"
@@ -182,14 +181,14 @@ class ScrapeService:
         extracted = self.text_extractor(
             document.body,
             extraction_cap,
-            include_nav=include_nav,
-            include_header=include_header,
-            include_footer=include_footer,
+            include_nav=options.include_nav,
+            include_header=options.include_header,
+            include_footer=options.include_footer,
             from_encoding=document.charset,
             base_url=document.final_url or url,
-            links=links,
-            footnote_url_policy=footnote_url_policy,
-            max_footnote_url_length=max_footnote_url_length,
+            links=options.links,
+            footnote_url_policy=options.footnote_url_policy,
+            max_footnote_url_length=options.max_footnote_url_length,
         )
 
         write_memory_cache(
@@ -226,6 +225,10 @@ class ScrapeService:
             )
 
         return document, result, cache_layer
+
+
+
+
 
 
 
