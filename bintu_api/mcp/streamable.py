@@ -52,7 +52,6 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from bintu_api.api.routes import common as routes_common
 from bintu_api.auth import (
     mcp_rate_limit_identity,
     mcp_upgrade_url,
@@ -63,6 +62,7 @@ from bintu_api.context import (
     normalize_mode,
 )
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
+from bintu_api.extraction.service import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,
@@ -513,7 +513,7 @@ async def _tools_call_result(
 
         sections = arguments.sections
 
-        document, cached, cache_layer = await routes_common.fetch_and_extract(
+        document, cached, cache_layer = await routes_common_fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
