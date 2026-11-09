@@ -10,6 +10,7 @@ import pytest
 from bintu_api.database import CachedMarkdown
 from bintu_api.extraction.cache_policy import DEFAULT_MAX_TEXT_CHARACTERS, compute_cache_key
 from bintu_api.extraction.request_context import ScrapeRequestContext
+from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.scrape_service import ScrapeService
 
 
@@ -72,10 +73,11 @@ async def call_service(service, request, **overrides):
         database_client=request.app.state.supabase_client,
         request_id=request.state.request_id,
     )
+    options = ScrapeOptions(**arguments)
     return await service.fetch_and_extract(
         context,
         "https://example.com/page",
-        **arguments,
+        options,
     )
 
 
@@ -207,4 +209,6 @@ async def test_persist_false_reads_but_does_not_write():
     assert result.markdown == "extracted"
     service.persistent_cache_reader.assert_awaited_once()
     service.persistent_cache_writer.assert_not_awaited()
+
+
 

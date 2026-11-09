@@ -40,6 +40,7 @@ from bintu_api.extraction.output import (
     is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
 )
 from bintu_api.extraction.request_context import ScrapeRequestContext
+from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.scrape_service import ScrapeService
 from bintu_api.observability import log_cache_event
 from bintu_api.robots import robots_decision as robots_decision
@@ -118,9 +119,7 @@ async def _fetch_and_extract(
         request_id=getattr(getattr(request, "state", None), "request_id", None),
     )
     service = build_scrape_service(request)
-    return await service.fetch_and_extract(
-        context,
-        url,
+    options = ScrapeOptions(
         include_nav=include_nav,
         include_header=include_header,
         include_footer=include_footer,
@@ -133,6 +132,11 @@ async def _fetch_and_extract(
         footnote_url_policy=footnote_url_policy,
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
+    )
+    return await service.fetch_and_extract(
+        context,
+        url,
+        options,
     )
 
 async def fetch_and_extract(
@@ -169,6 +173,8 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
 
 
 
