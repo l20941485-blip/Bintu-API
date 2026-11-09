@@ -8,6 +8,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from bintu_api.errors.tool_errors import ToolError
 from bintu_api.mcp import TOOL_NAME
 from bintu_api.scraper import (
     PayloadTooLarge,
@@ -19,7 +20,6 @@ from bintu_api.scraper import (
     UpstreamRenderError,
 )
 from bintu_api.settings import Settings
-from bintu_api.errors.tool_errors import ToolError
 from main import create_app
 
 

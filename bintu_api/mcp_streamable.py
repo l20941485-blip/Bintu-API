@@ -17,10 +17,10 @@ from bintu_api.mcp.streamable import (
 
 __all__ = [
     "MAX_MCP_BODY_BYTES",
-    "router",
     "_initialize_result",
     "_rpc_error",
     "_rpc_result",
     "_tools_call_result",
     "_tools_list_result",
+    "router",
 ]

@@ -32,6 +32,9 @@ __all__ = [
     "CacheEconomics",
     "ContextMode",
     "ContextResult",
+    "_decode_source_text",
+    "_is_table_block",
+    "_sentences",
     "count_tokens",
     "delivered_savings",
     "extract_context",
@@ -40,7 +43,4 @@ __all__ = [
     "resolve_effective_char_cap",
     "split_into_chunks",
     "summarize_text",
-    "_decode_source_text",
-    "_is_table_block",
-    "_sentences",
 ]

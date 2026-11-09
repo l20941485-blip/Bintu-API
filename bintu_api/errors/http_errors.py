@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
+
 from fastapi import HTTPException
+
 from bintu_api.observability import log_upstream_error
 from bintu_api.scraper import (
     PayloadTooLarge,
@@ -11,6 +13,7 @@ from bintu_api.scraper import (
     UpstreamHTTPError,
     UpstreamRenderError,
 )
+
 """Shared scraper-exception to HTTP status/code mapping.
 
 This module centralizes the status-code and error-code decision for scraper
@@ -20,7 +23,6 @@ and hints remain the responsibility of each caller, preserving exact output.
 
 
 from dataclasses import dataclass
-
 
 __all__ = ["UpstreamErrorSpec", "resolve_upstream_error"]
 

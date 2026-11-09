@@ -8,7 +8,19 @@ Important boundaries, invariants, and compatibility notes are documented here so
 import re
 
 from bintu_api import context_baseline as old
-from bintu_api import context_chunking as new
+from bintu_api.extraction.chunker import sentence_pieces, split_into_chunks
+from bintu_api.extraction.context import count_tokens
+from bintu_api.extraction.summarizer import summarize_text
+
+
+class _ExtractionFacade:
+    count_tokens = staticmethod(count_tokens)
+    summarize_text = staticmethod(summarize_text)
+    split_into_chunks = staticmethod(split_into_chunks)
+    sentence_pieces = staticmethod(sentence_pieces)
+
+
+new = _ExtractionFacade()
 
 try:
     import pytest
@@ -280,5 +292,7 @@ def test_intro_is_left_alone_when_moving_would_break_the_budget():
     budget = count(big_fence) + 2  # fence fits alone; fence + intro line does not
     chunks = new.split_into_chunks(text, budget)
     assert all(count(c) <= budget for c in chunks)
+
+
 
 

@@ -662,7 +662,11 @@ async def _tools_call_result(
     # provenance is added additively (Phase D): same shape as REST response.
     from bintu_api.extraction.response import build_mcp_envelope
 
-    envelope = build_mcp_envelope(context, arguments.url)
+    envelope = build_mcp_envelope(
+        context,
+        arguments.url,
+        restore_section_headings=True,
+    )
     return _rpc_result(
         request_id,
         {

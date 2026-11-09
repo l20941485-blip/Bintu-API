@@ -27,7 +27,6 @@ from bintu_api.api.routes.common import (
 from bintu_api.auth import (
     api_key_scheme,
     bearer_scheme,
-    has_valid_proxy_secret,
     verify_supabase_user,
 )
 from bintu_api.errors.upstream import translate_upstream_error
@@ -231,7 +230,7 @@ async def _scrape_text(
             sections=sections,
         )
 
-        if request.app.state.supabase_client is not None and has_valid_proxy_secret(request, settings):
+        if request.app.state.supabase_client is not None and common.has_valid_proxy_secret(request, settings):
             rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
             if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
                 queue_usage_event(

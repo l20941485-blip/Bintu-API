@@ -21,6 +21,9 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException, Request
 
+from bintu_api.auth import has_valid_proxy_secret as has_valid_proxy_secret
+from bintu_api.auth import rate_limit_identity as rate_limit_identity
+from bintu_api.auth import verify_api_access as verify_api_access
 from bintu_api.context import (
     DEFAULT_MAX_TEXT_CHARACTERS,
     MAX_EXTRACTION_CHARACTERS,
@@ -408,3 +411,7 @@ async def _fetch_and_extract(
 
     return document, result, cache_layer
 
+
+
+
+from bintu_api.api.routes.extract import _scrape_text as _scrape_text

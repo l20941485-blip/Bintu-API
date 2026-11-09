@@ -12,7 +12,6 @@ Important boundaries, invariants, or compatibility notes:
 from __future__ import annotations
 
 import math
-
 import re
 
 

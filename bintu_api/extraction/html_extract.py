@@ -238,8 +238,8 @@ def _footnote_display_label(destination: str, max_length: int) -> str:
     if len(label) <= max_length:
         return label
     if max_length == 1:
-        return "â€¦"
-    return f"{label[: max_length - 1]}â€¦"
+        return "…"
+    return f"{label[:max_length - 1]}…"
 
 
 PRE_NL = "\x01"
@@ -719,6 +719,8 @@ def extract_text_result(
 
     fallback_text = None
     if len(bs4_text) == 0 and comment_thread_root is None:
+        from bintu_api.scraper import _trafilatura_fallback as _trafilatura_fallback
+
         fallback_text = _trafilatura_fallback(
             html_bytes,
             max_characters,
@@ -739,4 +741,5 @@ def extract_text_result(
         text,
         max_characters,
     )
+
 

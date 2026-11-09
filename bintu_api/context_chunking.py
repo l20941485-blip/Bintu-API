@@ -6,8 +6,6 @@ and compatibility expectations continue to work.
 """
 
 from bintu_api.extraction.chunker import (
-    _keep_headings_with_body,
-    _keep_lead_ins,
     apply_link_policy,
     sentence_pieces,
     split_block,

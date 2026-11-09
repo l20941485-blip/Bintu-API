@@ -1,4 +1,4 @@
-﻿"""Web fetching for Bintu.
+"""Web fetching for Bintu.
 
 This module owns network fetching, safety checks, and HTML retrieval without
 making metering or HTTP route decisions. Text extraction lives in
@@ -22,11 +22,6 @@ from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
 
 from bintu_api.settings import Settings
-from bintu_api.extraction.html_extract import (
-    ExtractedText,
-    extract_text,
-    extract_text_result,
-)
 
 logger = logging.getLogger(__name__)
 READ_CHUNK_BYTES = 4096
@@ -760,3 +755,7 @@ def _read_html_response(
         return decoded
 
     return bytes(html_bytes)
+
+from bintu_api.extraction.html_extract import _trafilatura_fallback as _trafilatura_fallback
+from bintu_api.extraction.html_extract import extract_text as extract_text
+from bintu_api.extraction.html_extract import extract_text_result as extract_text_result

@@ -116,7 +116,7 @@ def test_rest_default_policy_truncates_and_reduces_tokens(client):
     assert truncated_response.status_code == 200
     truncated_text = truncated_response.json()["text"]
     assert LONG_URL not in truncated_text
-    assert "â€¦" in truncated_text
+    assert "…" in truncated_text
     assert "[URL truncated]" in truncated_text
     assert truncated_text.count("[URL truncated]") == 1
     assert "`" not in truncated_text
@@ -215,7 +215,7 @@ def test_mcp_defaults_to_truncated_policy_for_footnote_extractor(
     assert response.status_code == 200
     text = _mcp_text(response, transport)
     assert LONG_URL not in text
-    assert "â€¦" in text
+    assert "…" in text
     assert "[URL truncated]" in text
     assert text.count("[URL truncated]") == 1
     assert "`" not in text

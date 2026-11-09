@@ -5,8 +5,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bintu_api.database import CachedMarkdown, get_cached_markdown
 from bintu_api.api.routes.common import _fetch_and_extract
+from bintu_api.database import CachedMarkdown, get_cached_markdown
 from bintu_api.settings import Settings
 
 

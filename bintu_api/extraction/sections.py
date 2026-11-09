@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -69,7 +69,7 @@ def select_sections(
     selectors = normalize_selectors(sections)
     headings = _parse_headings(text)
 
-    if not selectors or not headings:
+    if not selectors:
         return SectionSelection(sections=[], text="", truncated=False)
 
     matched: list[dict[str, Any]] = []
@@ -88,6 +88,28 @@ def select_sections(
     matched.sort(key=lambda heading: heading["ordinal"])    
 
     if not matched:
+        blocks = [
+            block.strip()
+            for block in re.split(r"\n\s*\n", text)
+            if block.strip()
+        ]
+
+        for block in blocks:
+            normalized_block = _normalize(block)
+            if normalized_block in selectors:
+                return SectionSelection(
+                    sections=[
+                        {
+                            "heading": block.splitlines()[0][:200],
+                            "level": 0,
+                            "index": 0,
+                            "text": block,
+                        }
+                    ],
+                    text=block,
+                    truncated=False,
+                )
+
         return SectionSelection(sections=[], text="", truncated=False)
 
     lines = text.split("\n")

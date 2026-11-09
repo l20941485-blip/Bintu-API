@@ -19,7 +19,6 @@ from bintu_api.mcp_descriptions import (
     SECTIONS_DESCRIPTION,
     URL_DESCRIPTION,
 )
-
 from bintu_api.mcp_descriptions import TOOL_DESCRIPTION as TOOL_DESCRIPTION
 
 TOOL_NAME = "bintu_scrape_text"
