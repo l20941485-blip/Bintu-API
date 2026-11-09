@@ -1,4 +1,4 @@
-﻿"""Shared fetch, robots, cache, and provenance helpers for API routes.
+"""Shared fetch, robots, cache, and provenance helpers for API routes.
 
 This module owns the fetch -> robots -> cache -> extract boundary shared by
 the REST scrape and chunk endpoints, plus the URL redaction and provenance
@@ -17,7 +17,7 @@ import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Literal
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunparse, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException, Request
 
@@ -33,6 +33,7 @@ from bintu_api.database import (
     upsert_cached_markdown,
 )
 from bintu_api.extraction.cache import compute_saved_tokens
+from bintu_api.extraction.quality import assess_yield
 from bintu_api.observability import log_cache_event
 from bintu_api.robots import robots_decision, robots_mode
 from bintu_api.schemas import CacheInfo, Provenance, ScrapeTextResponse
@@ -53,7 +54,6 @@ from bintu_api.security.url_safety import (
     sanitize_url,
 )
 from bintu_api.settings import Settings
-from bintu_api.extraction.quality import assess_yield
 
 logger = logging.getLogger("bintu_api.scrape")
 
@@ -407,3 +407,4 @@ async def _fetch_and_extract(
             )
 
     return document, result, cache_layer
+

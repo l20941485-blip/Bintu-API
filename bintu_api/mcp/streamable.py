@@ -1,8 +1,8 @@
 ﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
-Exposes the single ``bintu_scrape_text`` tool to real MCP clients Ã¢â‚¬â€ Claude
+Exposes the single ``bintu_scrape_text`` tool to real MCP clients Ã¢â'¬â€ Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
-any other Streamable HTTP client Ã¢â‚¬â€ without adding the ``mcp`` SDK dependency.
+any other Streamable HTTP client Ã¢â'¬â€ without adding the ``mcp`` SDK dependency.
 Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 ``2025-03-26`` during negotiation):
 
@@ -10,8 +10,8 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
   single ``application/json`` response (the spec allows skipping SSE when
   the server never pushes messages). ``initialize``, ``tools/list`` and
   ``ping`` are public discovery/onboarding methods (protocol negotiation,
-  tool schemas, liveness Ã¢â‚¬â€ never extraction); every other method Ã¢â‚¬â€ above
-  all ``tools/call`` Ã¢â‚¬â€ requires the master API_KEY, the scoped
+  tool schemas, liveness Ã¢â'¬â€ never extraction); every other method Ã¢â'¬â€ above
+  all ``tools/call`` Ã¢â'¬â€ requires the master API_KEY, the scoped
   MCP_API_KEY, or ``Authorization: Bearer`` with either key, so gateway
   health-checkers and marketplace audits that omit the upstream token
   complete instantly while all billable work stays behind auth (401 with
@@ -38,7 +38,7 @@ Error mapping follows the spec: protocol failures (unknown method/tool,
 invalid arguments, malformed payloads) use JSON-RPC error codes, while tool
 execution failures (unsafe URL, rate limit, upstream errors, render_js
 disabled) are returned in-band with ``isError: true`` and a readable text so
-the model can self-correct Ã¢â‚¬â€ e.g. retrying with ``render_js=false``.
+the model can self-correct Ã¢â'¬â€ e.g. retrying with ``render_js=false``.
 """
 
 import asyncio
@@ -62,7 +62,7 @@ from bintu_api.context import (
     _decode_source_text,
     normalize_mode,
 )
-from bintu_api.errors.tool_errors import build_mcp_tool_error_result
+from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,
@@ -131,7 +131,6 @@ from bintu_api.scraper import (
     UpstreamRenderError,
 )
 from bintu_api.settings import Settings
-from bintu_api.errors.tool_errors import ToolError
 
 MAX_MCP_BODY_BYTES = _PROTOCOL_MAX_MCP_BODY_BYTES
 
@@ -358,7 +357,7 @@ def _protocol_version_header(request: Request) -> str:
 
 def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONResponse:
     # Strict scanners expect the standard JSON-RPC envelope even for
-    # transport-level rejections Ã¢â‚¬â€ never a bare {"error": ...} shape.
+    # transport-level rejections Ã¢â'¬â€ never a bare {"error": ...} shape.
     return _protocol_reject_unknown_protocol_version(request_id, version)
 
 
@@ -369,7 +368,7 @@ def _accept_header_serves_json(request: Request) -> bool:
     text/event-stream``. This server answers every POST with a single JSON
     response and never opens an SSE stream, so a client that lists other
     media types but not JSON cannot be served (HTTP 406). Clients that send
-    no Accept header at all (gateway Test buttons, curl) are tolerated Ã¢â‚¬â€
+    no Accept header at all (gateway Test buttons, curl) are tolerated Ã¢â'¬â€
     rejecting the largest installed base would be worse than the
     corner-case protocol violation.
     """

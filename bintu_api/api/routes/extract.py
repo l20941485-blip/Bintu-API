@@ -1,4 +1,4 @@
-﻿"""Scrape-text extraction endpoints for the Bintu API.
+"""Scrape-text extraction endpoints for the Bintu API.
 
 This module owns the REST scrape-text route, the mobile authenticated route,
 and the shared scrape helper that applies sections selection and token
@@ -19,8 +19,8 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Security
 
+from bintu_api.api.routes import common
 from bintu_api.api.routes.common import (
-    TOKEN_METHOD,
     _build_response,
     _fetch_and_extract,
 )
@@ -28,8 +28,6 @@ from bintu_api.auth import (
     api_key_scheme,
     bearer_scheme,
     has_valid_proxy_secret,
-    rate_limit_identity,
-    verify_api_access,
     verify_supabase_user,
 )
 from bintu_api.errors.upstream import translate_upstream_error
@@ -77,7 +75,7 @@ async def scrape_text(
     sections: Annotated[list[str] | None, Query()] = None,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
-    verify_api_access(request, settings)
+    common.verify_api_access(request, settings)
 
     if max_tokens < 100 or max_tokens > 50000:
         raise HTTPException(
@@ -131,7 +129,7 @@ async def scrape_text(
         include_nav,
         include_header,
         include_footer,
-        rate_limit_identity(request, settings),
+        common.rate_limit_identity(request, settings),
         render_js,
         links,
         skip_cache,
