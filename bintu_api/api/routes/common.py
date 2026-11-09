@@ -17,7 +17,6 @@ import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Literal
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException, Request
 
@@ -35,11 +34,21 @@ from bintu_api.database import (
     get_cached_markdown,
     upsert_cached_markdown,
 )
-from bintu_api.extraction.cache import compute_saved_tokens
-from bintu_api.extraction.quality import assess_yield
+from bintu_api.extraction.output import (  # noqa: F401
+    TOKEN_METHOD,
+    redact_cache_url,
+)
+from bintu_api.extraction.output import (
+    build_provenance as _build_provenance,  # noqa: F401
+)
+from bintu_api.extraction.output import (
+    build_scrape_response as _build_response,  # noqa: F401
+)
+from bintu_api.extraction.output import (
+    is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
+)
 from bintu_api.observability import log_cache_event
 from bintu_api.robots import robots_decision, robots_mode
-from bintu_api.schemas import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.scraper import (
     FetchedHTML,
     _compute_approx_tokens,
@@ -49,90 +58,13 @@ from bintu_api.scraper import (
     fetch_rendered_html_document,
 )
 from bintu_api.security.credentials import (
-    CREDENTIAL_QUERY_PARAMS,
     has_credential_params,
-)
-from bintu_api.security.url_safety import (
-    SENSITIVE_QUERY_PARAMETER_NAMES,
-    sanitize_url,
 )
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.scrape")
 
-TOKEN_METHOD = "ceil(characters/4)"
 LINK_MODES = ("inline", "footnotes", "false")
-
-
-def _is_sensitive_query_parameter(name: str) -> bool:
-    normalized = name.strip().lower()
-    return normalized in SENSITIVE_QUERY_PARAMETER_NAMES or normalized.startswith("utm_")
-
-
-def _build_provenance(
-    url: str,
-    text: str,
-    document: FetchedHTML | None,
-    cache_layer: str,
-    request_id: str,
-    settings: Settings,
-) -> Provenance:
-    """Provenance with real values only; fields that do not apply stay None."""
-    fetched = document is not None and cache_layer == "none"
-    return Provenance(
-        request_id=request_id,
-        fetched_at=datetime.now(UTC).isoformat(),
-        requested_url=sanitize_url(url),
-        final_url=document.final_url if fetched else None,
-        bytes_fetched=len(document.body) if fetched else None,
-        content_sha256=(hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None),
-        cache=CacheInfo(
-            hit=cache_layer != "none",
-            layer=cache_layer,
-            age_seconds=None,
-        ),
-        extractor_version=getattr(settings, "service_version", "unknown"),
-    )
-
-
-def _build_response(
-    url: str,
-    result: CachedMarkdown,
-    document: FetchedHTML | None,
-    cache_layer: str,
-    request_id: str,
-    settings: Settings,
-) -> ScrapeTextResponse:
-    approx_tokens = _compute_approx_tokens(result.markdown)
-
-    # Preserve the economics of the original extraction on cache hits. A
-    # persistent-cache row no longer has the source HTML, so recomputing savings
-    # would incorrectly report zero.
-    saved = compute_saved_tokens(document, result, cache_layer)
-
-    assessment = assess_yield(approx_tokens, result.html_tokens)
-
-    return ScrapeTextResponse(
-        url=url,
-        text=result.markdown,
-        truncated=result.truncated,
-        cache_hit=cache_layer != "none",
-        cache_layer=cache_layer,
-        approx_tokens=approx_tokens,
-        token_method=TOKEN_METHOD,
-        tokens=approx_tokens,
-        tokens_saved_estimate=saved,
-        low_yield=assessment.low_yield,
-        yield_hint=assessment.hint,
-        provenance=_build_provenance(
-            url,
-            result.markdown,
-            document,
-            cache_layer,
-            request_id,
-            settings,
-        ),
-    )
 
 
 async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
@@ -184,37 +116,12 @@ async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
         )
 
 
-def redact_cache_url(url: str) -> str:
-    """Redact credential-like query values before persistent-cache storage.
 
+async def _scrape_text(*args, **kwargs):
+    """Compatibility delegate for the route-level text extraction helper."""
+    from bintu_api.api.routes.extract import _scrape_text as implementation
 
-    Cache lookups continue to use the original request URL. Only the URL
-    written to Supabase is redacted, preventing bearer tokens, session IDs,
-    and similar caller credentials from being retained in cache rows.
-    """
-    parsed = urlsplit(url)
-    if not parsed.query:
-        return url
-
-    try:
-        pairs = parse_qsl(parsed.query, keep_blank_values=True)
-    except ValueError:
-        return url
-
-    redacted_pairs = [
-        (name, "[REDACTED]" if name.lower() in CREDENTIAL_QUERY_PARAMS else value) for name, value in pairs
-    ]
-
-    return urlunsplit(
-        (
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            urlencode(redacted_pairs),
-            parsed.fragment,
-        )
-    )
-
+    return await implementation(*args, **kwargs)
 
 async def _fetch_and_extract(
     request: Request,
@@ -449,4 +356,3 @@ async def fetch_and_extract(
         sections=sections,
     )
 
-from bintu_api.api.routes.extract import _scrape_text as _scrape_text
