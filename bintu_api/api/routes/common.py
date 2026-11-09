@@ -54,6 +54,10 @@ from bintu_api.extraction.output import (
 from bintu_api.extraction.output import (
     is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
 )
+from bintu_api.extraction.request_policy import (
+    resolve_fetch_strategy,
+    validate_link_mode,
+)
 from bintu_api.observability import log_cache_event
 from bintu_api.robots import robots_decision as robots_decision
 from bintu_api.robots import robots_mode as robots_mode
@@ -120,8 +124,7 @@ async def _fetch_and_extract(
 
     Raises the same HTTPException and scraper exceptions as the REST endpoint.
     """
-    if links not in LINK_MODES:
-        raise ValueError("links must be one of: inline, footnotes, false")
+    validate_link_mode(links)
 
     settings = request.app.state.settings
     extraction_cap = resolve_extraction_cap(settings)
@@ -201,7 +204,8 @@ async def _fetch_and_extract(
         # skip_cache does not bypass it.
         await _enforce_robots(url, settings, cache_key[:12])
 
-        if render_js:
+        strategy = resolve_fetch_strategy(render_js)
+        if strategy == "rendered":
             document = await fetch_rendered_html_document(url, settings)
         else:
             # The existing transport pins each request to a validated public IP.
@@ -312,6 +316,9 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
+
 
 
 
