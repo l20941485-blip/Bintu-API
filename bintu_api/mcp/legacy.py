@@ -21,7 +21,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
-from bintu_api.api.routes import common as routes_common
 from bintu_api.auth import (
     api_key_scheme,
     mcp_rate_limit_identity,
@@ -31,6 +30,7 @@ from bintu_api.context import (
     _decode_source_text,
 )
 from bintu_api.extraction.cache import build_cache_economics
+from bintu_api.extraction.service import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS as _TOOL_ANNOTATIONS,
 )
@@ -402,7 +402,7 @@ async def call_tool(
     sections = arguments.sections
 
     try:
-        document, cached, cache_layer = await routes_common.fetch_and_extract(
+        document, cached, cache_layer = await routes_common_fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
