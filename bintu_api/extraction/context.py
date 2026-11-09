@@ -152,7 +152,6 @@ class CacheEconomics:
 def _decode_source_text(document: FetchedHTML) -> str:
     """Decode a fetched body for the savings baseline (best effort, no throws).
 
-
     The baseline deliberately counts the raw document â€" markup included â€" so
     `tokens_saved_estimate` is approximately "fetched HTML tokens minus
     delivered text tokens", the all-in number the cost-reduction story needs.
@@ -164,6 +163,10 @@ def _decode_source_text(document: FetchedHTML) -> str:
     except Exception:  # pragma: no cover - decoder lookup is already guarded
         return ""
 
+
+def decode_source_text(document: FetchedHTML) -> str:
+    """Public alias for the established source-text decoder."""
+    return _decode_source_text(document)
 
 def _sentences(text: str) -> list[str]:
     """Split prose into sentences while preserving terminal punctuation."""
@@ -434,4 +437,6 @@ async def extract_context(
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:
     """Return the non-negative token savings estimate for a delivered response."""
     return max(0, html_tokens - approx_tokens)
+
+
 

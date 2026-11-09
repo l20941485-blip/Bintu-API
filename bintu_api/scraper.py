@@ -1,4 +1,4 @@
-"""Web fetching for Bintu.
+﻿"""Web fetching for Bintu.
 
 This module owns network fetching, safety checks, and HTML retrieval without
 making metering or HTTP route decisions. Text extraction lives in
@@ -66,6 +66,18 @@ def _compute_tokens_saved_estimate(
         0,
         _compute_approx_tokens(html_text) - _compute_approx_tokens(extracted_text),
     )
+
+def compute_approx_tokens(text: str) -> int:
+    """Public alias for the established approximate token counter."""
+    return _compute_approx_tokens(text)
+
+
+def compute_tokens_saved_estimate(
+    source_text: str,
+    extracted_text: str,
+) -> int:
+    """Public alias for the established token-savings estimator."""
+    return _compute_tokens_saved_estimate(source_text, extracted_text)
 
 
 class TargetURLRejected(ValueError):
@@ -759,3 +771,4 @@ def _read_html_response(
 from bintu_api.extraction.html_extract import _trafilatura_fallback as _trafilatura_fallback
 from bintu_api.extraction.html_extract import extract_text as extract_text
 from bintu_api.extraction.html_extract import extract_text_result as extract_text_result
+

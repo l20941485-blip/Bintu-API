@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from bintu_api.context import decode_source_text
 from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.context import decode_source_text
 from bintu_api.scraper import (
     FetchedHTML,
     compute_approx_tokens,
@@ -23,9 +23,11 @@ def build_cached_markdown(
     url: str,
     *,
     extracted_at: str | None = None,
+    decode_source_text_fn=None,
 ) -> CachedMarkdown:
     """Build the canonical extraction result for a freshly extracted page."""
-    html_source_text = decode_source_text(document)
+    decode_source = decode_source_text_fn or decode_source_text
+    html_source_text = decode_source(document)
     html_tokens = compute_approx_tokens(html_source_text)
     tokens_saved_estimate = compute_tokens_saved_estimate(
         document.body,

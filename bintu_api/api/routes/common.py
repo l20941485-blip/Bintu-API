@@ -1,4 +1,4 @@
-"""Shared fetch, robots, cache, and provenance helpers for API routes.
+﻿"""Shared fetch, robots, cache, and provenance helpers for API routes.
 
 This module owns the fetch -> robots -> cache -> extract boundary shared by
 the REST scrape and chunk endpoints, plus the URL redaction and provenance
@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import Request
@@ -22,21 +21,20 @@ from fastapi import Request
 from bintu_api.auth import has_valid_proxy_secret as has_valid_proxy_secret
 from bintu_api.auth import rate_limit_identity as rate_limit_identity
 from bintu_api.auth import verify_api_access as verify_api_access
-from bintu_api.context import (
-    _decode_source_text,
-)
 from bintu_api.database import (
     DATABASE_TIMEOUT_SECONDS,
     CachedMarkdown,
     get_cached_markdown,
     upsert_cached_markdown,
 )
+from bintu_api.extraction.builder import build_cached_markdown
 from bintu_api.extraction.cache_policy import (
     compute_cache_key,
     is_cacheable,
     is_persistent_cache_enabled,
     resolve_extraction_cap,
 )
+from bintu_api.extraction.context import _decode_source_text
 from bintu_api.extraction.output import (  # noqa: F401
     TOKEN_METHOD,
     redact_cache_url,
@@ -55,8 +53,6 @@ from bintu_api.robots import robots_decision as robots_decision
 from bintu_api.robots import robots_mode as robots_mode
 from bintu_api.scraper import (
     FetchedHTML,
-    _compute_approx_tokens,
-    _compute_tokens_saved_estimate,
     extract_text_result,
     fetch_html_document,
     fetch_rendered_html_document,
@@ -224,21 +220,11 @@ async def _fetch_and_extract(
     if cache_layer == "none" and extracted.text.strip():
         cache.set(cache_key, document)
 
-    html_source_text = _decode_source_text(document)
-    html_tokens = _compute_approx_tokens(html_source_text)
-    tokens_saved_estimate = _compute_tokens_saved_estimate(
-        document.body,
-        extracted.text,
-    )
-    extracted_at = datetime.now(UTC).isoformat()
-
-    result = CachedMarkdown(
-        markdown=extracted.text,
-        truncated=extracted.truncated,
-        html_tokens=html_tokens,
-        tokens_saved_estimate=tokens_saved_estimate,
-        limiting_factor="char_cap" if extracted.truncated else "none",
-        extracted_at=extracted_at,
+    result = build_cached_markdown(
+        document,
+        extracted,
+        url,
+        decode_source_text_fn=_decode_source_text,
     )
 
     if database_client is not None and persistent_cache_enabled and cacheable and persist:
@@ -311,4 +297,8 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
+
+
 
