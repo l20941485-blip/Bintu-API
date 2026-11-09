@@ -39,6 +39,7 @@ from bintu_api.extraction.output import (
 from bintu_api.extraction.output import (
     is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
 )
+from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_service import ScrapeService
 from bintu_api.observability import log_cache_event
 from bintu_api.robots import robots_decision as robots_decision
@@ -111,9 +112,14 @@ async def _fetch_and_extract(
     sections: list[str] | None = None,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Compatibility boundary preserving the established scrape patch seams."""
+    context = ScrapeRequestContext(
+        settings=request.app.state.settings,
+        database_client=getattr(request.app.state, "supabase_client", None),
+        request_id=getattr(getattr(request, "state", None), "request_id", None),
+    )
     service = build_scrape_service(request)
     return await service.fetch_and_extract(
-        request,
+        context,
         url,
         include_nav=include_nav,
         include_header=include_header,
@@ -163,6 +169,8 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
 
 
 

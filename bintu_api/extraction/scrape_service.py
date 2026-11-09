@@ -33,6 +33,7 @@ from bintu_api.extraction.persistent_cache import (
     read_persistent_cache,
     write_persistent_cache,
 )
+from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.request_policy import (
     resolve_fetch_strategy,
     validate_link_mode,
@@ -70,7 +71,7 @@ class ScrapeService:
 
     async def fetch_and_extract(
         self,
-        request,
+        context: ScrapeRequestContext,
         url: str,
         *,
         include_nav: bool,
@@ -89,15 +90,15 @@ class ScrapeService:
         """Fetch, enforce robots, consult caches, and extract markdown."""
         validate_link_mode(links)
 
-        settings = request.app.state.settings
+        settings = context.settings
         extraction_cap = resolve_extraction_cap(settings)
         persistent_cache_enabled = is_persistent_cache_enabled(settings, links)
         cacheable = is_cacheable(url)
-        database_client = getattr(request.app.state, "supabase_client", None)
+        database_client = context.database_client
         result = None
         document = None
         cache_layer = "none"
-        request_id = getattr(getattr(request, "state", None), "request_id", None)
+        request_id = context.request_id
 
         if should_read_persistent_cache(
             database_client,
@@ -211,3 +212,6 @@ class ScrapeService:
             )
 
         return document, result, cache_layer
+
+
+

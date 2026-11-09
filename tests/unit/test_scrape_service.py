@@ -9,6 +9,7 @@ import pytest
 
 from bintu_api.database import CachedMarkdown
 from bintu_api.extraction.cache_policy import DEFAULT_MAX_TEXT_CHARACTERS, compute_cache_key
+from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_service import ScrapeService
 
 
@@ -66,7 +67,16 @@ async def call_service(service, request, **overrides):
         "render_js": False,
     }
     arguments.update(overrides)
-    return await service.fetch_and_extract(request, "https://example.com/page", **arguments)
+    context = ScrapeRequestContext(
+        settings=request.app.state.settings,
+        database_client=request.app.state.supabase_client,
+        request_id=request.state.request_id,
+    )
+    return await service.fetch_and_extract(
+        context,
+        "https://example.com/page",
+        **arguments,
+    )
 
 
 @pytest.mark.asyncio
@@ -136,6 +146,8 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
     service.robots_enforcer.assert_awaited_once()
     service.html_fetcher.assert_called_once()
     assert list(cache.data.values()) == [document]
+
+
 
 
 
