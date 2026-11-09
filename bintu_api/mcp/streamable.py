@@ -1,4 +1,4 @@
-﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
+"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients Ã¢â'¬â€ Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
@@ -513,7 +513,7 @@ async def _tools_call_result(
 
         sections = arguments.sections
 
-        document, cached, cache_layer = await routes_common._fetch_and_extract(
+        document, cached, cache_layer = await routes_common.fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
