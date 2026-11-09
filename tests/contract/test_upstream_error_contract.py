@@ -1,4 +1,4 @@
-"""Upstream failures must be stable, actionable, and privacy-safe."""
+﻿"""Upstream failures must be stable, actionable, and privacy-safe."""
 
 from __future__ import annotations
 
@@ -38,11 +38,11 @@ class UpstreamErrorContractTests(unittest.TestCase):
     def test_target_401_maps_to_upstream_access_denied(self) -> None:
         with (
             patch(
-                "bintu_api.routes._enforce_robots",
+                "bintu_api.api.routes.common._enforce_robots",
                 new=AsyncMock(),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 side_effect=UpstreamHTTPError(401, "Unauthorized"),
             ),
         ):
@@ -60,11 +60,11 @@ class UpstreamErrorContractTests(unittest.TestCase):
     def test_target_403_maps_to_upstream_access_denied(self) -> None:
         with (
             patch(
-                "bintu_api.routes._enforce_robots",
+                "bintu_api.api.routes.common._enforce_robots",
                 new=AsyncMock(),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 side_effect=UpstreamHTTPError(403, "Forbidden"),
             ),
         ):
@@ -82,11 +82,11 @@ class UpstreamErrorContractTests(unittest.TestCase):
     def test_target_429_maps_to_upstream_rate_limited(self) -> None:
         with (
             patch(
-                "bintu_api.routes._enforce_robots",
+                "bintu_api.api.routes.common._enforce_robots",
                 new=AsyncMock(),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 side_effect=UpstreamHTTPError(429, "Too Many Requests"),
             ),
         ):
@@ -104,11 +104,11 @@ class UpstreamErrorContractTests(unittest.TestCase):
     def test_target_500_maps_to_upstream_http_error(self) -> None:
         with (
             patch(
-                "bintu_api.routes._enforce_robots",
+                "bintu_api.api.routes.common._enforce_robots",
                 new=AsyncMock(),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 side_effect=UpstreamHTTPError(500, "Internal Server Error"),
             ),
         ):
@@ -126,11 +126,11 @@ class UpstreamErrorContractTests(unittest.TestCase):
     def test_target_404_maps_to_upstream_http_error(self) -> None:
         with (
             patch(
-                "bintu_api.routes._enforce_robots",
+                "bintu_api.api.routes.common._enforce_robots",
                 new=AsyncMock(),
             ),
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 side_effect=UpstreamHTTPError(404, "Not Found"),
             ),
         ):
@@ -148,5 +148,6 @@ class UpstreamErrorContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

@@ -1,10 +1,10 @@
-"""Persistent extraction must not depend on the first caller's budget."""
+﻿"""Persistent extraction must not depend on the first caller's budget."""
 
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bintu_api import routes
+from bintu_api.api.routes import common as routes
 from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 
@@ -133,5 +133,6 @@ def test_small_first_request_does_not_shorten_persistent_extraction():
 
 def test_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode():
     asyncio.run(_check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode())
+
 
 

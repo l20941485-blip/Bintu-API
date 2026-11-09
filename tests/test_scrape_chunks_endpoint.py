@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/scrape/chunks endpoint."""
+﻿"""Tests for the /api/v1/scrape/chunks endpoint."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 
-from bintu_api.routes import scrape_chunks
+from bintu_api.api.routes.chunk import scrape_chunks
 from bintu_api.settings import Settings
 
 
@@ -41,9 +41,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload()
 
         with (
-            patch("bintu_api.routes.verify_api_access"),
+            patch("bintu_api.api.routes.common.verify_api_access"),
             patch(
-                "bintu_api.routes.rate_limit_identity",
+                "bintu_api.api.routes.common.rate_limit_identity",
                 return_value="test-client",
             ),
             self.assertRaises(HTTPException) as caught,
@@ -67,9 +67,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload()
 
         with (
-            patch("bintu_api.routes.verify_api_access"),
+            patch("bintu_api.api.routes.common.verify_api_access"),
             patch(
-                "bintu_api.routes.rate_limit_identity",
+                "bintu_api.api.routes.common.rate_limit_identity",
                 return_value="test-client",
             ),
             self.assertRaises(HTTPException) as caught,
@@ -93,9 +93,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload(render_js=True)
 
         with (
-            patch("bintu_api.routes.verify_api_access"),
+            patch("bintu_api.api.routes.common.verify_api_access"),
             patch(
-                "bintu_api.routes.rate_limit_identity",
+                "bintu_api.api.routes.common.rate_limit_identity",
                 return_value="test-client",
             ),
             self.assertRaises(HTTPException) as caught,
@@ -125,13 +125,13 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         result.extracted_at = "2026-10-29T00:00:00+00:00"
 
         with (
-            patch("bintu_api.routes.verify_api_access"),
+            patch("bintu_api.api.routes.common.verify_api_access"),
             patch(
-                "bintu_api.routes.rate_limit_identity",
+                "bintu_api.api.routes.common.rate_limit_identity",
                 return_value="test-client",
             ),
             patch(
-                "bintu_api.routes._scrape_chunks",
+                "bintu_api.api.routes.chunk._scrape_chunks",
                 new=AsyncMock(return_value=(None, result, "none")),
             ),
         ):
@@ -154,5 +154,6 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

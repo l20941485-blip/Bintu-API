@@ -30,5 +30,3 @@ def test_dedupe_does_not_treat_python_comment_as_heading():
 
     assert removed == 0
     assert "# Real Heading" in result
-
-

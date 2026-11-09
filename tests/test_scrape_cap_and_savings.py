@@ -1,4 +1,4 @@
-"""Test Scrape Cap And Savings for Bintu.
+﻿"""Test Scrape Cap And Savings for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -19,7 +19,7 @@ from main import create_app
 
 def _robots_patch():
     return patch(
-        "bintu_api.routes.robots_decision",
+        "bintu_api.api.routes.common.robots_decision",
         return_value=RobotsDecision(
             allowed=True,
             reason="disabled in tests",
@@ -57,7 +57,7 @@ class ScrapeCapAndSavingsTests(unittest.TestCase):
 
     def _scrape(self, html: bytes, **params):
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=html, charset=None),
         ):
             return self.client.get("/api/v1/scrape/text", params=params)
@@ -134,5 +134,6 @@ class ScrapeCapAndSavingsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

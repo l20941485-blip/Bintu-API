@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the Bintu API test suite."""
+﻿"""Shared pytest fixtures for the Bintu API test suite."""
 
 from __future__ import annotations
 
@@ -24,9 +24,10 @@ def bypass_robots_enforcement(request):
         return
 
     with patch(
-        "bintu_api.routes._enforce_robots",
+        "bintu_api.api.routes.common._enforce_robots",
         new=AsyncMock(return_value=None),
     ):
         yield
+
 
 

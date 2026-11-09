@@ -16,7 +16,8 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Security
 
-from bintu_api.api.routes.common import TOKEN_METHOD, _fetch_and_extract
+from bintu_api.api.routes import common as routes_common
+from bintu_api.api.routes.common import TOKEN_METHOD
 from bintu_api.auth import api_key_scheme, rate_limit_identity, verify_api_access
 from bintu_api.context import split_into_chunks
 from bintu_api.database import CachedMarkdown
@@ -148,7 +149,7 @@ async def _scrape_chunks(
             identity,
         )
 
-        document, result, cache_layer = await _fetch_and_extract(
+        document, result, cache_layer = await routes_common._fetch_and_extract(
             request,
             url,
             include_nav=include_nav,
@@ -185,3 +186,4 @@ async def _scrape_chunks(
             url=url,
             request_id=request_id,
         ) from error
+

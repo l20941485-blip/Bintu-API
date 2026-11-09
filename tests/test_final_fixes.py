@@ -102,5 +102,3 @@ def test_truncated_fence_cleanup_removes_empty_trailing_fence():
 
     assert truncated is True
     assert not cleaned.rstrip().endswith("```")
-
-

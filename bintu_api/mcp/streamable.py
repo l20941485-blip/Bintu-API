@@ -1,8 +1,8 @@
-"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
+﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
-Exposes the single ``bintu_scrape_text`` tool to real MCP clients â€” Claude
+Exposes the single ``bintu_scrape_text`` tool to real MCP clients Ã¢â‚¬â€ Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
-any other Streamable HTTP client â€” without adding the ``mcp`` SDK dependency.
+any other Streamable HTTP client Ã¢â‚¬â€ without adding the ``mcp`` SDK dependency.
 Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
 ``2025-03-26`` during negotiation):
 
@@ -10,8 +10,8 @@ Targets protocol revision ``2025-11-25`` (also accepting ``2025-06-18`` and
   single ``application/json`` response (the spec allows skipping SSE when
   the server never pushes messages). ``initialize``, ``tools/list`` and
   ``ping`` are public discovery/onboarding methods (protocol negotiation,
-  tool schemas, liveness â€” never extraction); every other method â€” above
-  all ``tools/call`` â€” requires the master API_KEY, the scoped
+  tool schemas, liveness Ã¢â‚¬â€ never extraction); every other method Ã¢â‚¬â€ above
+  all ``tools/call`` Ã¢â‚¬â€ requires the master API_KEY, the scoped
   MCP_API_KEY, or ``Authorization: Bearer`` with either key, so gateway
   health-checkers and marketplace audits that omit the upstream token
   complete instantly while all billable work stays behind auth (401 with
@@ -38,7 +38,7 @@ Error mapping follows the spec: protocol failures (unknown method/tool,
 invalid arguments, malformed payloads) use JSON-RPC error codes, while tool
 execution failures (unsafe URL, rate limit, upstream errors, render_js
 disabled) are returned in-band with ``isError: true`` and a readable text so
-the model can self-correct â€” e.g. retrying with ``render_js=false``.
+the model can self-correct Ã¢â‚¬â€ e.g. retrying with ``render_js=false``.
 """
 
 import asyncio
@@ -52,7 +52,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from bintu_api import routes
+from bintu_api.api.routes import common as routes_common
 from bintu_api.auth import (
     mcp_rate_limit_identity,
     mcp_upgrade_url,
@@ -358,7 +358,7 @@ def _protocol_version_header(request: Request) -> str:
 
 def _reject_unknown_protocol_version(request_id: Any, version: str) -> JSONResponse:
     # Strict scanners expect the standard JSON-RPC envelope even for
-    # transport-level rejections â€” never a bare {"error": ...} shape.
+    # transport-level rejections Ã¢â‚¬â€ never a bare {"error": ...} shape.
     return _protocol_reject_unknown_protocol_version(request_id, version)
 
 
@@ -369,7 +369,7 @@ def _accept_header_serves_json(request: Request) -> bool:
     text/event-stream``. This server answers every POST with a single JSON
     response and never opens an SSE stream, so a client that lists other
     media types but not JSON cannot be served (HTTP 406). Clients that send
-    no Accept header at all (gateway Test buttons, curl) are tolerated â€”
+    no Accept header at all (gateway Test buttons, curl) are tolerated Ã¢â‚¬â€
     rejecting the largest installed base would be worse than the
     corner-case protocol violation.
     """
@@ -510,11 +510,11 @@ async def _tools_call_result(
         # MCP tool calls use the same robots, cache, SSRF-guarded page fetch,
         # and extractor pipeline as the REST endpoint. Call through the routes
         # module so tests can patch the shared network boundary at
-        # bintu_api.routes.fetch_html_document.
+        # bintu_api.api.routes.common.fetch_html_document.
 
         sections = arguments.sections
 
-        document, cached, cache_layer = await routes._fetch_and_extract(
+        document, cached, cache_layer = await routes_common._fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
@@ -881,3 +881,5 @@ async def mcp_listen_nested_alias(request: Request) -> Response:
 async def mcp_unsupported_methods() -> Response:
     # Stateless server: no sessions to end (DELETE); PUT/PATCH are undefined.
     return Response(status_code=405, headers={"Allow": "POST, GET"})
+
+

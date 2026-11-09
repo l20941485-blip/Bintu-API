@@ -1,4 +1,4 @@
-"""MCP-compatible tool discovery and invocation helpers.
+﻿"""MCP-compatible tool discovery and invocation helpers.
 
 
 Two surfaces intentionally share the same tool definitions:
@@ -21,7 +21,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
-from bintu_api import routes
+from bintu_api.api.routes import common as routes_common
 from bintu_api.auth import (
     api_key_scheme,
     mcp_rate_limit_identity,
@@ -402,7 +402,7 @@ async def call_tool(
     sections = arguments.sections
 
     try:
-        document, cached, cache_layer = await routes._fetch_and_extract(
+        document, cached, cache_layer = await routes_common._fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
@@ -494,3 +494,5 @@ async def call_tool(
         "structuredContent": envelope,
         "isError": False,
     }
+
+

@@ -1,4 +1,4 @@
-"""Test Mcp Alias Contract for Bintu.
+﻿"""Test Mcp Alias Contract for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -87,7 +87,7 @@ def patch_fetch():
     )
 
     return patch(
-        "bintu_api.routes._fetch_and_extract",
+        "bintu_api.api.routes.common._fetch_and_extract",
         new=AsyncMock(return_value=(document, cached, "persistent")),
     )
 
@@ -151,5 +151,6 @@ def test_input_schema_advertises_chunked_alias():
         "chunked",
     ]
     assert "chunk_token_budget" in TOOL_INPUT_SCHEMA["properties"]
+
 
 

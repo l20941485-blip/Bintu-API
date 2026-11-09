@@ -1,4 +1,4 @@
-"""Extraction response shaping for REST and MCP surfaces.
+﻿"""Extraction response shaping for REST and MCP surfaces.
 
 This module centralizes the final envelope construction used after extraction,
 without changing the underlying behavior or cache semantics. It preserves the
@@ -12,7 +12,7 @@ import json
 from typing import Any
 
 from bintu_api.context import ContextResult
-from bintu_api.routes import sanitize_url
+from bintu_api.security.url_safety import sanitize_url
 
 
 def build_response_provenance(context: ContextResult) -> dict[str, Any]:
@@ -106,3 +106,4 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
 def build_mcp_text_payload(envelope: dict[str, Any]) -> str:
     """Serialize the MCP envelope exactly as the existing endpoint does."""
     return json.dumps(envelope)
+

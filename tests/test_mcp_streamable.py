@@ -1,4 +1,4 @@
-"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
+﻿"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
 
 import json
 import unittest
@@ -20,7 +20,7 @@ from bintu_api.settings import Settings
 from main import create_app
 
 _robots_patch = mock.patch(
-    "bintu_api.routes.robots_decision",
+    "bintu_api.api.routes.common.robots_decision",
     return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
 )
 
@@ -137,7 +137,7 @@ class McpStreamableTests(unittest.TestCase):
         )
 
         with patch(
-            "bintu_api.routes._fetch_and_extract",
+            "bintu_api.api.routes.common._fetch_and_extract",
             new=mock.AsyncMock(return_value=(None, cached, "none")),
         ):
             response = self.rpc(
@@ -216,7 +216,7 @@ class McpStreamableTests(unittest.TestCase):
 
     def test_tools_call_returns_text_content(self) -> None:
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>MCP stream</main>", charset=None),
         ):
             response = self.rpc(
@@ -235,7 +235,7 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_chunk_mode_returns_structured_json(self) -> None:
         long_text = "Sentence one. " * 200
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -262,7 +262,7 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_summarize_mode_truncates_to_budget(self) -> None:
         long_text = "Sentence one. " * 100
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -330,7 +330,7 @@ class McpStreamableTests(unittest.TestCase):
         for mode in (" Scrape ", "CHUNK", "Summarize"):
             with self.subTest(mode=mode):
                 with patch(
-                    "bintu_api.routes.fetch_html_document",
+                    "bintu_api.api.routes.common.fetch_html_document",
                     return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
                 ):
                     response = self.rpc(
@@ -349,7 +349,7 @@ class McpStreamableTests(unittest.TestCase):
         for mode in ("scrape", "chunk", "summarize"):
             with self.subTest(mode=mode):
                 with patch(
-                    "bintu_api.routes.fetch_html_document",
+                    "bintu_api.api.routes.common.fetch_html_document",
                     return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
                 ):
                     response = self.rpc(
@@ -479,7 +479,7 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(payload["error"]["data"]["code"], "premium_required")
         self.assertEqual(payload["error"]["data"]["upgrade_url"], "https://mcpize.com")
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>gated</main>", charset=None),
         ):
             authorized = client.post("/mcp", json=call_payload, headers={"X-API-Key": "owner-key"})
@@ -514,7 +514,7 @@ class McpStreamableTests(unittest.TestCase):
             "params": {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
         }
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>bearer ok</main>", charset=None),
         ):
             for token in ("owner-key", "claude-key"):
@@ -698,4 +698,5 @@ class McpScopedApiKeyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 

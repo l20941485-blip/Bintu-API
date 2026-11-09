@@ -1,4 +1,4 @@
-"""Test Access Denied for Bintu.
+﻿"""Test Access Denied for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -12,7 +12,8 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from bintu_api import routes
+from bintu_api.api.routes import common as routes
+from bintu_api.api.routes.extract import _scrape_text
 from bintu_api.scraper import UpstreamHTTPError
 from bintu_api.settings import Settings
 
@@ -49,7 +50,7 @@ class UpstreamAccessDeniedTests(unittest.TestCase):
             mock.patch.object(routes, "fetch_html_document", side_effect=_upstream_error(status)),
             self.assertRaises(HTTPException) as caught,
         ):
-            asyncio.run(routes._scrape_text(_request(), "https://example.com/", False, False, False, "id"))
+            asyncio.run(_scrape_text(_request(), "https://example.com/", False, False, False, "id"))
         return caught.exception
 
     def test_denied_statuses_map_to_upstream_access_denied(self):
@@ -71,5 +72,7 @@ class UpstreamAccessDeniedTests(unittest.TestCase):
         error = self._run(500)
         self.assertEqual(error.status_code, 502)
         self.assertEqual(error.detail["code"], "upstream_http_error")
+
+
 
 

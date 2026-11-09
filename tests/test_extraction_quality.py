@@ -166,5 +166,3 @@ def test_urls_and_abbreviations_survive():
 
     assert len(sentences) == 2
     assert "https://www.bbc.co.uk/news" in sentences[1]
-
-

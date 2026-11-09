@@ -1,4 +1,4 @@
-"""Cache keys must be private, deterministic, and render-mode aware."""
+﻿"""Cache keys must be private, deterministic, and render-mode aware."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bintu_api.routes import _fetch_and_extract
+from bintu_api.api.routes.common import _fetch_and_extract
 from bintu_api.scraper import FetchedHTML
 from bintu_api.settings import Settings
 
@@ -15,7 +15,7 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         # These contract tests isolate robots retrieval from page fetching.
         robots_patcher = patch(
-            "bintu_api.routes._enforce_robots",
+            "bintu_api.api.routes.common._enforce_robots",
             new=AsyncMock(return_value=None),
         )
         self.addCleanup(robots_patcher.stop)
@@ -47,7 +47,7 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
         document = self._document()
 
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=document,
         ):
             await _fetch_and_extract(
@@ -81,7 +81,7 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
         request.app.state.cache.set.side_effect = capture_key
 
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=document,
         ):
             await _fetch_and_extract(
@@ -95,7 +95,7 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
             )
 
             with patch(
-                "bintu_api.routes.fetch_rendered_html_document",
+                "bintu_api.api.routes.common.fetch_rendered_html_document",
                 new=AsyncMock(return_value=document),
             ):
                 await _fetch_and_extract(
@@ -122,7 +122,7 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
         document = self._document()
 
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=document,
         ) as fetch:
             await _fetch_and_extract(
@@ -145,11 +145,11 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.fetch_html_document",
+                "bintu_api.api.routes.common.fetch_html_document",
                 return_value=document,
             ),
             patch(
-                "bintu_api.routes._enforce_robots",
+                "bintu_api.api.routes.common._enforce_robots",
                 new=AsyncMock(),
             ) as robots,
         ):
@@ -168,5 +168,6 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

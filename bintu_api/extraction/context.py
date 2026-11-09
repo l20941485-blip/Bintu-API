@@ -232,7 +232,7 @@ async def extract_context(
 
 
     Reuses the existing fetch â†’ extract â†’ cache pipeline from
-    ``bintu_api.routes._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
+    ``bintu_api.api.routes.extract._scrape_text`` (rate limiting, SSRF guards, 1 MiB cap,
     Supabase + memory cache all intact), then applies the requested mode.
     """
     if settings is None:
@@ -434,3 +434,4 @@ async def extract_context(
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:
     """Return the non-negative token savings estimate for a delivered response."""
     return max(0, html_tokens - approx_tokens)
+

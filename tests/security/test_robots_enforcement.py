@@ -1,4 +1,4 @@
-"""Robots enforcement must be mode-aware and privacy-safe."""
+﻿"""Robots enforcement must be mode-aware and privacy-safe."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from bintu_api.routes import _enforce_robots
+from bintu_api.api.routes.common import _enforce_robots
 from bintu_api.settings import Settings
 
 
@@ -31,11 +31,11 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.robots_mode",
+                "bintu_api.api.routes.common.robots_mode",
                 return_value="enforce",
             ),
             patch(
-                "bintu_api.routes.robots_decision",
+                "bintu_api.api.routes.common.robots_decision",
                 new=MagicMock(return_value=decision),
             ),
             self.assertRaises(HTTPException) as raised,
@@ -59,11 +59,11 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.robots_mode",
+                "bintu_api.api.routes.common.robots_mode",
                 return_value="enforce",
             ),
             patch(
-                "bintu_api.routes.robots_decision",
+                "bintu_api.api.routes.common.robots_decision",
                 new=MagicMock(return_value=decision),
             ),
             self.assertRaises(HTTPException) as raised,
@@ -87,11 +87,11 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.robots_mode",
+                "bintu_api.api.routes.common.robots_mode",
                 return_value="warn",
             ),
             patch(
-                "bintu_api.routes.robots_decision",
+                "bintu_api.api.routes.common.robots_decision",
                 new=MagicMock(return_value=decision),
             ) as robots_decision,
         ):
@@ -108,11 +108,11 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.robots_mode",
+                "bintu_api.api.routes.common.robots_mode",
                 return_value="off",
             ),
             patch(
-                "bintu_api.routes.robots_decision",
+                "bintu_api.api.routes.common.robots_decision",
                 new=MagicMock(return_value=decision),
             ) as robots_decision,
         ):
@@ -129,11 +129,11 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "bintu_api.routes.robots_mode",
+                "bintu_api.api.routes.common.robots_mode",
                 return_value="enforce",
             ),
             patch(
-                "bintu_api.routes.robots_decision",
+                "bintu_api.api.routes.common.robots_decision",
                 new=MagicMock(return_value=decision),
             ) as robots_decision,
         ):
@@ -144,5 +144,6 @@ class RobotsEnforcementTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
