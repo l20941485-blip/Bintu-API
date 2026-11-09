@@ -18,7 +18,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from bintu_api.auth import has_valid_proxy_secret as has_valid_proxy_secret
 from bintu_api.auth import rate_limit_identity as rate_limit_identity
@@ -48,7 +48,8 @@ from bintu_api.extraction.output import (
     is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
 )
 from bintu_api.observability import log_cache_event
-from bintu_api.robots import robots_decision, robots_mode
+from bintu_api.robots import robots_decision as robots_decision
+from bintu_api.robots import robots_mode as robots_mode
 from bintu_api.scraper import (
     FetchedHTML,
     _compute_approx_tokens,
@@ -67,55 +68,21 @@ logger = logging.getLogger("bintu_api.scrape")
 LINK_MODES = ("inline", "footnotes", "false")
 
 
-async def _enforce_robots(url: str, settings: Settings, url_hash: str) -> None:
-    """Check robots.txt before any network fetch of the page.
+async def _enforce_robots(
+    url: str,
+    settings: Settings,
+    url_hash: str,
+) -> None:
+    """Compatibility delegate preserving the established robots patch seam."""
+    from bintu_api.security.robots_policy import enforce_robots
 
-
-    enforce: an explicit robots disallow blocks with 403. A robots.txt retrieval
-    failure also blocks with 403, but is reported as ``robots_unreachable``.
-    warn: log and continue. off: skipped inside robots_decision.
-    The blocking check runs in a worker thread. URLs are never logged, only a hash.
-    """
-    mode = robots_mode(settings)
-    if mode == "off":
-        return
-
-    decision = await asyncio.to_thread(robots_decision, url, settings)
-    if decision.allowed:
-        return
-
-    logger.info(
-        "robots_not_allowed url_hash=%s mode=%s unreachable=%s reason=%s",
+    return await enforce_robots(
+        url,
+        settings,
         url_hash,
-        mode,
-        decision.unreachable,
-        decision.reason,
+        robots_mode_fn=robots_mode,
+        robots_decision_fn=robots_decision,
     )
-
-    if mode == "enforce":
-        if decision.unreachable:
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "robots_unreachable",
-                    "message": (f"Fetching this page is not permitted: {decision.reason.rstrip('.')}."),
-                    "hint": (
-                        "The target's robots.txt could not be retrieved. "
-                        "Access is denied while robots enforcement is enabled."
-                    ),
-                },
-            )
-
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "blocked_by_robots",
-                "message": (f"Fetching this page is not permitted: {decision.reason.rstrip('.')}."),
-                "hint": ("Bintu respects robots.txt. The site owner controls this."),
-            },
-        )
-
-
 
 async def _scrape_text(*args, **kwargs):
     """Compatibility delegate for the route-level text extraction helper."""
