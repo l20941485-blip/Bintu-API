@@ -1,4 +1,4 @@
-﻿"""Extraction service boundary for REST and MCP consumers.
+"""Extraction service boundary for REST and MCP consumers.
 
 This module is the intended stable entry point for the shared
 fetch -> robots -> cache -> extract orchestration. During the modularization
@@ -11,6 +11,7 @@ Important boundaries, invariants, or compatibility notes:
   compatibility seam until all callers and tests have migrated.
 """
 
-from bintu_api.api.routes.common import fetch_and_extract
+def __getattr__(name: str):
+    from bintu_api.api.routes import common
 
-__all__ = ["fetch_and_extract"]
+    return getattr(common, name)

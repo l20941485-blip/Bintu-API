@@ -19,10 +19,8 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Security
 
-from bintu_api.api.routes import common
 from bintu_api.api.routes.common import (
     _build_response,
-    _fetch_and_extract,
 )
 from bintu_api.auth import (
     api_key_scheme,
@@ -30,6 +28,7 @@ from bintu_api.auth import (
     verify_supabase_user,
 )
 from bintu_api.errors.upstream import translate_upstream_error
+from bintu_api.extraction import service as routes_common
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.token_budget import truncate_to_token_budget
 from bintu_api.metering.service import UsageEvent, queue_usage_event
@@ -74,7 +73,7 @@ async def scrape_text(
     sections: Annotated[list[str] | None, Query()] = None,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
-    common.verify_api_access(request, settings)
+    routes_common.verify_api_access(request, settings)
 
     if max_tokens < 100 or max_tokens > 50000:
         raise HTTPException(
@@ -128,7 +127,7 @@ async def scrape_text(
         include_nav,
         include_header,
         include_footer,
-        common.rate_limit_identity(request, settings),
+        routes_common.rate_limit_identity(request, settings),
         render_js,
         links,
         skip_cache,
@@ -214,7 +213,7 @@ async def _scrape_text(
             identity,
         )
 
-        document, result, cache_layer = await _fetch_and_extract(
+        document, result, cache_layer = await routes_common.fetch_and_extract(
             request,
             url,
             include_nav=include_nav,
@@ -230,7 +229,7 @@ async def _scrape_text(
             sections=sections,
         )
 
-        if request.app.state.supabase_client is not None and common.has_valid_proxy_secret(request, settings):
+        if request.app.state.supabase_client is not None and routes_common.has_valid_proxy_secret(request, settings):
             rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
             if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
                 queue_usage_event(
