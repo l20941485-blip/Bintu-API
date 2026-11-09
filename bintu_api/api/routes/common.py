@@ -34,12 +34,14 @@ from bintu_api.extraction.cache_policy import (
     resolve_extraction_cap,
 )
 from bintu_api.extraction.cacheaccess import (
-    should_read_memory_cache,
     should_read_persistent_cache,
-    should_write_memory_cache,
     should_write_persistent_cache,
 )
 from bintu_api.extraction.context import _decode_source_text
+from bintu_api.extraction.memory_cache import (
+    read_memory_cache,
+    write_memory_cache,
+)
 from bintu_api.extraction.output import (  # noqa: F401
     TOKEN_METHOD,
     redact_cache_url,
@@ -175,10 +177,11 @@ async def _fetch_and_extract(
         return document, result, cache_layer
 
     cache = request.app.state.cache
-    document = (
-        cache.get(cache_key)
-        if should_read_memory_cache(skip_cache, sections)
-        else None
+    document = await read_memory_cache(
+        cache,
+        cache_key,
+        skip_cache,
+        sections,
     )
     if document is not None:
         cache_layer = "memory"
@@ -227,8 +230,13 @@ async def _fetch_and_extract(
     )
 
     # Replace raw HTML only after a successful, nonempty extraction.
-    if should_write_memory_cache(cache_layer, extracted.text):
-        cache.set(cache_key, document)
+    write_memory_cache(
+        cache,
+        cache_key,
+        document,
+        cache_layer,
+        extracted.text,
+    )
 
     result = build_cached_markdown(
         document,
@@ -294,6 +302,9 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
+
 
 
 
