@@ -34,6 +34,10 @@ from bintu_api.extraction.cache_policy import (
     is_persistent_cache_enabled,
     resolve_extraction_cap,
 )
+from bintu_api.extraction.cacheaccess import (
+    should_read_persistent_cache,
+    should_write_persistent_cache,
+)
 from bintu_api.extraction.context import _decode_source_text
 from bintu_api.extraction.output import (  # noqa: F401
     TOKEN_METHOD,
@@ -128,12 +132,12 @@ async def _fetch_and_extract(
     request_id = getattr(getattr(request, "state", None), "request_id", None)
 
     # skip_cache skips cache READS only. Writes and usage counting still happen.
-    if (
-        database_client is not None
-        and persistent_cache_enabled
-        and cacheable
-        and not skip_cache
-        and sections is None
+    if should_read_persistent_cache(
+        database_client,
+        persistent_cache_enabled,
+        cacheable,
+        skip_cache,
+        sections,
     ):
         try:
             result = await asyncio.wait_for(
@@ -227,7 +231,12 @@ async def _fetch_and_extract(
         decode_source_text_fn=_decode_source_text,
     )
 
-    if database_client is not None and persistent_cache_enabled and cacheable and persist:
+    if should_write_persistent_cache(
+        database_client,
+        persistent_cache_enabled,
+        cacheable,
+        persist,
+    ):
         try:
             await asyncio.wait_for(
                 upsert_cached_markdown(
@@ -297,6 +306,9 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
+
 
 
 
