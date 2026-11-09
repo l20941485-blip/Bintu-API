@@ -22,7 +22,6 @@ from bintu_api.auth import has_valid_proxy_secret as has_valid_proxy_secret
 from bintu_api.auth import rate_limit_identity as rate_limit_identity
 from bintu_api.auth import verify_api_access as verify_api_access
 from bintu_api.database import (
-    DATABASE_TIMEOUT_SECONDS,
     CachedMarkdown,
     get_cached_markdown,
     upsert_cached_markdown,
@@ -53,6 +52,10 @@ from bintu_api.extraction.output import (
 )
 from bintu_api.extraction.output import (
     is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
+)
+from bintu_api.extraction.persistent_cache import (
+    read_persistent_cache,
+    write_persistent_cache,
 )
 from bintu_api.extraction.request_policy import (
     resolve_fetch_strategy,
@@ -144,23 +147,16 @@ async def _fetch_and_extract(
         skip_cache,
         sections,
     ):
-        try:
-            result = await asyncio.wait_for(
-                get_cached_markdown(
-                    database_client,
-                    url,
-                    render_js,
-                    include_nav,
-                    include_header,
-                    include_footer,
-                ),
-                timeout=DATABASE_TIMEOUT_SECONDS,
-            )
-        except Exception as error:
-            logger.warning(
-                "supabase_cache_lookup_failed error_type=%s",
-                type(error).__name__,
-            )
+        result = await read_persistent_cache(
+            database_client,
+            url,
+            render_js,
+            include_nav,
+            include_header,
+            include_footer,
+            get_cached_markdown,
+            request_id=request_id,
+        )
 
     cache_key = compute_cache_key(render_js=render_js, links=links, url=url)
 
@@ -247,35 +243,17 @@ async def _fetch_and_extract(
         cacheable,
         persist,
     ):
-        try:
-            await asyncio.wait_for(
-                upsert_cached_markdown(
-                    database_client,
-                    url,
-                    render_js,
-                    include_nav,
-                    include_header,
-                    include_footer,
-                    result.markdown,
-                    result.truncated,
-                    html_tokens=result.html_tokens,
-                    tokens_saved_estimate=result.tokens_saved_estimate,
-                    limiting_factor=result.limiting_factor,
-                    extracted_at=result.extracted_at,
-                ),
-                timeout=DATABASE_TIMEOUT_SECONDS,
-            )
-            log_cache_event(
-                event="persistent_cache_write",
-                url=url,
-                request_id=request_id,
-                layer="persistent",
-            )
-        except Exception as error:
-            logger.warning(
-                "supabase_cache_upsert_failed error_type=%s",
-                type(error).__name__,
-            )
+        await write_persistent_cache(
+            database_client,
+            url,
+            render_js,
+            include_nav,
+            include_header,
+            include_footer,
+            result,
+            upsert_cached_markdown,
+            request_id=request_id,
+        )
 
     return document, result, cache_layer
 
@@ -316,6 +294,9 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
+
+
 
 
 
