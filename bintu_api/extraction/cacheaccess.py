@@ -37,3 +37,19 @@ def should_write_persistent_cache(
         and cacheable
         and persist
     )
+
+
+def should_read_memory_cache(
+    skip_cache: bool,
+    sections: list[str] | None,
+) -> bool:
+    """Return whether a memory-cache read may be attempted."""
+    return not skip_cache and sections is None
+
+
+def should_write_memory_cache(
+    cache_layer: str,
+    extracted_text: str,
+) -> bool:
+    """Return whether a freshly fetched document should replace cached HTML."""
+    return cache_layer == "none" and bool(extracted_text.strip())
