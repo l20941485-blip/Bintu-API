@@ -449,5 +449,4 @@ async def fetch_and_extract(
         sections=sections,
     )
 
-
 from bintu_api.api.routes.extract import _scrape_text as _scrape_text
