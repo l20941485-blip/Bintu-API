@@ -69,6 +69,25 @@ class ScrapeService:
         self.source_decoder = source_decoder
         self.cache_event_logger = cache_event_logger
 
+    async def _fetch_document(
+        self,
+        url: str,
+        settings: object,
+        cache_key: str,
+        render_js: bool,
+    ) -> FetchedHTML:
+        """Enforce robots and obtain the document using the configured strategy."""
+        await self.robots_enforcer(url, settings, cache_key[:12])
+
+        strategy = resolve_fetch_strategy(render_js)
+        if strategy == "rendered":
+            return await self.rendered_html_fetcher(url, settings)
+        return await asyncio.to_thread(
+            self.html_fetcher,
+            url,
+            settings,
+        )
+
     async def fetch_and_extract(
         self,
         context: ScrapeRequestContext,
@@ -153,17 +172,12 @@ class ScrapeService:
                 layer="none",
             )
 
-            await self.robots_enforcer(url, settings, cache_key[:12])
-
-            strategy = resolve_fetch_strategy(render_js)
-            if strategy == "rendered":
-                document = await self.rendered_html_fetcher(url, settings)
-            else:
-                document = await asyncio.to_thread(
-                    self.html_fetcher,
-                    url,
-                    settings,
-                )
+            document = await self._fetch_document(
+                url,
+                settings,
+                cache_key,
+                render_js,
+            )
 
         extracted = self.text_extractor(
             document.body,
@@ -212,6 +226,9 @@ class ScrapeService:
             )
 
         return document, result, cache_layer
+
+
+
 
 
 
