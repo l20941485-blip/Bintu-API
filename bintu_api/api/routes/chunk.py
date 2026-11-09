@@ -16,7 +16,6 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Security
 
-from bintu_api.api.routes import common
 from bintu_api.api.routes import common as routes_common
 from bintu_api.api.routes.common import TOKEN_METHOD
 from bintu_api.auth import api_key_scheme
@@ -56,7 +55,7 @@ async def scrape_chunks(
     persist: bool = True,
 ) -> ScrapeChunksResponse:
     settings = request.app.state.settings
-    common.verify_api_access(request, settings)
+    routes_common.verify_api_access(request, settings)
 
     if not 100 <= max_tokens <= 50000:
         raise HTTPException(
@@ -83,7 +82,7 @@ async def scrape_chunks(
         payload.include_nav,
         payload.include_header,
         payload.include_footer,
-        common.rate_limit_identity(request, settings),
+        routes_common.rate_limit_identity(request, settings),
         payload.render_js,
         links,
         skip_cache,
@@ -150,7 +149,7 @@ async def _scrape_chunks(
             identity,
         )
 
-        document, result, cache_layer = await routes_common._fetch_and_extract(
+        document, result, cache_layer = await routes_common.fetch_and_extract(
             request,
             url,
             include_nav=include_nav,

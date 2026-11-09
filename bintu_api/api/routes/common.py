@@ -414,4 +414,40 @@ async def _fetch_and_extract(
 
 
 
+async def fetch_and_extract(
+    request: Request,
+    url: str,
+    *,
+    include_nav: bool,
+    include_header: bool,
+    include_footer: bool,
+    render_js: bool,
+    links: Literal["inline", "footnotes", "false"] = "inline",
+    skip_cache: bool = False,
+    persist: bool = True,
+    mode: str = "scrape",
+    max_tokens: int = 6000,
+    footnote_url_policy: Literal["full", "truncated"] = "truncated",
+    max_footnote_url_length: int = 100,
+    sections: list[str] | None = None,
+) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
+    """Public shared fetch -> robots -> cache -> extract boundary."""
+    return await _fetch_and_extract(
+        request,
+        url,
+        include_nav=include_nav,
+        include_header=include_header,
+        include_footer=include_footer,
+        render_js=render_js,
+        links=links,
+        skip_cache=skip_cache,
+        persist=persist,
+        mode=mode,
+        max_tokens=max_tokens,
+        footnote_url_policy=footnote_url_policy,
+        max_footnote_url_length=max_footnote_url_length,
+        sections=sections,
+    )
+
+
 from bintu_api.api.routes.extract import _scrape_text as _scrape_text
