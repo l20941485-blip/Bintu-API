@@ -153,3 +153,58 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
 
 
 
+
+
+@pytest.mark.asyncio
+async def test_skip_cache_bypasses_reads_but_allows_persistent_write():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+
+    _, result, layer = await call_service(
+        service,
+        request,
+        skip_cache=True,
+    )
+
+    assert layer == "none"
+    assert result.markdown == "extracted"
+    service.persistent_cache_reader.assert_not_called()
+    service.persistent_cache_writer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sections_bypass_both_cache_reads():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+
+    _, result, layer = await call_service(
+        service,
+        request,
+        sections=["introduction"],
+    )
+
+    assert layer == "none"
+    assert result.markdown == "extracted"
+    service.persistent_cache_reader.assert_not_called()
+    service.persistent_cache_writer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_persist_false_reads_but_does_not_write():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+
+    _, result, layer = await call_service(
+        service,
+        request,
+        persist=False,
+    )
+
+    assert layer == "none"
+    assert result.markdown == "extracted"
+    service.persistent_cache_reader.assert_awaited_once()
+    service.persistent_cache_writer.assert_not_awaited()
+
