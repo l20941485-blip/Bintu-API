@@ -13,7 +13,6 @@ Important boundaries, invariants, or compatibility notes:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Literal
@@ -24,8 +23,6 @@ from bintu_api.auth import has_valid_proxy_secret as has_valid_proxy_secret
 from bintu_api.auth import rate_limit_identity as rate_limit_identity
 from bintu_api.auth import verify_api_access as verify_api_access
 from bintu_api.context import (
-    DEFAULT_MAX_TEXT_CHARACTERS,
-    MAX_EXTRACTION_CHARACTERS,
     _decode_source_text,
 )
 from bintu_api.database import (
@@ -33,6 +30,12 @@ from bintu_api.database import (
     CachedMarkdown,
     get_cached_markdown,
     upsert_cached_markdown,
+)
+from bintu_api.extraction.cache_policy import (
+    compute_cache_key,
+    is_cacheable,
+    is_persistent_cache_enabled,
+    resolve_extraction_cap,
 )
 from bintu_api.extraction.output import (  # noqa: F401
     TOKEN_METHOD,
@@ -57,9 +60,6 @@ from bintu_api.scraper import (
     extract_text_result,
     fetch_html_document,
     fetch_rendered_html_document,
-)
-from bintu_api.security.credentials import (
-    has_credential_params,
 )
 from bintu_api.settings import Settings
 
@@ -122,20 +122,9 @@ async def _fetch_and_extract(
         raise ValueError("links must be one of: inline, footnotes, false")
 
     settings = request.app.state.settings
-    extraction_cap = (
-        MAX_EXTRACTION_CHARACTERS
-        if settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
-        else min(settings.max_text_characters, MAX_EXTRACTION_CHARACTERS)
-    )
-    # Persistent rows share one canonical extraction policy.
-    # Custom operator caps use raw-HTML memory caching only.
-    persistent_cache_enabled = settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
-    # Link output changes the extracted Markdown, so only the default inline
-    # mode may use the existing persistent-cache policy until its schema is
-    # extended to store the link mode.
-    persistent_cache_enabled = persistent_cache_enabled and links == "inline"
-    # Never persist URLs whose query string may carry a caller credential.
-    cacheable = not has_credential_params(url)
+    extraction_cap = resolve_extraction_cap(settings)
+    persistent_cache_enabled = is_persistent_cache_enabled(settings, links)
+    cacheable = is_cacheable(url)
     database_client = getattr(request.app.state, "supabase_client", None)
     result: CachedMarkdown | None = None
     document: FetchedHTML | None = None
@@ -168,7 +157,7 @@ async def _fetch_and_extract(
                 type(error).__name__,
             )
 
-    cache_key = hashlib.sha256(f"{int(render_js)}:{links}:{url}".encode()).hexdigest()
+    cache_key = compute_cache_key(render_js=render_js, links=links, url=url)
 
     if result is not None:
         cache_layer = "persistent"
