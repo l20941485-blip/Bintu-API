@@ -1,4 +1,4 @@
-"""REST document reading; registered separately from legacy scrape routes."""
+﻿"""REST document reading; registered separately from legacy scrape routes."""
 
 import asyncio
 import hashlib
@@ -8,9 +8,9 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, Field, StrictInt
 
-from bintu_api import routes as scrape_routes
+from bintu_api.api.routes import common as scrape_routes
 from bintu_api.auth import api_key_scheme, has_valid_proxy_secret
-from bintu_api.database import DATABASE_TIMEOUT_SECONDS, increment_developer_usage
+from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.reader_auth import reader_owner
 from bintu_api.reader_extraction import (
     ReaderDocumentEmpty,
@@ -82,16 +82,14 @@ async def _record_usage(request: Request) -> None:
         return
 
     subscriber = request.headers.get("X-RapidAPI-User", "").strip()
-    try:
-        await asyncio.wait_for(
-            increment_developer_usage(client, subscriber),
-            timeout=DATABASE_TIMEOUT_SECONDS,
-        )
-    except Exception as error:
-        logger.warning(
-            "reader_usage_increment_failed error_type=%s",
-            type(error).__name__,
-        )
+    queue_usage_event(
+        request,
+        UsageEvent(
+            identity=subscriber,
+            legacy_rpc=True,
+            source="reader",
+        ),
+    )
 
 
 async def _fetch_snapshot(request: Request, payload: ReadRequest):
@@ -235,3 +233,5 @@ async def continue_document(request: Request, payload: ContinueRequest):
     response = _response(result)
     await _record_usage(request)
     return response
+
+

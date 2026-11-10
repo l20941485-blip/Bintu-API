@@ -1,9 +1,13 @@
-from bintu_api.final_fixes import (
-    close_up_punctuation,
-    delivered_savings,
-    drop_empty_fences,
-    has_credential_params,
-)
+"""Test Final Fixes for Bintu.
+
+This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
+from bintu_api.extraction.cleaner import close_up_punctuation, drop_empty_fences
+from bintu_api.extraction.economics import delivered_savings
+from bintu_api.security.credentials import has_credential_params
 
 
 def test_credential_detection():
@@ -81,7 +85,7 @@ def test_text_without_fences_is_unchanged():
 
 
 def test_truncate_to_token_budget_returns_input_unchanged_within_budget():
-    from bintu_api.extraction_quality import truncate_to_token_budget
+    from bintu_api.extraction.token_budget import truncate_to_token_budget
 
     text = "Intro\n\n```md\nconsole.log('ok')\n```\n\n```md\n```"
     cleaned, truncated = truncate_to_token_budget(text, 1000)
@@ -91,7 +95,7 @@ def test_truncate_to_token_budget_returns_input_unchanged_within_budget():
 
 
 def test_truncated_fence_cleanup_removes_empty_trailing_fence():
-    from bintu_api.extraction_quality import truncate_to_token_budget
+    from bintu_api.extraction.token_budget import truncate_to_token_budget
 
     text = "Intro\n\n```md\n" + ("x" * 500) + "\n```"
     cleaned, truncated = truncate_to_token_budget(text, 20)

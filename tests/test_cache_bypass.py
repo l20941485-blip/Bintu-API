@@ -1,10 +1,17 @@
+﻿"""Test Cache Bypass for Bintu.
+
+This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import asyncio
 import hashlib
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from bintu_api import routes
+from bintu_api.api.routes import common as routes
 from bintu_api.database import CachedMarkdown
 from bintu_api.settings import Settings
 
@@ -43,7 +50,8 @@ def make_request(cache, db_client=None):
 def cache_key():
     return hashlib.sha256(f"0:inline:{URL}".encode()).hexdigest()
 
-def run(request, skip_cache=False):
+
+def run(request, skip_cache=False, sections=None):
     return asyncio.run(
         routes._scrape_text(
             request,
@@ -55,6 +63,7 @@ def run(request, skip_cache=False):
             False,
             links="inline",
             skip_cache=skip_cache,
+            sections=sections,
         )
     )
 
@@ -70,6 +79,27 @@ class CacheBypassTests(unittest.TestCase):
             mock.patch.object(routes, "upsert_cached_markdown", new=mock.AsyncMock()),
             mock.patch.object(routes, "has_valid_proxy_secret", return_value=False),
         )
+
+    def test_sections_bypass_persistent_and_memory_cache(self):
+        cache = FakeCache({cache_key(): fake_document()})
+        request = make_request(cache, db_client=object())
+        fetch, get_cached, upsert, proxy = self.patches()
+
+        with (
+            fetch as fetch_m,
+            get_cached as get_m,
+            upsert as upsert_m,
+            proxy,
+        ):
+            response = run(request, sections=["Hello world"])
+
+        get_m.assert_not_called()
+        self.assertEqual(cache.get_calls, 0)
+        fetch_m.assert_called_once()
+        upsert_m.assert_called_once()
+        self.assertEqual(response.cache_layer, "none")
+        self.assertIsNotNone(response.selected_sections)
+        self.assertEqual(response.text, "Hello world")
 
     def test_skip_cache_reads_no_cache_but_still_writes(self):
         cache = FakeCache({cache_key(): fake_document()})
@@ -114,3 +144,6 @@ class CacheBypassTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

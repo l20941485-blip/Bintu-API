@@ -30,7 +30,9 @@ The response includes `text`, an approximate token count, and `truncated`. If a 
 
 ### 3. Use MCP
 
-MCP discovery is available without a key. Tool execution requires either the scoped `MCP_API_KEY` or the master `API_KEY`, sent as `X-API-Key` or `Authorization: Bearer`.
+MCP discovery (`initialize`, `tools/list`, `ping`) is available without a key.
+Tool execution requires either the scoped `MCP_API_KEY` or the master `API_KEY`,
+sent as `X-API-Key` or `Authorization: Bearer`.
 
 ```powershell
 $body = @{
@@ -56,6 +58,98 @@ Invoke-RestMethod `
   -ContentType "application/json" `
   -Body $body
 ```
+
+#### What `bintu_scrape_text` does
+
+Fetches one public HTTP or HTTPS URL and returns its readable text, sized for an LLM context window. Only HTML/XHTML pages up to 1 MiB are supported; PDF, JSON, images, and pages that require JavaScript are not. Article or main content is preferred; navigation, headers, footers, ads, and cookie banners are dropped; repeated story blocks are removed (`deduplicated_count`); links appear as `label (url)`; code is returned in fenced blocks with indentation kept; tables are pipe-delimited.
+
+#### When to use it
+
+- You need readable, token-bounded text from a public web page for an LLM context window.
+- You want chunks sized for a vector database (`mode=chunk`).
+- You want a short leading extract within a budget (`mode=summarize`).
+- You want cache-aware extraction with provenance and token economics.
+
+#### Input parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | required | Absolute public HTTP(S) URL. Private, loopback, link-local, and metadata addresses, non-standard ports, and URLs containing credentials are rejected with `invalid_or_unsafe_url`. |
+| `mode` | string | `scrape` | `scrape` returns readable text trimmed to `max_tokens`; `chunk` splits the page into budgeted chunks; `summarize` returns leading text within `max_tokens`. `chunked` is accepted as an alias for `chunk`. |
+| `max_tokens` | integer | 6000 | Approximate token budget, enforced in every mode (range 100–50,000). Accepted alias: `chunk_token_budget`. |
+| `chunk_token_budget` | integer | — | Accepted alias for `max_tokens`; `max_tokens` wins on conflict. |
+| `links` | string | `inline` | `inline` preserves readable link URLs; `footnotes` uses numbered references and a link list; `false` removes URLs for the lowest-token output. |
+| `footnote_url_policy` | string | `truncated` | For `links=footnotes` only: `full` preserves complete destinations; `truncated` replaces over-limit destinations with non-clickable text. |
+| `max_footnote_url_length` | integer | 100 | For `links=footnotes` only: maximum URL length for visible labels and truncated destinations. |
+| `render_js` | boolean | false | Render in a browser before extraction. Available only if the operator enables it; otherwise `render_js_disabled` is returned. |
+| `cache` | boolean | true | Read from memory and persistent caches. `false` bypasses cache reads. |
+| `persist` | boolean | true | Allow a fresh successful result to be written to the persistent cache. `false` skips that write.
+
+#### Output envelope
+
+Every successful call returns the same JSON envelope (in `structuredContent` and as JSON in `content[0].text`):
+
+| Field | Type | Description |
+|---|---|---|
+| `mode` | string | Extraction mode used (`scrape`, `chunk`, or `summarize`). |
+| `tokens` | integer | Compatibility alias of `approx_tokens`. |
+| `approx_tokens` | integer | Approximate token count of the returned text (`ceil(characters / 4)`). |
+| `html_tokens` | integer | Approximate token count of the fetched source HTML. |
+| `token_method` | string | Method used to compute `approx_tokens`: `ceil(characters / 4)`. |
+| `limiting_factor` | string | `char_cap`, `token_budget`, or `none` — which limit bound the response. |
+| `chunk_count` | integer | Number of chunks in `chunks`. |
+| `cache_hit` | boolean | True when served from memory or persistent cache. |
+| `cache_layer` | string | `none`, `memory`, or `persistent`. |
+| `source_url` | string | Requested URL with sensitive-looking query parameters removed. |
+| `extracted_at` | string | UTC ISO 8601 timestamp of the extraction. |
+| `tokens_saved_estimate` | integer | Source-HTML estimate minus returned-text estimate, floored at 0. |
+| `truncated` | boolean | True when content exceeded a limit and text was shortened. |
+| `split` | boolean | True when content spans multiple chunks (chunk mode only). |
+| `chunks` | array | Each item: `{index, text, tokens, approx_tokens}`. |
+| `deduplicated_count` | integer | Repeated story blocks removed. |
+| `low_yield` | boolean | True when a large page produced very little text. |
+| `yield_hint` | string | Present only when `low_yield` is true. |
+| Provenance fields* | — | `request_id`, `fetched_at`, `requested_url`, `final_url`, `content_type`, `bytes_fetched`, `content_sha256`, `cache`, `extractor_version` — present when available. |
+
+\* Provenance fields are additive and may be absent.
+
+#### Error semantics
+
+Tool execution failures are returned in-band with `isError: true` and a stable error object at `structuredContent.error` (`code`, `message`, optional `hint`, optional `retryable`, optional `retry_with`), with the same code and message in `content[0].text`.
+
+| Condition | MCP error code | Retryable? |
+|---|---|---|
+| Invalid or unsafe URL | `invalid_or_unsafe_url` | No |
+| Robots disallow | `blocked_by_robots` | No |
+| Robots unavailable | `robots_unreachable` | No |
+| Caller burst limit | `burst_rate_limit_exceeded` | Yes (after `Retry-After`) |
+| Upstream HTTP 429 | `upstream_rate_limited` | Yes (`retry_after_delay`) |
+| Upstream HTTP 401/402/403 | `upstream_access_denied` | No |
+| Other upstream HTTP error | `upstream_http_error` | No |
+| Body exceeds 1 MiB | `payload_too_large` | No |
+| Unsupported media type | `unsupported_media_type` | No |
+| Unsupported encoding | `unsupported_content_encoding` | No |
+| Too many redirects | `too_many_redirects` | No |
+| Timeout or connection failure | `upstream_timeout` / `upstream_connection_error` | No |
+| JavaScript disabled | `render_js_disabled` | No (retry with `render_js=false`) |
+| JavaScript render failure | `upstream_render_error` | No |
+| Invalid tool arguments | `invalid_arguments` | No |
+
+#### Retry behavior
+
+Only `upstream_rate_limited` is retryable (`retryable=true`, `retry_with="retry_after_delay"`). Wait for the indicated delay before retrying. All other errors are non-retryable; do not retry them unchanged.
+
+#### Cache behavior
+
+Results may be served from memory or persistent cache (`cache_hit`, `cache_layer`). Set `cache=false` to bypass cache reads; set `persist=false` to skip the persistent write. URLs with credential-like query parameters are never stored. `robots.txt` is honored.
+
+#### Token economics
+
+`approx_tokens` is `ceil(characters / 4)`, an estimate, not a tokenizer count. `tokens_saved_estimate` is the source-HTML estimate minus the returned-text estimate. `html_tokens` reports the source size the same way. Use these fields to budget LLM context before and after extraction.
+
+#### Rate limits
+
+The service applies a per-process burst limit (60 requests per 60 seconds by default). A burst-limit response (`429 burst_rate_limit_exceeded` on REST; `upstream_rate_limited` on MCP) includes a `Retry-After` hint. Pause and retry after that delay; do not retry immediately.
 
 ### Common responses
 
@@ -379,6 +473,66 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 | Cache | 5-min in-memory + 24 h Supabase persistent | Same | Same upstream cache; cold fetch ~2–6 s, cache hit ~300 ms |
 
 **Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
+
+### Section selection
+
+For `mode=scrape`, supply `sections` to return only selected Markdown
+sections instead of the full extracted page.
+
+MCP accepts either an array of strings or newline-separated selectors:
+
+```json
+{
+  "name": "bintu_scrape_text",
+  "arguments": {
+    "url": "[https://example.com](https://example.com)",
+    "sections": ["Alpha", "Beta"]
+  }
+}
+```
+
+```json
+{
+  "name": "bintu_scrape_text",
+  "arguments": {
+    "url": "[https://example.com](https://example.com)",
+    "sections": "Alpha\nBeta"
+  }
+}
+```
+
+REST accepts repeated `sections` query parameters:
+
+```http
+GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com&sections=Alpha&sections=Beta
+```
+
+Selectors are matched exactly against normalized Markdown heading text:
+whitespace is collapsed and matching is case-insensitive. Each selector
+must be 200 characters or fewer. Empty or whitespace-only selectors return
+`invalid_arguments`.
+
+When `sections` is supplied, cache reads are bypassed so selection uses
+freshly extracted Markdown. A fresh result may still be written to the
+persistent cache when `persist=true`.
+
+The response includes `selected_sections` only for scrape requests that
+supply selectors. Each selected section contains:
+
+| Field | Meaning |
+|---|---|
+| `heading` | Original heading text |
+| `level` | Markdown heading level, 1–6 |
+| `index` | Zero-based position of the heading in the document’s full heading sequence |
+| `text` | Selected section body after sequential token-budget clipping |
+
+If no heading matches, `selected_sections` is an empty array, `text` is
+empty, and `low_yield` is `false`.
+
+`max_tokens` applies to the combined selected text. When the budget is
+exceeded, sections are clipped sequentially in document order,
+`truncated` becomes `true`, and `limiting_factor` becomes
+`token_budget`.
 
 ### Chunk mode limits
 

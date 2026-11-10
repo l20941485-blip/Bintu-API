@@ -75,3 +75,5 @@ def test_cache_miss_logs_hashed_url_not_raw_url(
     assert "cache_layer=none" in output
     assert "age_seconds=none" in output
     assert raw_url not in output
+
+

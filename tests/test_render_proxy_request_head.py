@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from bintu_api.render_proxy_protocol import (
+from bintu_api.render.proxy_protocol import (
     MAX_CONNECT_HEAD_BYTES,
     MAX_CONNECT_LINE_BYTES,
     ConnectTarget,
@@ -81,3 +81,6 @@ class ConnectRequestHeadTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

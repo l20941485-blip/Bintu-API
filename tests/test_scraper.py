@@ -1,3 +1,10 @@
+"""Web fetching and HTML extraction for Bintu.
+
+This module owns network fetching, safety checks, and article extraction without making metering or HTTP route decisions.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 import gzip
 import io
 import socket
@@ -26,7 +33,6 @@ def dns_result(address: str, family: int = socket.AF_INET):
     return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, 80))
 
 
-
 class FakeResponse:
     def __init__(self, status=200, headers=None, body=b"<p>safe</p>"):
         self.status = status
@@ -34,14 +40,11 @@ class FakeResponse:
         self._headers = headers or {"Content-Type": "text/html"}
         self._body = io.BytesIO(body)
 
-
     def getheader(self, name, default=None):
         return self._headers.get(name, default)
 
-
     def read(self, size=-1):
         return self._body.read(size)
-
 
 
 class FakeConnection:
@@ -50,24 +53,19 @@ class FakeConnection:
         self.closed = False
         self.request_args = None
 
-
     def request(self, method, path, headers):
         self.request_args = (method, path, headers)
 
-
     def getresponse(self):
         return self.response
-
 
     def close(self):
         self.closed = True
 
 
-
 class ScraperNetworkTests(unittest.TestCase):
     def setUp(self):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
-
 
     def test_resolver_rejects_private_ipv4_and_ipv6(self):
         for result in (dns_result("127.0.0.1"), dns_result("::1", socket.AF_INET6)):
@@ -77,7 +75,6 @@ class ScraperNetworkTests(unittest.TestCase):
                 self.assertRaises(TargetURLRejected),
             ):
                 resolve_public_addresses("target.example", 80)
-
 
     def test_resolver_rejects_multicast_ipv4_and_ipv6(self):
         """Multicast is not a public web destination (S7)."""
@@ -97,7 +94,6 @@ class ScraperNetworkTests(unittest.TestCase):
             ):
                 resolve_public_addresses("multicast.example", 80)
 
-
     def test_resolver_rejects_multicast_mapped_ipv6(self):
         with (
             patch(
@@ -107,7 +103,6 @@ class ScraperNetworkTests(unittest.TestCase):
             self.assertRaises(TargetURLRejected),
         ):
             resolve_public_addresses("mapped.example", 80)
-
 
     def test_resolver_still_accepts_public_addresses(self):
         for address, family in (
@@ -123,7 +118,6 @@ class ScraperNetworkTests(unittest.TestCase):
             ):
                 self.assertEqual(resolve_public_addresses("public.example", 80), (address,))
 
-
     def test_one_multicast_answer_poisons_the_whole_result(self):
         with (
             patch(
@@ -133,7 +127,6 @@ class ScraperNetworkTests(unittest.TestCase):
             self.assertRaises(TargetURLRejected),
         ):
             resolve_public_addresses("mixed.example", 80)
-
 
     def test_unusual_port_is_rejected_by_default(self):
         """S8: the service is not a public host/port probe."""
@@ -146,7 +139,6 @@ class ScraperNetworkTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(TargetURLRejected):
                 _parse_target(url)
 
-
     def test_default_ports_still_pass_parsing(self):
         _parsed, host, port, _ = _parse_target("http://example.com/")
         self.assertEqual((host, port), ("example.com", 80))
@@ -155,12 +147,10 @@ class ScraperNetworkTests(unittest.TestCase):
         _parsed, host, port, _ = _parse_target("http://example.com:80/explicit")
         self.assertEqual((host, port), ("example.com", 80))
 
-
     def test_configured_extra_ports_are_allowed(self):
         settings = Settings(api_key="", rapidapi_proxy_secret="", allowed_ports="80,443,8080")
         _parsed, _host, port, _ = _parse_target("http://example.com:8080/", settings=settings)
         self.assertEqual(port, 8080)
-
 
     def test_redirect_https_to_http_downgrade_is_refused(self):
         """S10: an https page must not hand us down to cleartext mid-chain."""
@@ -175,7 +165,6 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             fetch_html("https://example.com/", self.settings)
 
-
     def test_redirect_http_to_https_upgrade_is_allowed(self):
         first = FakeConnection(FakeResponse(status=302, headers={"Location": "https://example.com/"}))
         second = FakeConnection(FakeResponse(status=200, body=b"<p>secure</p>"))
@@ -187,7 +176,6 @@ class ScraperNetworkTests(unittest.TestCase):
             patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
         ):
             self.assertEqual(fetch_html("http://example.com/", self.settings), b"<p>secure</p>")
-
 
     def test_same_scheme_redirect_still_works(self):
         first = FakeConnection(FakeResponse(status=301, headers={"Location": "/landing"}))
@@ -201,7 +189,6 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             self.assertEqual(fetch_html("https://example.com/", self.settings), b"<p>final</p>")
 
-
     def test_private_dns_answer_is_rejected_before_connecting(self):
         with (
             patch(
@@ -213,9 +200,7 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             fetch_html("http://target.example/", self.settings)
 
-
         make_connection.assert_not_called()
-
 
     def test_public_to_private_redirect_is_rejected_before_second_connect(self):
         redirect_response = FakeResponse(
@@ -237,10 +222,8 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             fetch_html("http://public.example/", self.settings)
 
-
         make_connection.assert_called_once()
         self.assertTrue(connection.closed)
-
 
     def test_dns_changes_are_rechecked_for_each_redirect(self):
         first = FakeConnection(FakeResponse(status=302, headers={"Location": "http://second.example/page"}, body=b""))
@@ -257,12 +240,10 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             body = fetch_html("http://first.example/", self.settings)
 
-
         self.assertEqual(body, b"<p>done</p>")
         self.assertEqual(resolve.call_count, 2)
         self.assertEqual(make_connection.call_args_list[0].args[2], "93.184.216.34")
         self.assertEqual(make_connection.call_args_list[1].args[2], "1.1.1.1")
-
 
     def test_socket_connects_to_validated_address_not_hostname(self):
         connection = _PinnedHTTPConnection("target.example", "93.184.216.34", 80, 3.0)
@@ -270,28 +251,22 @@ class ScraperNetworkTests(unittest.TestCase):
         with patch("bintu_api.scraper.socket.create_connection", return_value=fake_socket) as connect:
             connection.connect()
 
-
         connect.assert_called_once_with(("93.184.216.34", 80), 3.0, None)
         connection.close()
-
 
     def test_html_reader_is_chunk_bounded_and_stops_over_limit(self):
         response = FakeResponse(body=b"x" * 4097)
         with self.assertRaises(PayloadTooLarge):
             _read_html_response(response, 4096)
 
-
         self.assertEqual(response._body.tell(), 4097)
-
 
     def test_html_reader_rejects_non_html_before_read(self):
         response = FakeResponse(headers={"Content-Type": "application/pdf"}, body=b"%PDF")
         with self.assertRaises(UnsupportedMediaType):
             _read_html_response(response, 4096)
 
-
         self.assertEqual(response._body.tell(), 0)
-
 
     def test_html_reader_decodes_gzip_with_decoded_size_limit(self):
         body = gzip.compress(b"<p>compressed HTML</p>")
@@ -300,9 +275,7 @@ class ScraperNetworkTests(unittest.TestCase):
             body=body,
         )
 
-
         self.assertEqual(_read_html_response(response, 4096), b"<p>compressed HTML</p>")
-
 
     def test_html_reader_rejects_gzip_expansion_over_limit(self):
         body = gzip.compress(b"x" * 4097)
@@ -311,10 +284,8 @@ class ScraperNetworkTests(unittest.TestCase):
             body=body,
         )
 
-
         with self.assertRaises(PayloadTooLarge):
             _read_html_response(response, 4096)
-
 
     def test_html_reader_rejects_unsupported_content_encoding(self):
         response = FakeResponse(
@@ -322,10 +293,8 @@ class ScraperNetworkTests(unittest.TestCase):
             body=b"compressed",
         )
 
-
         with self.assertRaises(UnsupportedContentEncoding):
             _read_html_response(response, 4096)
-
 
     def test_redirect_limit_is_enforced(self):
         self.settings = Settings(api_key="", rapidapi_proxy_secret="")
@@ -341,7 +310,6 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             fetch_html("http://target.example/", self.settings)
 
-
     def test_plain_200_without_location_header_returns_body(self):
         """Regression: a 200 with no Location header must not be treated as a redirect."""
         connection = FakeConnection(
@@ -356,11 +324,9 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             body = fetch_html("http://target.example/", self.settings)
 
-
         self.assertEqual(body, b"<p>hello</p>")
         self.assertEqual(connection.request_args[2]["Accept-Encoding"], "identity")
         self.assertTrue(connection.closed)
-
 
     def test_fetch_html_document_keeps_response_charset(self):
         response = FakeResponse(
@@ -377,10 +343,8 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             document = fetch_html_document("http://target.example/", self.settings)
 
-
         self.assertEqual(document.body, b"<p>caf\xe9</p>")
         self.assertEqual(document.charset, "iso-8859-1")
-
 
     def test_redirect_makes_exactly_two_requests_and_returns_final_body(self):
         """Regression: one Location header must trigger exactly one re-fetch."""
@@ -395,12 +359,10 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             body = fetch_html("http://target.example/start", self.settings)
 
-
         self.assertEqual(body, b"<p>final</p>")
         self.assertEqual(second.request_args[1], "/final")
         self.assertTrue(first.closed)
         self.assertTrue(second.closed)
-
 
     def test_upstream_error_status_raises_upstream_http_error(self):
         connection = FakeConnection(FakeResponse(status=404, headers={"Content-Type": "text/html"}, body=b""))
@@ -414,9 +376,7 @@ class ScraperNetworkTests(unittest.TestCase):
             with self.assertRaises(UpstreamHTTPError) as raised:
                 fetch_html("http://target.example/missing", self.settings)
 
-
         self.assertEqual(raised.exception.status_code, 404)
-
 
     def test_non_ascii_and_space_in_request_target_are_percent_encoded(self):
         """http.client writes the request line as latin-1, so the target must be ASCII."""
@@ -430,18 +390,14 @@ class ScraperNetworkTests(unittest.TestCase):
         ):
             fetch_html("http://target.example/café?q=a b", self.settings)
 
-
         self.assertEqual(connection.request_args[1], "/caf%C3%A9?q=a%20b")
-
 
     def test_fetch_tries_next_address_after_connection_failure(self):
         first = MagicMock()
         first.request.side_effect = OSError("first address unavailable")
 
-
         second = FakeResponse()
         second_connection = FakeConnection(second)
-
 
         with (
             patch(
@@ -461,14 +417,12 @@ class ScraperNetworkTests(unittest.TestCase):
                 self.settings,
             )
 
-
         self.assertEqual(document.body, b"<p>safe</p>")
         self.assertEqual(document.final_url, "http://example.com/")
         self.assertEqual(make_connection.call_count, 2)
         first.close.assert_called_once()
         self.assertTrue(second_connection.request_args)
         self.assertTrue(second_connection.closed)
-
 
 
 def test_adjacent_links_do_not_run_together():
@@ -478,10 +432,7 @@ def test_adjacent_links_do_not_run_together():
         max_characters=1000,
         base_url="https://example.com/",
     )
-    assert (
-        "culture (https://example.com/a) salt (https://example.com/b)"
-        in result.text
-    )
+    assert "culture (https://example.com/a) salt (https://example.com/b)" in result.text
     assert "culturesalt" not in result.text
     assert ")salt" not in result.text
 
@@ -524,6 +475,7 @@ def test_wikipedia_edit_links_are_removed():
     assert "edit" not in result.text
     assert "Sourdough history text." in result.text
 
+
 def test_wikipedia_infobox_ingredient_links_do_not_run_together():
     html = (
         b"<table><tr><th>Main ingredients</th>"
@@ -556,7 +508,6 @@ def test_links_false_removes_urls():
     assert "https://example.com/page" not in result.text
 
 
-
 def test_links_footnotes_collects_references():
     html = b"<p>Read <a href='https://example.com/page'>the guide</a>.</p>"
     result = extract_text_result(
@@ -567,13 +518,11 @@ def test_links_footnotes_collects_references():
     )
     assert "the guide [1]" in result.text
     assert "## Links" in result.text
-    assert "1. https://example.com/page" in result.text
-
+    assert "1. [example.com/page](<https://example.com/page>)" in result.text
 
 
 def test_invalid_links_mode_is_rejected():
     import pytest
-
 
     with pytest.raises(ValueError):
         extract_text_result(
@@ -582,7 +531,6 @@ def test_invalid_links_mode_is_rejected():
             base_url="https://example.com/",
             links="bogus",
         )
-
 
 
 def test_headings_are_converted_to_markdown():
@@ -595,6 +543,7 @@ def test_headings_are_converted_to_markdown():
     assert "## Section title" in result.text
 
 
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+

@@ -1,3 +1,10 @@
+"""Test Chunking for Bintu.
+
+This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from bintu_api.scraper import extract_text_result
 
 
@@ -206,3 +213,5 @@ def test_actual_chunker_keeps_wide_table_row_intact():
     )
     assert sum(chunk.count(target_row) for chunk in chunks) == 1
     assert all(count_tokens(chunk) <= budget for chunk in chunks)
+
+

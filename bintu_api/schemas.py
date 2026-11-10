@@ -1,4 +1,11 @@
-from typing import Literal
+"""Shared data schemas for Bintu responses and requests.
+
+This module defines the public contract used by API and MCP surfaces while avoiding direct business logic.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -110,6 +117,14 @@ class ScrapeTextResponse(BaseModel):
     yield_hint: str | None = Field(
         default=None,
         description=("Optional operator-facing explanation when low_yield is true."),
+    )
+
+    selected_sections: list[dict[str, Any]] | None = Field(
+        default=None,
+        description=(
+            "Selected sections returned only when a scrape request supplies "
+            "section selectors. Each item includes heading, level, index, and text."
+        ),
     )
 
     cache_layer: Literal["none", "memory", "persistent"] = Field(

@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from bintu_api.api.routes import router
 from bintu_api.auth import verify_api_access
 from bintu_api.cache import TTLCache
 from bintu_api.database import (
@@ -17,11 +18,11 @@ from bintu_api.database import (
 from bintu_api.discovery import router as discovery_router
 from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp_streamable import router as mcp_streamable_router
+from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
 from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.reader_routes import router as reader_router
 from bintu_api.reader_store import SnapshotStore
-from bintu_api.routes import router
 from bintu_api.settings import Settings
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -80,10 +81,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     # /docs Authorize button: Security(api_key_scheme) / Security(bearer_scheme)
-    # dependencies on the scrape routes (bintu_api.routes / bintu_api.mcp) make
+    # dependencies on the scrape routes (bintu_api.api.routes / bintu_api.mcp) make
     # FastAPI emit components.securitySchemes (named ApiKeyAuth / BearerAuth)
     # plus the per-operation security arrays, so Swagger UI offers "Authorize".
-    # Runtime auth is unchanged — verify_api_access / verify_supabase_user
+    # Runtime auth is unchanged â€” verify_api_access / verify_supabase_user
     # still enforce the actual credentials; the schemes are auto_error=False
     # documentation markers only.
     # CORSMiddleware is added before RequestObservabilityMiddleware, which makes
@@ -109,6 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.cache = TTLCache(app_settings.cache_ttl_seconds)
     application.state.supabase_client = None
     application.state.reader_store = SnapshotStore()
+    application.add_middleware(UsageMeteringMiddleware)
     application.add_middleware(RequestObservabilityMiddleware)
     application.include_router(discovery_router)
     application.include_router(router)
@@ -136,3 +138,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
+

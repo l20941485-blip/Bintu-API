@@ -97,7 +97,8 @@ def _metric_value(metrics_text: str, name: str) -> float:
 def _check_metrics(base_url: str, api_key: str) -> None:
     print("Checking metrics ...")
 
-    status, _headers, body = _request(        headers={"X-API-Key": api_key},
+    status, _headers, body = _request(
+        headers={"X-API-Key": api_key},
     )
 
     if status == 401:

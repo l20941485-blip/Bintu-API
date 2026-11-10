@@ -1,4 +1,4 @@
-"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
+﻿"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
 
 import json
 import unittest
@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from bintu_api.database import CachedMarkdown
 from bintu_api.mcp import (
     TOOL_ANNOTATIONS,
     TOOL_INPUT_SCHEMA,
@@ -19,7 +20,7 @@ from bintu_api.settings import Settings
 from main import create_app
 
 _robots_patch = mock.patch(
-    "bintu_api.routes.robots_decision",
+    "bintu_api.api.routes.common.robots_decision",
     return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
 )
 
@@ -125,6 +126,85 @@ class McpStreamableTests(unittest.TestCase):
         self.assertTrue(tools[0]["description"])
         self.assertIn("url", tools[0]["inputSchema"]["properties"])
 
+    def test_tools_call_selects_multiple_sections(self) -> None:
+        cached = CachedMarkdown(
+            markdown="# Alpha\nAlpha body\n\n# Beta\nBeta body",
+            truncated=False,
+            html_tokens=100,
+            tokens_saved_estimate=0,
+            limiting_factor="none",
+            extracted_at="2026-01-01T00:00:00+00:00",
+        )
+
+        with patch(
+            "bintu_api.api.routes.common._fetch_and_extract",
+            new=mock.AsyncMock(return_value=(None, cached, "none")),
+        ):
+            response = self.rpc(
+                "tools/call",
+                {
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "sections": "Alpha\nBeta",
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertFalse(payload["isError"])
+
+        data = json.loads(payload["content"][0]["text"])
+        self.assertEqual(
+            [section["heading"] for section in data["selected_sections"]],
+            ["Alpha", "Beta"],
+        )
+        self.assertEqual(
+            data["text"],
+            "# Alpha\nAlpha body\n\n# Beta\nBeta body",
+        )
+
+    def test_tools_call_rejects_whitespace_only_sections(self) -> None:
+        response = self.rpc(
+            "tools/call",
+            {
+                "name": TOOL_NAME,
+                "arguments": {
+                    "url": "https://example.com",
+                    "sections": "   \n\n   ",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(payload["isError"])
+        self.assertEqual(
+            payload["structuredContent"]["error"]["code"],
+            "invalid_arguments",
+        )
+
+    def test_tools_call_rejects_overlong_section_selector(self) -> None:
+        response = self.rpc(
+            "tools/call",
+            {
+                "name": TOOL_NAME,
+                "arguments": {
+                    "url": "https://example.com",
+                    "sections": "A" * 201,
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(payload["isError"])
+        self.assertEqual(
+            payload["structuredContent"]["error"]["code"],
+            "invalid_arguments",
+        )
+
     def test_notification_returns_202_with_empty_body(self) -> None:
         response = self.client.post(
             "/mcp",
@@ -136,7 +216,7 @@ class McpStreamableTests(unittest.TestCase):
 
     def test_tools_call_returns_text_content(self) -> None:
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>MCP stream</main>", charset=None),
         ):
             response = self.rpc(
@@ -155,7 +235,7 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_chunk_mode_returns_structured_json(self) -> None:
         long_text = "Sentence one. " * 200
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -182,7 +262,7 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_summarize_mode_truncates_to_budget(self) -> None:
         long_text = "Sentence one. " * 100
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -219,7 +299,7 @@ class McpStreamableTests(unittest.TestCase):
         self.assertIn("render_js_disabled", payload["content"][0]["text"])
 
     def test_tools_call_rejects_invalid_mode(self) -> None:
-        """Invalid mode strings must map to JSON-RPC -32602 on the streamable endpoint."""
+        """Invalid mode strings use the stable tool argument error contract."""
         response = self.rpc(
             "tools/call",
             {
@@ -228,11 +308,11 @@ class McpStreamableTests(unittest.TestCase):
             },
         )
 
-        error = response.json()["error"]
-        self.assertEqual(error["code"], -32602)
+        error = response.json()["result"]["structuredContent"]["error"]
+        self.assertEqual(error["code"], "invalid_arguments")
 
     def test_tools_call_rejects_invalid_mode_case_variants(self) -> None:
-        """Case/whitespace variants of unknown modes map to -32602."""
+        """Case/whitespace variants of unknown modes use invalid_arguments."""
         for bad_mode in ("INVALID", "chunked!"):
             with self.subTest(mode=bad_mode):
                 response = self.rpc(
@@ -242,15 +322,15 @@ class McpStreamableTests(unittest.TestCase):
                         "arguments": {"url": "https://example.com", "mode": bad_mode},
                     },
                 )
-                error = response.json()["error"]
-                self.assertEqual(error["code"], -32602)
+                error = response.json()["result"]["structuredContent"]["error"]
+                self.assertEqual(error["code"], "invalid_arguments")
 
     def test_tools_call_accepts_whitespace_tolerant_valid_modes(self) -> None:
         """Whitespace/case-tolerant normalization of valid modes succeeds."""
         for mode in (" Scrape ", "CHUNK", "Summarize"):
             with self.subTest(mode=mode):
                 with patch(
-                    "bintu_api.routes.fetch_html_document",
+                    "bintu_api.api.routes.common.fetch_html_document",
                     return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
                 ):
                     response = self.rpc(
@@ -269,7 +349,7 @@ class McpStreamableTests(unittest.TestCase):
         for mode in ("scrape", "chunk", "summarize"):
             with self.subTest(mode=mode):
                 with patch(
-                    "bintu_api.routes.fetch_html_document",
+                    "bintu_api.api.routes.common.fetch_html_document",
                     return_value=FetchedHTML(body=b"<main>ok</main>", charset=None),
                 ):
                     response = self.rpc(
@@ -292,9 +372,13 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_missing_url_is_invalid_params(self) -> None:
         response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {}})
 
-        error = response.json()["error"]
-        self.assertEqual(error["code"], -32602)
-        self.assertIn("url", error["message"])
+        result = response.json()["result"]
+        self.assertTrue(result["isError"])
+        self.assertEqual(
+            result["structuredContent"]["error"]["code"],
+            "invalid_arguments",
+        )
+        self.assertIn("url", result["structuredContent"]["error"]["message"])
 
     def test_unsafe_url_is_in_band_tool_error(self) -> None:
         response = self.rpc("tools/call", {"name": TOOL_NAME, "arguments": {"url": "nota-url"}})
@@ -395,7 +479,7 @@ class McpStreamableTests(unittest.TestCase):
         self.assertEqual(payload["error"]["data"]["code"], "premium_required")
         self.assertEqual(payload["error"]["data"]["upgrade_url"], "https://mcpize.com")
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>gated</main>", charset=None),
         ):
             authorized = client.post("/mcp", json=call_payload, headers={"X-API-Key": "owner-key"})
@@ -430,7 +514,7 @@ class McpStreamableTests(unittest.TestCase):
             "params": {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
         }
         with patch(
-            "bintu_api.routes.fetch_html_document",
+            "bintu_api.api.routes.common.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>bearer ok</main>", charset=None),
         ):
             for token in ("owner-key", "claude-key"):
@@ -614,3 +698,5 @@ class McpScopedApiKeyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+

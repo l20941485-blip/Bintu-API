@@ -120,3 +120,5 @@ class ExtractorStructureTests(unittest.TestCase):
 
         self.assertIn("Article headline", result.text)
         self.assertIn("Article body.", result.text)
+
+

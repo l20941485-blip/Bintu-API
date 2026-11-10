@@ -1,5 +1,12 @@
+"""Test Yield And Descriptions for Bintu.
+
+This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
+
+Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
+"""
+
 from bintu_api import mcp_descriptions as d
-from bintu_api.yield_check import (
+from bintu_api.extraction.quality import (
     HINT_JAVASCRIPT,
     HINT_LITTLE_TEXT,
     LOW_YIELD_MAX_TEXT_TOKENS,
@@ -140,3 +147,5 @@ def test_output_schema_additions_are_optional_and_typed():
     assert props["low_yield"]["type"] == "boolean"
     assert props["yield_hint"]["type"] == "string"
     assert props["deduplicated_count"]["type"] == "integer"
+
+

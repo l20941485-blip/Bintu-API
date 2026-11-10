@@ -35,3 +35,5 @@ def test_code_and_prose_do_not_lose_fence_balance():
     assert len(chunks) > 1
     for chunk in chunks:
         assert chunk.count("```") % 2 == 0
+
+

@@ -92,3 +92,5 @@ def test_extraction_completed_uses_stable_url_hash(
     output = "\n".join(extraction_log_capture.records)
 
     assert "url_hash=a32f3bb71f3e05ea" in output
+
+

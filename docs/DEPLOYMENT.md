@@ -53,6 +53,14 @@ variables into the running process.
 
 See root `SECURITY.md` before changing rendering or outbound-network behavior.
 
+## MCP request-size limit
+
+The application rejects `/mcp` request bodies larger than 64 KiB and reads
+streamed bodies without buffering beyond that limit. The Render blueprint
+does not configure an independent edge request-size limit. If this service is
+placed behind a trusted CDN, reverse proxy, or API gateway, configure that
+edge to enforce a matching 64 KiB limit as well.
+
 ## 3. Reader deployment constraints
 
 Reader snapshots are stored in memory in each application instance.
