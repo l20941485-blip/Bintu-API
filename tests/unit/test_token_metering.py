@@ -1,4 +1,4 @@
-﻿"""Token Tax engine tests: aliases, unified envelope, 401 upgrade_url, metering header."""
+"""Token Tax engine tests: aliases, unified envelope, 401 upgrade_url, metering header."""
 
 import json
 import unittest
@@ -8,7 +8,6 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
 from bintu_api.extraction.context import normalize_mode
 from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, ToolArguments
 from bintu_api.scraper.fetcher import (
@@ -17,6 +16,7 @@ from bintu_api.scraper.fetcher import (
     _compute_tokens_saved_estimate,
 )
 from bintu_api.scraper.robots import RobotsDecision
+from bintu_api.security.auth import mcp_rate_limit_identity, rate_limit_identity
 from bintu_api.settings import Settings
 from main import create_app
 

@@ -21,11 +21,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
-from bintu_api.auth import (
-    api_key_scheme,
-    mcp_rate_limit_identity,
-    verify_mcp_api_access,
-)
 from bintu_api.extraction.cache import build_cache_economics
 from bintu_api.extraction.context import (
     _decode_source_text,
@@ -42,6 +37,11 @@ from bintu_api.mcp.schemas import (
 from bintu_api.mcp.tools import ToolArguments, ToolCallRequest
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper.fetcher import TargetURLRejected
+from bintu_api.security.auth import (
+    api_key_scheme,
+    mcp_rate_limit_identity,
+    verify_mcp_api_access,
+)
 from bintu_api.settings import Settings
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])

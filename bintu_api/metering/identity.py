@@ -9,7 +9,7 @@ import hashlib
 
 from starlette.requests import Request
 
-from bintu_api.auth import has_valid_proxy_secret
+from bintu_api.security.auth import has_valid_proxy_secret
 from bintu_api.settings import Settings
 
 

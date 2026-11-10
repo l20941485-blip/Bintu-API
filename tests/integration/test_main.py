@@ -560,7 +560,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         with (
             patch(
-                "bintu_api.auth.urlopen",
+                "bintu_api.security.auth.urlopen",
                 return_value=auth_response,
             ) as verify,
             patch(
@@ -941,7 +941,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         with (
             patch(
-                "bintu_api.auth.urlopen",
+                "bintu_api.security.auth.urlopen",
                 return_value=auth_response,
             ) as verify,
             patch(
@@ -986,7 +986,7 @@ class ScraperApiTests(unittest.TestCase):
         )
         client = TestClient(create_app(settings))
         with patch(
-            "bintu_api.auth.urlopen",
+            "bintu_api.security.auth.urlopen",
             return_value=io.BytesIO(b'{"id":"user-123"}'),
         ):
             response = client.post(

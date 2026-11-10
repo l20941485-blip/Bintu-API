@@ -4,7 +4,7 @@ import hashlib
 
 from starlette.requests import Request
 
-from bintu_api.auth import (
+from bintu_api.security.auth import (
     mcp_rate_limit_identity,
     verify_mcp_execution_access,
 )

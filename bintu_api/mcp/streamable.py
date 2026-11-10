@@ -1,4 +1,4 @@
-﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
+"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients Ã¢â'¬â€ Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
@@ -52,11 +52,6 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from bintu_api.auth import (
-    mcp_rate_limit_identity,
-    mcp_upgrade_url,
-    verify_mcp_execution_access,
-)
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
 from bintu_api.extraction.context import (
     _decode_source_text,
@@ -129,6 +124,11 @@ from bintu_api.scraper.fetcher import (
     UnsupportedMediaType,
     UpstreamHTTPError,
     UpstreamRenderError,
+)
+from bintu_api.security.auth import (
+    mcp_rate_limit_identity,
+    mcp_upgrade_url,
+    verify_mcp_execution_access,
 )
 from bintu_api.settings import Settings
 
