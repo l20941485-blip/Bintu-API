@@ -1,4 +1,4 @@
-"""Bounded process-local snapshots and caller-bound continuation handles."""
+﻿"""Bounded process-local snapshots and caller-bound continuation handles."""
 
 import secrets
 import threading
@@ -7,7 +7,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from bintu_api.reader import DocumentPage, DocumentSnapshot, read_page
+from bintu_api.reader.service import DocumentPage, DocumentSnapshot, read_page
 
 
 class SnapshotUnavailable(ValueError):
@@ -151,3 +151,4 @@ class SnapshotStore:
                 offset=offset,
             )
             return self._wrap_page(document_id, page)
+

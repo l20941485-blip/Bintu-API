@@ -1,4 +1,4 @@
-"""Test Reader Extraction for Bintu.
+﻿"""Test Reader Extraction for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -7,14 +7,14 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 import pytest
 
-from bintu_api.reader import (
-    DEFAULT_MAX_DOCUMENT_CHARACTERS,
-    read_page,
-)
-from bintu_api.reader_extraction import (
+from bintu_api.reader.extraction import (
     ReaderDocumentEmpty,
     ReaderDocumentTooLarge,
     snapshot_from_document,
+)
+from bintu_api.reader.service import (
+    DEFAULT_MAX_DOCUMENT_CHARACTERS,
+    read_page,
 )
 from bintu_api.scraper import FetchedHTML, extract_text_result
 
@@ -141,5 +141,6 @@ def test_preserves_existing_heading_and_table_extraction():
     assert "# Reference" in snapshot.text
     assert "Name | Value" in snapshot.text
     assert "Alpha | 1" in snapshot.text
+
 
 

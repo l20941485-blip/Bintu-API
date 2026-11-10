@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -21,8 +21,8 @@ from bintu_api.mcp.streamable import router as mcp_streamable_router
 from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
 from bintu_api.rate_limit import create_rate_limiter
-from bintu_api.reader_routes import router as reader_router
-from bintu_api.reader_store import SnapshotStore
+from bintu_api.reader.routes import router as reader_router
+from bintu_api.reader.store import SnapshotStore
 from bintu_api.settings import Settings
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -84,7 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # dependencies on the scrape routes (bintu_api.api.routes / bintu_api.mcp) make
     # FastAPI emit components.securitySchemes (named ApiKeyAuth / BearerAuth)
     # plus the per-operation security arrays, so Swagger UI offers "Authorize".
-    # Runtime auth is unchanged â€” verify_api_access / verify_supabase_user
+    # Runtime auth is unchanged - verify_api_access / verify_supabase_user
     # still enforce the actual credentials; the schemes are auto_error=False
     # documentation markers only.
     # CORSMiddleware is added before RequestObservabilityMiddleware, which makes
@@ -138,4 +138,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
+
 

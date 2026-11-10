@@ -1,4 +1,4 @@
-"""Authentication and authorization for Bintu.
+﻿"""Authentication and authorization for Bintu.
 
 This module enforces API and MCP access control while keeping request validation independent from extraction logic.
 
@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from bintu_api.reader_auth import reader_owner
+from bintu_api.reader.auth import reader_owner
 from bintu_api.settings import Settings
 
 MASTER = "reader-test-master"
@@ -184,5 +184,6 @@ def test_distinct_direct_keys_have_distinct_owner_namespaces():
     )
 
     assert first != second
+
 
 

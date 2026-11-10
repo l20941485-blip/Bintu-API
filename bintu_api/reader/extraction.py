@@ -1,7 +1,7 @@
 ﻿"""Extract retained reader documents without changing scrape limits."""
 
 from bintu_api.extraction.html_extract import extract_text_result
-from bintu_api.reader import (
+from bintu_api.reader.service import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     DocumentSnapshot,
 )
@@ -47,3 +47,4 @@ def snapshot_from_document(
         raise ReaderDocumentEmpty("No readable text was extracted.")
 
     return DocumentSnapshot(extracted.text)
+
