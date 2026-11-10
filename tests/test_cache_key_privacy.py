@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bintu_api.api.routes.common import _fetch_and_extract
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
 from bintu_api.settings import Settings
 
 
@@ -168,6 +168,7 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

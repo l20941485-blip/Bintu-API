@@ -19,7 +19,7 @@ from bintu_api.mcp.schemas import (
     TOOL_OUTPUT_SCHEMA,
     TOOL_TITLE,
 )
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TooManyRedirects,
     UnsupportedContentEncoding,
@@ -241,6 +241,7 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
             ]
         },
     )
+
 
 
 

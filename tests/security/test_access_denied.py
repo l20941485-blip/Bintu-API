@@ -14,7 +14,7 @@ from fastapi import HTTPException
 
 from bintu_api.api.routes import common as routes
 from bintu_api.api.routes.extract import _scrape_text
-from bintu_api.scraper import UpstreamHTTPError
+from bintu_api.scraper.fetcher import UpstreamHTTPError
 from bintu_api.settings import Settings
 
 
@@ -72,6 +72,7 @@ class UpstreamAccessDeniedTests(unittest.TestCase):
         error = self._run(500)
         self.assertEqual(error.status_code, 502)
         self.assertEqual(error.detail["code"], "upstream_http_error")
+
 
 
 

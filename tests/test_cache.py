@@ -1,9 +1,9 @@
-"""Tests for the bounded, thread-safe TTL cache."""
+﻿"""Tests for the bounded, thread-safe TTL cache."""
 
 import threading
 import unittest
 
-from bintu_api.cache import TTLCache
+from bintu_api.scraper.cache import TTLCache
 
 
 class TTLCacheTests(unittest.TestCase):
@@ -65,5 +65,6 @@ class TTLCacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

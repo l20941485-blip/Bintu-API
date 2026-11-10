@@ -1,4 +1,4 @@
-"""Integration tests using a real local HTTP server.
+﻿"""Integration tests using a real local HTTP server.
 
 These tests verify the full fetch -> parse -> extract pipeline
 with actual HTTP responses, while still respecting SSRF protection
@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from bintu_api.scraper import extract_text, extract_text_result, fetch_html
+from bintu_api.scraper.fetcher import extract_text, extract_text_result, fetch_html
 from bintu_api.settings import Settings
 
 
@@ -96,11 +96,11 @@ class IntegrationTests(unittest.TestCase):
         """Verify the complete flow: HTTP fetch -> HTML parse -> text extraction."""
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=_resolve_test_dns,
             ),
             patch(
-                "bintu_api.scraper.socket.create_connection",
+                "bintu_api.scraper.fetcher.socket.create_connection",
                 side_effect=lambda *args, **kwargs: _REAL_CREATE_CONNECTION(
                     ("127.0.0.1", self.port), *args[1:], **kwargs
                 ),
@@ -121,11 +121,11 @@ class IntegrationTests(unittest.TestCase):
         """Verify redirects are followed and final content is extracted."""
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=_resolve_test_dns,
             ),
             patch(
-                "bintu_api.scraper.socket.create_connection",
+                "bintu_api.scraper.fetcher.socket.create_connection",
                 side_effect=lambda *args, **kwargs: _REAL_CREATE_CONNECTION(
                     ("127.0.0.1", self.port), *args[1:], **kwargs
                 ),
@@ -331,5 +331,7 @@ class IntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
 
 

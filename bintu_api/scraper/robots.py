@@ -1,4 +1,4 @@
-"""robots.txt support for BintuBot.
+﻿"""robots.txt support for BintuBot.
 
 Parsing, safe fetching, per-origin caching and allow/deny decisions live
 here. Fetching uses public-address validation and pinned connections.
@@ -18,7 +18,7 @@ import zlib
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     REDIRECT_STATUSES,
     TargetURLRejected,
     _host_header,
@@ -388,3 +388,4 @@ def robots_decision(
         reason=(f"disallowed by robots.txt (group: {rules.matched_group})"),
         matched_group=rules.matched_group,
     )
+

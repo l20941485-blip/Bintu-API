@@ -1,4 +1,4 @@
-"""Web fetching and HTML extraction for Bintu.
+﻿"""Web fetching and HTML extraction for Bintu.
 
 This module owns network fetching, safety checks, and article extraction without making metering or HTTP route decisions.
 
@@ -11,7 +11,7 @@ import socket
 import unittest
 from unittest.mock import MagicMock, patch
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
@@ -71,7 +71,7 @@ class ScraperNetworkTests(unittest.TestCase):
         for result in (dns_result("127.0.0.1"), dns_result("::1", socket.AF_INET6)):
             with (
                 self.subTest(address=result[4][0]),
-                patch("bintu_api.scraper.socket.getaddrinfo", return_value=[result]),
+                patch("bintu_api.scraper.fetcher.socket.getaddrinfo", return_value=[result]),
                 self.assertRaises(TargetURLRejected),
             ):
                 resolve_public_addresses("target.example", 80)
@@ -87,7 +87,7 @@ class ScraperNetworkTests(unittest.TestCase):
             with (
                 self.subTest(address=address),
                 patch(
-                    "bintu_api.scraper.socket.getaddrinfo",
+                    "bintu_api.scraper.fetcher.socket.getaddrinfo",
                     return_value=[dns_result(address, family)],
                 ),
                 self.assertRaises(TargetURLRejected),
@@ -97,7 +97,7 @@ class ScraperNetworkTests(unittest.TestCase):
     def test_resolver_rejects_multicast_mapped_ipv6(self):
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("::ffff:224.0.0.1", socket.AF_INET6)],
             ),
             self.assertRaises(TargetURLRejected),
@@ -112,7 +112,7 @@ class ScraperNetworkTests(unittest.TestCase):
             with (
                 self.subTest(address=address),
                 patch(
-                    "bintu_api.scraper.socket.getaddrinfo",
+                    "bintu_api.scraper.fetcher.socket.getaddrinfo",
                     return_value=[dns_result(address, family)],
                 ),
             ):
@@ -121,7 +121,7 @@ class ScraperNetworkTests(unittest.TestCase):
     def test_one_multicast_answer_poisons_the_whole_result(self):
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34"), dns_result("224.0.0.1")],
             ),
             self.assertRaises(TargetURLRejected),
@@ -157,10 +157,10 @@ class ScraperNetworkTests(unittest.TestCase):
         first = FakeConnection(FakeResponse(status=302, headers={"Location": "http://example.com/"}))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=first),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=first),
             self.assertRaises(TargetURLRejected),
         ):
             fetch_html("https://example.com/", self.settings)
@@ -170,10 +170,10 @@ class ScraperNetworkTests(unittest.TestCase):
         second = FakeConnection(FakeResponse(status=200, body=b"<p>secure</p>"))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
+            patch("bintu_api.scraper.fetcher._make_connection", side_effect=[first, second]),
         ):
             self.assertEqual(fetch_html("http://example.com/", self.settings), b"<p>secure</p>")
 
@@ -182,20 +182,20 @@ class ScraperNetworkTests(unittest.TestCase):
         second = FakeConnection(FakeResponse(status=200, body=b"<p>final</p>"))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
+            patch("bintu_api.scraper.fetcher._make_connection", side_effect=[first, second]),
         ):
             self.assertEqual(fetch_html("https://example.com/", self.settings), b"<p>final</p>")
 
     def test_private_dns_answer_is_rejected_before_connecting(self):
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("10.0.0.7")],
             ),
-            patch("bintu_api.scraper._make_connection") as make_connection,
+            patch("bintu_api.scraper.fetcher._make_connection") as make_connection,
             self.assertRaises(TargetURLRejected),
         ):
             fetch_html("http://target.example/", self.settings)
@@ -211,13 +211,13 @@ class ScraperNetworkTests(unittest.TestCase):
         connection = FakeConnection(redirect_response)
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=[
                     [dns_result("93.184.216.34")],
                     [dns_result("192.168.1.20")],
                 ],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection) as make_connection,
             self.assertRaises(TargetURLRejected),
         ):
             fetch_html("http://public.example/", self.settings)
@@ -230,13 +230,13 @@ class ScraperNetworkTests(unittest.TestCase):
         second = FakeConnection(FakeResponse(body=b"<p>done</p>"))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=[
                     [dns_result("93.184.216.34")],
                     [dns_result("1.1.1.1")],
                 ],
             ) as resolve,
-            patch("bintu_api.scraper._make_connection", side_effect=[first, second]) as make_connection,
+            patch("bintu_api.scraper.fetcher._make_connection", side_effect=[first, second]) as make_connection,
         ):
             body = fetch_html("http://first.example/", self.settings)
 
@@ -248,7 +248,7 @@ class ScraperNetworkTests(unittest.TestCase):
     def test_socket_connects_to_validated_address_not_hostname(self):
         connection = _PinnedHTTPConnection("target.example", "93.184.216.34", 80, 3.0)
         fake_socket = MagicMock()
-        with patch("bintu_api.scraper.socket.create_connection", return_value=fake_socket) as connect:
+        with patch("bintu_api.scraper.fetcher.socket.create_connection", return_value=fake_socket) as connect:
             connection.connect()
 
         connect.assert_called_once_with(("93.184.216.34", 80), 3.0, None)
@@ -302,10 +302,10 @@ class ScraperNetworkTests(unittest.TestCase):
         redirect = FakeConnection(FakeResponse(status=302, headers={"Location": "/again"}, body=b""))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=redirect),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=redirect),
             self.assertRaises(TooManyRedirects),
         ):
             fetch_html("http://target.example/", self.settings)
@@ -317,10 +317,10 @@ class ScraperNetworkTests(unittest.TestCase):
         )
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection),
         ):
             body = fetch_html("http://target.example/", self.settings)
 
@@ -336,10 +336,10 @@ class ScraperNetworkTests(unittest.TestCase):
         connection = FakeConnection(response)
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection),
         ):
             document = fetch_html_document("http://target.example/", self.settings)
 
@@ -352,10 +352,10 @@ class ScraperNetworkTests(unittest.TestCase):
         second = FakeConnection(FakeResponse(status=200, body=b"<p>final</p>"))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", side_effect=[first, second]),
+            patch("bintu_api.scraper.fetcher._make_connection", side_effect=[first, second]),
         ):
             body = fetch_html("http://target.example/start", self.settings)
 
@@ -368,10 +368,10 @@ class ScraperNetworkTests(unittest.TestCase):
         connection = FakeConnection(FakeResponse(status=404, headers={"Content-Type": "text/html"}, body=b""))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection),
         ):
             with self.assertRaises(UpstreamHTTPError) as raised:
                 fetch_html("http://target.example/missing", self.settings)
@@ -383,10 +383,10 @@ class ScraperNetworkTests(unittest.TestCase):
         connection = FakeConnection(FakeResponse(body=b"<p>ok</p>"))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection),
         ):
             fetch_html("http://target.example/café?q=a b", self.settings)
 
@@ -401,14 +401,14 @@ class ScraperNetworkTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[
                     dns_result("93.184.216.34"),
                     dns_result("8.8.8.8"),
                 ],
             ),
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 side_effect=[first, second_connection],
             ) as make_connection,
         ):
@@ -545,5 +545,8 @@ def test_headings_are_converted_to_markdown():
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+
 
 

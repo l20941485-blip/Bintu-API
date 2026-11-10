@@ -1,6 +1,6 @@
-"""Comment-thread pages must preserve discussion and omit site furniture."""
+﻿"""Comment-thread pages must preserve discussion and omit site furniture."""
 
-from bintu_api.scraper import extract_text
+from bintu_api.scraper.fetcher import extract_text
 
 HTML = b"""
 <html>
@@ -33,5 +33,6 @@ def test_comment_thread_prefers_comments_and_title() -> None:
     assert "Guidelines" not in text
     assert "FAQ" not in text
     assert "Apply to YC" not in text
+
 
 

@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bintu_api import robots
-from bintu_api.robots import (
+from bintu_api.scraper import robots
+from bintu_api.scraper.robots import (
     RobotsUnreachable,
     clear_robots_cache,
     parse_robots_rules,
@@ -169,5 +169,6 @@ def test_robots_off_allows_without_check(monkeypatch):
     assert decision.allowed is True
     assert decision.checked is False
     assert decision.reason == "robots checking is off"
+
 
 

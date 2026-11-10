@@ -1,7 +1,7 @@
 """Robots enforcement policy for outbound document retrieval.
 
 This module owns the robots enforcement boundary. The low-level robots
-protocol, parsing, caching, and decision logic remain in ``bintu_api.robots``.
+protocol, parsing, caching, and decision logic remain in ``bintu_api.scraper.robots``.
 
 The dependency parameters preserve the established patch seam in
 ``bintu_api.api.routes.common`` during the modularization transition.
@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import HTTPException
 
-from bintu_api.robots import RobotsDecision, robots_decision, robots_mode
+from bintu_api.scraper.robots import RobotsDecision, robots_decision, robots_mode
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.scrape")

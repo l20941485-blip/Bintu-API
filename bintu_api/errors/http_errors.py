@@ -3,7 +3,7 @@
 from fastapi import HTTPException
 
 from bintu_api.observability import log_upstream_error
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     RedirectedToPrivateNetwork,
     TargetURLRejected,
@@ -242,6 +242,7 @@ def translate_upstream_error(
             "message": "An internal extraction error occurred.",
         },
     )
+
 
 
 

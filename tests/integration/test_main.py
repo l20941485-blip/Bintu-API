@@ -17,8 +17,8 @@ from bintu_api.database import CachedMarkdown
 from bintu_api.mcp import (
     TOOL_NAME,
 )
-from bintu_api.robots import RobotsDecision
-from bintu_api.scraper import FetchedHTML, UpstreamHTTPError
+from bintu_api.scraper.fetcher import FetchedHTML, UpstreamHTTPError
+from bintu_api.scraper.robots import RobotsDecision
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -1057,6 +1057,8 @@ class ScraperApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
 
 
 

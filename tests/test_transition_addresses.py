@@ -1,4 +1,4 @@
-"""Regression tests for IPv6 transition addresses embedding IPv4 targets.
+﻿"""Regression tests for IPv6 transition addresses embedding IPv4 targets.
 
 The scraper conservatively rejects NAT64 and 6to4 addresses because their
 embedded IPv4 destination can conceal loopback, private, link-local, or
@@ -10,7 +10,7 @@ import socket
 import unittest
 from unittest.mock import patch
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     TargetURLRejected,
     _parse_target,
     fetch_html,
@@ -60,11 +60,11 @@ class TransitionAddressTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result(ipv6_address)],
             ),
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ) as make_connection,
             self.assertRaises(TargetURLRejected),
@@ -157,5 +157,8 @@ class TransitionAddressTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+
 
 

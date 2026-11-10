@@ -8,8 +8,8 @@ Important boundaries, invariants, and compatibility notes are documented here so
 import unittest
 from unittest import mock
 
-from bintu_api import robots
-from bintu_api.scraper import TargetURLRejected
+from bintu_api.scraper import robots
+from bintu_api.scraper.fetcher import TargetURLRejected
 from bintu_api.settings import Settings
 
 
@@ -60,5 +60,6 @@ class RobotsDecisionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

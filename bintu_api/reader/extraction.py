@@ -5,7 +5,7 @@ from bintu_api.reader.service import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     DocumentSnapshot,
 )
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
 
 
 class ReaderDocumentTooLarge(ValueError):
@@ -47,4 +47,5 @@ def snapshot_from_document(
         raise ReaderDocumentEmpty("No readable text was extracted.")
 
     return DocumentSnapshot(extracted.text)
+
 

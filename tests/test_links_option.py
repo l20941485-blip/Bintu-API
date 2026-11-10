@@ -1,4 +1,4 @@
-"""Test Links Option for Bintu.
+﻿"""Test Links Option for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -7,7 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 import pytest
 
-from bintu_api.scraper import _compute_approx_tokens, extract_text_result
+from bintu_api.scraper.fetcher import _compute_approx_tokens, extract_text_result
 
 
 def test_links_false_separates_link_and_span():
@@ -305,5 +305,6 @@ def test_links_inline_preserves_urls():
     )
 
     assert "Flour (https://en.wikipedia.org/wiki/Flour)" in result.text
+
 
 
