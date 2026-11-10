@@ -7,7 +7,7 @@ import unittest
 from dataclasses import replace
 from unittest.mock import MagicMock, patch
 
-from bintu_api.render_proxy import open_validated_socket
+from bintu_api.render.proxy import open_validated_socket
 from bintu_api.scraper import TargetURLRejected
 from bintu_api.settings import Settings
 
@@ -216,5 +216,6 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
