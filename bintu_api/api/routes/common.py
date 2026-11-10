@@ -42,6 +42,12 @@ from bintu_api.extraction.output import (
 from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.scrape_service import ScrapeService
+from bintu_api.extraction.service import (
+    ScrapeDependencies,
+)
+from bintu_api.extraction.service import (
+    build_scrape_service as build_scrape_service_from_dependencies,
+)
 from bintu_api.observability import log_cache_event
 from bintu_api.robots import robots_decision as robots_decision
 from bintu_api.robots import robots_mode as robots_mode
@@ -82,7 +88,7 @@ async def _scrape_text(*args, **kwargs):
 
 def build_scrape_service(request: Request) -> ScrapeService:
     """Build a scrape service using the request-scoped collaborators."""
-    return ScrapeService(
+    dependencies = ScrapeDependencies(
         cache=request.app.state.cache,
         persistent_cache_reader=get_cached_markdown,
         persistent_cache_writer=upsert_cached_markdown,
@@ -94,6 +100,7 @@ def build_scrape_service(request: Request) -> ScrapeService:
         cache_event_logger=log_cache_event,
     )
 
+    return build_scrape_service_from_dependencies(dependencies)
 
 async def _fetch_and_extract(
     request: Request,
@@ -173,6 +180,7 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
+
 
 
 
