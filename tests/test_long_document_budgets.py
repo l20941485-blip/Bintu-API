@@ -1,4 +1,4 @@
-﻿"""Test Long Document Budgets for Bintu.
+"""Test Long Document Budgets for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -8,8 +8,8 @@ Important boundaries, invariants, and compatibility notes are documented here so
 import inspect
 import unittest
 
-import bintu_api.mcp
 from bintu_api.extraction.context import resolve_effective_char_cap, split_into_chunks
+from bintu_api.mcp import http_api
 
 
 class EffectiveCharCapTests(unittest.TestCase):
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
 class McpTokenBudgetExtractionTests(unittest.TestCase):
     def test_mcp_forwards_max_tokens_to_extraction(self):
-        source = inspect.getsource(bintu_api.mcp)
+        source = inspect.getsource(http_api.call_tool)
         self.assertIn("max_tokens=arguments.max_tokens", source)
 
 
