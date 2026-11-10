@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from bintu_api.api.discovery import router as discovery_router
 from bintu_api.api.routes import router
 from bintu_api.auth import verify_api_access
 from bintu_api.database import (
@@ -14,7 +15,6 @@ from bintu_api.database import (
     close_supabase_client,
     create_supabase_client,
 )
-from bintu_api.discovery import router as discovery_router
 from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp.streamable import router as mcp_streamable_router
 from bintu_api.middleware.usage import UsageMeteringMiddleware
