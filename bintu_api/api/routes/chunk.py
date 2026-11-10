@@ -17,10 +17,10 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, Security
 
 from bintu_api.auth import api_key_scheme
-from bintu_api.extraction.context import split_into_chunks
 from bintu_api.database import CachedMarkdown
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction import service as routes_common
+from bintu_api.extraction.context import split_into_chunks
 from bintu_api.extraction.output import TOKEN_METHOD
 from bintu_api.observability import log_extraction_completed
 from bintu_api.schemas import (

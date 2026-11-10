@@ -25,9 +25,9 @@ from fastapi import Request
 
 from bintu_api.auth import rate_limit_identity
 from bintu_api.extraction.chunker import split_into_chunks
-from bintu_api.extraction.summarizer import summarize_text
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.extraction.sections import select_sections
+from bintu_api.extraction.summarizer import summarize_text
 from bintu_api.observability import (
     log_cache_lookup_completed,
     record_cache_tokens_saved,

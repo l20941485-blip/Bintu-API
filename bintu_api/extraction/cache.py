@@ -9,8 +9,8 @@ persisted economics instead of recomputing a misleading zero-savings baseline.
 
 from __future__ import annotations
 
-from bintu_api.extraction.context import CacheEconomics
 from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.context import CacheEconomics
 from bintu_api.scraper import FetchedHTML, _compute_tokens_saved_estimate
 
 __all__ = [

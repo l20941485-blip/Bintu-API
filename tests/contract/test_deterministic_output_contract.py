@@ -24,9 +24,9 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 
-from bintu_api.extraction.context import ContextResult, count_tokens, normalize_mode
 from bintu_api.errors.codes import ERROR_CODES, normalize_error_code
 from bintu_api.errors.tool_errors import build_mcp_tool_error_result
+from bintu_api.extraction.context import ContextResult, count_tokens, normalize_mode
 from bintu_api.extraction.response import (
     build_mcp_envelope,
     build_response_provenance,
