@@ -5,7 +5,7 @@ This module makes the public Bintu package surface explicit and keeps legacy imp
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api.mcp.legacy import _mcp_error_response, call_tool, list_tools, router
+from bintu_api.mcp.http_api import _mcp_error_response, call_tool, list_tools, router
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,

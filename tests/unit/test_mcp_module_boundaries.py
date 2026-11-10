@@ -6,14 +6,14 @@ Important boundaries, invariants, and compatibility notes are documented here so
 """
 
 from bintu_api import mcp
-from bintu_api.mcp import legacy, protocol, schemas, tools
+from bintu_api.mcp import http_api, protocol, schemas, tools
 
 
-def test_legacy_imports_use_canonical_schemas_and_tool_models():
-    assert legacy.TOOL_INPUT_SCHEMA is schemas.TOOL_INPUT_SCHEMA
-    assert legacy.TOOL_OUTPUT_SCHEMA is schemas.TOOL_OUTPUT_SCHEMA
-    assert legacy.ToolArguments is tools.ToolArguments
-    assert legacy.ToolCallRequest is tools.ToolCallRequest
+def test_http_api_uses_canonical_schemas_and_tool_models():
+    assert http_api.TOOL_INPUT_SCHEMA is schemas.TOOL_INPUT_SCHEMA
+    assert http_api.TOOL_OUTPUT_SCHEMA is schemas.TOOL_OUTPUT_SCHEMA
+    assert http_api.ToolArguments is tools.ToolArguments
+    assert http_api.ToolCallRequest is tools.ToolCallRequest
     assert mcp.ToolArguments is tools.ToolArguments
 
 

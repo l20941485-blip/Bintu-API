@@ -1,4 +1,4 @@
-﻿"""MCP-compatible tool discovery and invocation helpers.
+"""MCP-compatible tool discovery and invocation helpers.
 
 
 Two surfaces intentionally share the same tool definitions:
@@ -31,6 +31,18 @@ from bintu_api.extraction.context import (
     _decode_source_text,
 )
 from bintu_api.extraction.service import fetch_and_extract as routes_common_fetch_and_extract
+from bintu_api.mcp.descriptions import (
+    CACHE_DESCRIPTION,
+    MAX_TOKENS_DESCRIPTION,
+    MODE_DESCRIPTION,
+    OUTPUT_SCHEMA_EXTRA_PROPERTIES,
+    PERSIST_DESCRIPTION,
+    RENDER_JS_DESCRIPTION,
+    URL_DESCRIPTION,
+)
+from bintu_api.mcp.descriptions import (
+    TOOL_DESCRIPTION as NEW_TOOL_DESCRIPTION,
+)
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS as _TOOL_ANNOTATIONS,
 )
@@ -50,18 +62,6 @@ from bintu_api.mcp.schemas import (
     TOOL_TITLE as _TOOL_TITLE,
 )
 from bintu_api.mcp.tools import ToolArguments, ToolCallRequest
-from bintu_api.mcp_descriptions import (
-    CACHE_DESCRIPTION,
-    MAX_TOKENS_DESCRIPTION,
-    MODE_DESCRIPTION,
-    OUTPUT_SCHEMA_EXTRA_PROPERTIES,
-    PERSIST_DESCRIPTION,
-    RENDER_JS_DESCRIPTION,
-    URL_DESCRIPTION,
-)
-from bintu_api.mcp_descriptions import (
-    TOOL_DESCRIPTION as NEW_TOOL_DESCRIPTION,
-)
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper.fetcher import TargetURLRejected
 from bintu_api.settings import Settings

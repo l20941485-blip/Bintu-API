@@ -5,13 +5,13 @@ This module owns a focused responsibility within the service and must remain iso
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api import mcp_descriptions as d
 from bintu_api.extraction.quality import (
     HINT_JAVASCRIPT,
     HINT_LITTLE_TEXT,
     LOW_YIELD_MAX_TEXT_TOKENS,
     assess_yield,
 )
+from bintu_api.mcp import descriptions as d
 
 # ---- low_yield --------------------------------------------------------------
 
