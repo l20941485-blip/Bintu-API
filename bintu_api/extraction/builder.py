@@ -1,4 +1,4 @@
-﻿"""Build canonical extraction results from fetched documents.
+"""Build canonical extraction results from fetched documents.
 
 This module depends only on public extraction and context APIs. It does not
 import FastAPI, cache, database, robots, or network implementation details.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import decode_source_text
 from bintu_api.scraper.fetcher import (
     FetchedHTML,

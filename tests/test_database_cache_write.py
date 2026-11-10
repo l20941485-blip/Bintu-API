@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from bintu_api.database import CacheWriteFailed, upsert_cached_markdown
+from bintu_api.extraction.cache_store import CacheWriteFailed, upsert_cached_markdown
 
 
 class CacheWriteTests(unittest.IsolatedAsyncioTestCase):

@@ -1,4 +1,4 @@
-﻿"""Perform persistent extraction-cache operations.
+"""Perform persistent extraction-cache operations.
 
 This module owns the timeout and failure-logging boundary for persistent
 cache reads and writes. Callers supply the database functions, preserving
@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from bintu_api.database import DATABASE_TIMEOUT_SECONDS
+from bintu_api.integrations.supabase import DATABASE_TIMEOUT_SECONDS
 from bintu_api.observability import log_cache_event
 
 logger = logging.getLogger("bintu_api.scrape")

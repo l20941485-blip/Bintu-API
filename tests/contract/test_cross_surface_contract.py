@@ -1,4 +1,4 @@
-﻿"""Phase 2 cross-surface contract tests.
+"""Phase 2 cross-surface contract tests.
 
 REST, legacy MCP, and Streamable MCP intentionally expose different transport
 shapes, but they must agree on the shared extraction semantics: text, URL,
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.mcp import TOOL_NAME
 from bintu_api.scraper.fetcher import FetchedHTML
 from bintu_api.scraper.robots import RobotsDecision

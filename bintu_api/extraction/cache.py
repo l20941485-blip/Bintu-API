@@ -1,4 +1,4 @@
-﻿"""Cache-economics helpers for extraction results.
+"""Cache-economics helpers for extraction results.
 
 This module keeps persisted cache savings and provenance-sensitive metadata in a
 single place so the REST and MCP surfaces preserve the same economics without
@@ -9,7 +9,7 @@ persisted economics instead of recomputing a misleading zero-savings baseline.
 
 from __future__ import annotations
 
-from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import CacheEconomics
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_tokens_saved_estimate
 

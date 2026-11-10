@@ -1,4 +1,4 @@
-﻿"""Orchestrate the shared scrape extraction workflow.
+"""Orchestrate the shared scrape extraction workflow.
 
 This service owns the fetch -> robots -> cache -> extract boundary. Its
 collaborators are injected by the caller, keeping this module independent of
@@ -10,9 +10,6 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from bintu_api.database import (
-    CachedMarkdown,
-)
 from bintu_api.extraction.builder import build_cached_markdown
 from bintu_api.extraction.cache_policy import (
     compute_cache_key,
@@ -20,6 +17,7 @@ from bintu_api.extraction.cache_policy import (
     is_persistent_cache_enabled,
     resolve_extraction_cap,
 )
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.cacheaccess import (
     should_read_persistent_cache,
     should_write_persistent_cache,

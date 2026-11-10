@@ -8,10 +8,9 @@ Important boundaries, invariants, and compatibility notes are documented here so
 import unittest
 from unittest.mock import AsyncMock, Mock
 
-from bintu_api.database import increment_developer_usage as legacy_increment
-from bintu_api.database import increment_token_usage
 from bintu_api.metering.service import UsageEvent, record_usage_event
-from bintu_api.metering.supabase import increment_usage
+from bintu_api.metering.supabase import increment_developer_usage as legacy_increment
+from bintu_api.metering.supabase import increment_token_usage, increment_usage
 
 
 class MeteringBoundaryTests(unittest.IsolatedAsyncioTestCase):

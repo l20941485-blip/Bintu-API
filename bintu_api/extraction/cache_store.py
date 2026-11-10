@@ -1,4 +1,4 @@
-"""Asynchronous Supabase access for persistent scrape caching and usage counts."""
+"""Supabase persistence for extracted Markdown and cache metadata."""
 
 from __future__ import annotations
 
@@ -6,16 +6,6 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeAlias
-
-from bintu_api.integrations.supabase import (
-    DATABASE_TIMEOUT_SECONDS,  # noqa: F401
-    close_supabase_client,  # noqa: F401
-    create_supabase_client,  # noqa: F401
-)
-from bintu_api.metering.supabase import (  # noqa: F401
-    increment_developer_usage,
-    increment_token_usage,
-)
 
 if TYPE_CHECKING:
     from supabase import AsyncClient  # type: ignore[import-not-found,import-unresolved] # pyright: ignore[reportMissingImports]

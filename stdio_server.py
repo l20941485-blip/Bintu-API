@@ -1,4 +1,4 @@
-﻿"""Stdio MCP entry point for Glama's managed source-build checker.
+"""Stdio MCP entry point for Glama's managed source-build checker.
 
 Reads one JSON-RPC message per line from stdin and writes one JSON-RPC
 response per line to stdout. Reuses Bintu's existing Streamable HTTP
@@ -12,10 +12,7 @@ from types import SimpleNamespace
 
 from starlette.requests import Request
 
-from bintu_api.database import (
-    close_supabase_client,
-    create_supabase_client,
-)
+from bintu_api.integrations.supabase import close_supabase_client, create_supabase_client
 from bintu_api.mcp.streamable import (
     _initialize_result,
     _rpc_error,

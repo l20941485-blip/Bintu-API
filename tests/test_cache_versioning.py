@@ -3,11 +3,7 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from bintu_api.database import (
-    EXTRACTOR_VERSION,
-    get_cached_markdown,
-    upsert_cached_markdown,
-)
+from bintu_api.extraction.cache_store import EXTRACTOR_VERSION, get_cached_markdown, upsert_cached_markdown
 
 
 class CacheVersioningTests(unittest.IsolatedAsyncioTestCase):
