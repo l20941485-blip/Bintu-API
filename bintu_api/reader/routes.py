@@ -11,13 +11,13 @@ from pydantic import BaseModel, Field, StrictInt
 from bintu_api.api.routes import common as scrape_routes
 from bintu_api.auth import api_key_scheme, has_valid_proxy_secret
 from bintu_api.metering.service import UsageEvent, queue_usage_event
-from bintu_api.reader_auth import reader_owner
-from bintu_api.reader_extraction import (
+from bintu_api.reader.auth import reader_owner
+from bintu_api.reader.extraction import (
     ReaderDocumentEmpty,
     ReaderDocumentTooLarge,
     snapshot_from_document,
 )
-from bintu_api.reader_store import SnapshotUnavailable, StoredPage
+from bintu_api.reader.store import SnapshotUnavailable, StoredPage
 from bintu_api.scraper import (
     PayloadTooLarge,
     TargetURLRejected,
@@ -233,5 +233,6 @@ async def continue_document(request: Request, payload: ContinueRequest):
     response = _response(result)
     await _record_usage(request)
     return response
+
 
 

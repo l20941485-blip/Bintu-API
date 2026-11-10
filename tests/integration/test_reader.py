@@ -1,4 +1,4 @@
-"""Test Reader for Bintu.
+﻿"""Test Reader for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -8,7 +8,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 import pytest
 
 from bintu_api.context import TOKEN_METHOD, count_tokens
-from bintu_api.reader import (
+from bintu_api.reader.service import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     DocumentSnapshot,
     read_page,
@@ -146,5 +146,6 @@ def test_rejects_oversized_document_without_silent_truncation():
 def test_rejects_non_string_documents(text):
     with pytest.raises(ValueError, match="string"):
         DocumentSnapshot(text)
+
 
 
