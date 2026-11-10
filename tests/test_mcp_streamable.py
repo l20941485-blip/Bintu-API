@@ -1,4 +1,4 @@
-﻿"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
+"""Tests for the standard MCP Streamable HTTP endpoint (POST /mcp)."""
 
 import json
 import unittest
@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.mcp import (
     TOOL_ANNOTATIONS,
     TOOL_INPUT_SCHEMA,

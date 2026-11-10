@@ -1,4 +1,4 @@
-﻿"""Unit tests for the shared scrape-service orchestration boundary."""
+"""Unit tests for the shared scrape-service orchestration boundary."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bintu_api.database import CachedMarkdown
 from bintu_api.extraction.cache_policy import DEFAULT_MAX_TEXT_CHARACTERS, compute_cache_key
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.scrape_service import ScrapeService

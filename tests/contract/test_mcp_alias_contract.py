@@ -1,4 +1,4 @@
-﻿"""Test Mcp Alias Contract for Bintu.
+"""Test Mcp Alias Contract for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.settings import Settings
 from main import create_app
 

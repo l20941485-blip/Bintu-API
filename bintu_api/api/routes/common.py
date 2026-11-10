@@ -20,11 +20,7 @@ from fastapi import Request
 from bintu_api.auth import has_valid_proxy_secret as has_valid_proxy_secret
 from bintu_api.auth import rate_limit_identity as rate_limit_identity
 from bintu_api.auth import verify_api_access as verify_api_access
-from bintu_api.database import (
-    CachedMarkdown,
-    get_cached_markdown,
-    upsert_cached_markdown,
-)
+from bintu_api.extraction.cache_store import CachedMarkdown, get_cached_markdown, upsert_cached_markdown
 from bintu_api.extraction.context import _decode_source_text
 from bintu_api.extraction.output import (  # noqa: F401
     TOKEN_METHOD,

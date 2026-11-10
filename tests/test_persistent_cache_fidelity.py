@@ -1,4 +1,4 @@
-﻿"""Persistent-cache hits must preserve extracted Markdown exactly."""
+"""Persistent-cache hits must preserve extracted Markdown exactly."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from bintu_api.database import CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.settings import Settings
 from main import create_app
 
