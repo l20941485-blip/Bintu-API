@@ -17,7 +17,7 @@ from bintu_api.database import (
     close_supabase_client,
     create_supabase_client,
 )
-from bintu_api.mcp_streamable import (
+from bintu_api.mcp.streamable import (
     _initialize_result,
     _rpc_error,
     _rpc_result,
