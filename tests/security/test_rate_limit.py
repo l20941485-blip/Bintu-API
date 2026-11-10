@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from bintu_api import rate_limit
+from bintu_api.security import rate_limit
 from bintu_api.settings import Settings
 
 

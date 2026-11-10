@@ -1,4 +1,4 @@
-﻿"""HTTP route orchestration for the Bintu API.
+"""HTTP route orchestration for the Bintu API.
 
 This module coordinates API request handling while keeping business logic in the service and extraction layers.
 
@@ -13,10 +13,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from bintu_api.middleware.usage import UsageMeteringMiddleware
-from bintu_api.rate_limit import BurstRateLimiter
 from bintu_api.reader.routes import router
 from bintu_api.reader.store import SnapshotStore
 from bintu_api.scraper.fetcher import FetchedHTML, TargetURLRejected
+from bintu_api.security.rate_limit import BurstRateLimiter
 from bintu_api.settings import Settings
 
 KEY = "reader-route-test-key"

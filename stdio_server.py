@@ -20,8 +20,8 @@ from bintu_api.mcp.streamable import (
     _tools_call_result,
     _tools_list_result,
 )
-from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.scraper.cache import TTLCache
+from bintu_api.security.rate_limit import create_rate_limiter
 from bintu_api.settings import Settings
 
 METHOD_NOT_FOUND = -32601

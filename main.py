@@ -14,11 +14,11 @@ from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp.streamable import router as mcp_streamable_router
 from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
-from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.reader.routes import router as reader_router
 from bintu_api.reader.store import SnapshotStore
 from bintu_api.scraper.cache import TTLCache
 from bintu_api.security.auth import verify_api_access
+from bintu_api.security.rate_limit import create_rate_limiter
 from bintu_api.settings import Settings
 
 if hasattr(sys.stdout, "reconfigure"):
