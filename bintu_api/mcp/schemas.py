@@ -1,11 +1,11 @@
-﻿"""Tool metadata and JSON schema definitions for Bintu MCP.
+"""Tool metadata and JSON schema definitions for Bintu MCP.
 
 This module owns the public tool contract and keeps JSON schema metadata separate from invocation logic and FastAPI routing.
 
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api.mcp_descriptions import (
+from bintu_api.mcp.descriptions import (
     CACHE_DESCRIPTION,
     CHUNK_TOKEN_BUDGET_DESCRIPTION,
     FOOTNOTE_URL_POLICY_DESCRIPTION,
@@ -19,7 +19,7 @@ from bintu_api.mcp_descriptions import (
     SECTIONS_DESCRIPTION,
     URL_DESCRIPTION,
 )
-from bintu_api.mcp_descriptions import TOOL_DESCRIPTION as TOOL_DESCRIPTION
+from bintu_api.mcp.descriptions import TOOL_DESCRIPTION as TOOL_DESCRIPTION
 
 TOOL_NAME = "bintu_scrape_text"
 TOOL_TITLE = "Bintu Scrape Text"
