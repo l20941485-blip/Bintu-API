@@ -1,4 +1,4 @@
-﻿"""Health, gateway, and version endpoints for the Bintu API.
+"""Health, gateway, and version endpoints for the Bintu API.
 
 This module owns the public liveness, gateway-check, and build-metadata
 routes. It performs no extraction, caching, or metering work.
@@ -12,7 +12,7 @@ import os
 
 from fastapi import APIRouter, Request
 
-from bintu_api.schemas import (
+from bintu_api.api.schemas import (
     GatewayResponse,
     HealthResponse,
     VersionResponse,

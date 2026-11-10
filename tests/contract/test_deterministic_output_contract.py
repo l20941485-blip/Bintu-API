@@ -1,4 +1,4 @@
-﻿"""Deterministic output contract tests for Bintu's current behavior.
+"""Deterministic output contract tests for Bintu's current behavior.
 
 Locks the existing, shipped contract without implementing new features:
 
@@ -24,6 +24,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 
+from bintu_api.api.schemas import CacheInfo, Provenance
 from bintu_api.errors.codes import ERROR_CODES, normalize_error_code
 from bintu_api.errors.tool_errors import build_mcp_tool_error_result
 from bintu_api.extraction.context import ContextResult, count_tokens, normalize_mode
@@ -39,7 +40,6 @@ from bintu_api.mcp import (
     TOOL_NAME,
     TOOL_OUTPUT_SCHEMA,
 )
-from bintu_api.schemas import CacheInfo, Provenance
 from bintu_api.scraper.fetcher import UpstreamHTTPError
 from bintu_api.settings import Settings
 from main import create_app

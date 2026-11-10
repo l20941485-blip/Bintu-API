@@ -3,7 +3,7 @@
 import unittest
 from datetime import UTC, datetime
 
-from bintu_api.schemas import CacheInfo, Provenance
+from bintu_api.api.schemas import CacheInfo, Provenance
 
 
 class ProvenanceTests(unittest.TestCase):
