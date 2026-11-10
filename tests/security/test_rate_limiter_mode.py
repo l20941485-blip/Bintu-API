@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 
-from bintu_api.rate_limit import (
+from bintu_api.security.rate_limit import (
     RATE_LIMITER_MODE,
     BurstRateLimiter,
     RedisRateLimiter,
@@ -78,7 +78,7 @@ def test_local_limiter_reports_fallback_mode():
 
 
 def test_redis_limiter_reports_redis_mode():
-    with patch("bintu_api.rate_limit.redis.from_url", return_value=WorkingRedis()):
+    with patch("bintu_api.security.rate_limit.redis.from_url", return_value=WorkingRedis()):
         limiter = create_rate_limiter(settings("redis://localhost:6379/0"))
 
     assert isinstance(limiter, RedisRateLimiter)
@@ -87,7 +87,7 @@ def test_redis_limiter_reports_redis_mode():
 
 def test_redis_failure_reports_fallback_mode_and_uses_local_guard():
     with patch(
-        "bintu_api.rate_limit.redis.from_url",
+        "bintu_api.security.rate_limit.redis.from_url",
         return_value=FailingRedis(),
     ):
         limiter = create_rate_limiter(settings("redis://localhost:6379/0"))
@@ -109,7 +109,7 @@ def test_redis_failure_reports_fallback_mode_and_uses_local_guard():
 @pytest.mark.parametrize("over_limit", [False, True])
 def test_redis_recovery_restores_redis_mode(over_limit):
     with patch(
-        "bintu_api.rate_limit.redis.from_url",
+        "bintu_api.security.rate_limit.redis.from_url",
         return_value=FailingRedis(),
     ):
         limiter = create_rate_limiter(settings("redis://localhost:6379/0"))
@@ -117,7 +117,7 @@ def test_redis_recovery_restores_redis_mode(over_limit):
     assert gauge_value() == 1
 
     with patch(
-        "bintu_api.rate_limit.time.monotonic",
+        "bintu_api.security.rate_limit.time.monotonic",
         return_value=100.0,
     ):
         limiter.check("caller")
@@ -133,7 +133,7 @@ def test_redis_recovery_restores_redis_mode(over_limit):
     with (
         patch.object(limiter, "_redis", recovered),
         patch(
-            "bintu_api.rate_limit.time.monotonic",
+            "bintu_api.security.rate_limit.time.monotonic",
             return_value=recovery_time,
         ),
     ):
