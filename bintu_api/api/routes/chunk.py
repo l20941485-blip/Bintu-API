@@ -16,6 +16,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Security
 
+from bintu_api.api.routes import common as routes_common
 from bintu_api.api.schemas import (
     ErrorResponse,
     MobileScrapeTextRequest,
@@ -23,7 +24,6 @@ from bintu_api.api.schemas import (
     ScrapeChunksResponse,
 )
 from bintu_api.errors.upstream import translate_upstream_error
-from bintu_api.extraction import service as routes_common
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import split_into_chunks
 from bintu_api.extraction.output import TOKEN_METHOD

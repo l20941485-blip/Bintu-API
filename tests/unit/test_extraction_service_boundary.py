@@ -120,3 +120,27 @@ async def test_fetch_and_extract_from_context_builds_service():
 def test_common_fetch_and_extract_delegates_to_private_boundary():
     assert common.fetch_and_extract.__name__ == "fetch_and_extract"
     assert common._fetch_and_extract.__name__ == "_fetch_and_extract"
+
+def test_service_boundary_has_no_route_fallback():
+    import ast
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "bintu_api"
+        / "extraction"
+        / "service.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            assert node.name != "__getattr__"
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert module != "bintu_api.api"
+            assert not module.startswith("bintu_api.api.")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name != "bintu_api.api"
+                assert not alias.name.startswith("bintu_api.api.")

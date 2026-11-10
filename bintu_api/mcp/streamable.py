@@ -52,12 +52,12 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from bintu_api.api.routes.common import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
 from bintu_api.extraction.context import (
     _decode_source_text,
     normalize_mode,
 )
-from bintu_api.extraction.service import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,
