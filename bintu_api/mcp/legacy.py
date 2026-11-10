@@ -6,7 +6,7 @@ Two surfaces intentionally share the same tool definitions:
 
 - /mcp/tools and /mcp/tools/call are legacy JSON helper endpoints.
 - /mcp is the standard stateless Streamable HTTP endpoint implemented in
-  bintu_api.mcp_streamable.
+  bintu_api.mcp.streamable.
 
 
 Successful tool calls expose the extraction envelope as structuredContent
