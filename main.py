@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -17,7 +17,7 @@ from bintu_api.database import (
 )
 from bintu_api.discovery import router as discovery_router
 from bintu_api.mcp import router as mcp_router
-from bintu_api.mcp_streamable import router as mcp_streamable_router
+from bintu_api.mcp.streamable import router as mcp_streamable_router
 from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.observability import RequestObservabilityMiddleware, metrics_response
 from bintu_api.rate_limit import create_rate_limiter

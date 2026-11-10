@@ -6,7 +6,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from bintu_api.mcp_streamable import MAX_MCP_BODY_BYTES
+from bintu_api.mcp.streamable import MAX_MCP_BODY_BYTES
 from bintu_api.settings import Settings
 from main import create_app
 

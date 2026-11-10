@@ -134,7 +134,7 @@ from bintu_api.settings import Settings
 
 MAX_MCP_BODY_BYTES = _PROTOCOL_MAX_MCP_BODY_BYTES
 
-logger = logging.getLogger("bintu_api.mcp_streamable")
+logger = logging.getLogger("bintu_api.mcp.streamable")
 
 router = APIRouter(tags=["MCP"])
 
