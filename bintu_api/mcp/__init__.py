@@ -1,4 +1,4 @@
-"""Package exports for Bintu.
+﻿"""Package exports for Bintu.
 
 This module makes the public Bintu package surface explicit and keeps legacy imports stable while the modular architecture is being adopted.
 
