@@ -6,7 +6,7 @@ import hashlib
 import unittest
 from unittest.mock import MagicMock
 
-from bintu_api.auth import mcp_rate_limit_identity
+from bintu_api.security.auth import mcp_rate_limit_identity
 from bintu_api.settings import Settings
 
 

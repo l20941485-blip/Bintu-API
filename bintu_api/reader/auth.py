@@ -10,7 +10,7 @@ import hmac
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from bintu_api.auth import has_valid_proxy_secret, verify_api_access
+from bintu_api.security.auth import has_valid_proxy_secret, verify_api_access
 from bintu_api.settings import Settings
 
 

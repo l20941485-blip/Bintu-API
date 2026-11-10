@@ -16,7 +16,6 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Security
 
-from bintu_api.auth import api_key_scheme
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction import service as routes_common
 from bintu_api.extraction.cache_store import CachedMarkdown
@@ -30,6 +29,7 @@ from bintu_api.schemas import (
     ScrapeChunksResponse,
 )
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
+from bintu_api.security.auth import api_key_scheme
 
 router = APIRouter(tags=["Extraction"])
 
