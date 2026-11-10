@@ -1,4 +1,4 @@
-"""Test Chunking for Bintu.
+﻿"""Test Chunking for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -80,7 +80,7 @@ def test_chunk_mode_preserves_paragraph_spacing():
 
 
 def test_actual_chunker_preserves_extracted_table_rows():
-    from bintu_api.context import count_tokens, split_into_chunks
+    from bintu_api.extraction.context import count_tokens, split_into_chunks
 
     html = (
         b"<main><table>"
@@ -105,7 +105,7 @@ def test_actual_chunker_preserves_extracted_table_rows():
 
 
 def test_actual_chunker_preserves_url_when_splitting():
-    from bintu_api.context import count_tokens, split_into_chunks
+    from bintu_api.extraction.context import count_tokens, split_into_chunks
 
     url = "https://example.org/agreements.htm"
     text = f"Read the introduction carefully. Visit {url} for the agreement. Keep a copy for your records."
@@ -121,7 +121,7 @@ def test_actual_chunker_preserves_url_when_splitting():
 
 
 def test_actual_chunker_preserves_oversized_url():
-    from bintu_api.context import count_tokens, split_into_chunks
+    from bintu_api.extraction.context import count_tokens, split_into_chunks
 
     url = "https://example.org/" + ("a" * 120)
     budget = 8
@@ -133,7 +133,7 @@ def test_actual_chunker_preserves_oversized_url():
 
 
 def test_actual_chunker_preserves_oversized_table_row():
-    from bintu_api.context import count_tokens, split_into_chunks
+    from bintu_api.extraction.context import count_tokens, split_into_chunks
 
     row = "VeryLongName" * 10 + " | value"
     text = "Name | Value\n--- | ---\n" + row
@@ -147,7 +147,7 @@ def test_actual_chunker_preserves_oversized_table_row():
 
 
 def test_actual_chunker_preserves_table_embedded_in_prose():
-    from bintu_api.context import count_tokens, split_into_chunks
+    from bintu_api.extraction.context import count_tokens, split_into_chunks
 
     rows = [
         "Domain | Domain (A-label) | Language | Script",
@@ -179,7 +179,7 @@ def test_actual_chunker_preserves_table_embedded_in_prose():
 
 
 def test_actual_chunker_keeps_wide_table_row_intact():
-    from bintu_api.context import count_tokens, split_into_chunks
+    from bintu_api.extraction.context import count_tokens, split_into_chunks
 
     target_row = "\u03b4\u03bf\u03ba\u03b9\u03bc\u03ae | xn--jxalpdlp | Greek, Modern (1453-) | Greek"
     rows = [
@@ -213,5 +213,6 @@ def test_actual_chunker_keeps_wide_table_row_intact():
     )
     assert sum(chunk.count(target_row) for chunk in chunks) == 1
     assert all(count_tokens(chunk) <= budget for chunk in chunks)
+
 
 

@@ -1,4 +1,4 @@
-"""MCP-compatible tool discovery and invocation helpers.
+﻿"""MCP-compatible tool discovery and invocation helpers.
 
 
 Two surfaces intentionally share the same tool definitions:
@@ -26,10 +26,10 @@ from bintu_api.auth import (
     mcp_rate_limit_identity,
     verify_mcp_api_access,
 )
-from bintu_api.context import (
+from bintu_api.extraction.cache import build_cache_economics
+from bintu_api.extraction.context import (
     _decode_source_text,
 )
-from bintu_api.extraction.cache import build_cache_economics
 from bintu_api.extraction.service import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS as _TOOL_ANNOTATIONS,
@@ -494,5 +494,6 @@ async def call_tool(
         "structuredContent": envelope,
         "isError": False,
     }
+
 
 

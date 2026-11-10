@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from bintu_api.context import ContextResult
+from bintu_api.extraction.context import ContextResult
 from bintu_api.security.url_safety import sanitize_url
 
 
@@ -132,4 +132,5 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
 def build_mcp_text_payload(envelope: dict[str, Any]) -> str:
     """Serialize the MCP envelope exactly as the existing endpoint does."""
     return json.dumps(envelope)
+
 

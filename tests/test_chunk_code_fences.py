@@ -1,6 +1,6 @@
-"""Tests for balanced Markdown code fences during bounded chunking."""
+﻿"""Tests for balanced Markdown code fences during bounded chunking."""
 
-from bintu_api.context import count_tokens, split_into_chunks
+from bintu_api.extraction.context import count_tokens, split_into_chunks
 
 
 def test_small_code_fence_stays_atomic():
@@ -35,5 +35,6 @@ def test_code_and_prose_do_not_lose_fence_balance():
     assert len(chunks) > 1
     for chunk in chunks:
         assert chunk.count("```") % 2 == 0
+
 
 

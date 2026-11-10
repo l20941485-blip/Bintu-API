@@ -1,4 +1,4 @@
-"""Regression tests for summarize mode applied to cached extractions."""
+﻿"""Regression tests for summarize mode applied to cached extractions."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from bintu_api.context import (
+from bintu_api.extraction.context import (
     CacheEconomics,
     extract_context,
 )
@@ -121,5 +121,6 @@ def test_scrape_mode_enforces_max_tokens_and_reports_token_budget() -> None:
     assert result.chunks[0]["approx_tokens"] == result.approx_tokens
     # The delivered text must respect the requested token budget.
     assert len(result.text) <= 20 * 4
+
 
 

@@ -1,8 +1,8 @@
-"""Local lossless paging with an approximate content-only token budget."""
+﻿"""Local lossless paging with an approximate content-only token budget."""
 
 from dataclasses import dataclass
 
-from bintu_api.context import TOKEN_METHOD, count_tokens
+from bintu_api.extraction.context import TOKEN_METHOD, count_tokens
 
 DEFAULT_MAX_DOCUMENT_CHARACTERS = 200_000
 
@@ -85,3 +85,4 @@ def read_page(
         token_method=TOKEN_METHOD,
         boundary_split=boundary_split,
     )
+

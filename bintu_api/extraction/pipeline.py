@@ -1,4 +1,4 @@
-"""Extraction pipeline orchestration for the REST and MCP surfaces.
+﻿"""Extraction pipeline orchestration for the REST and MCP surfaces.
 
 This module owns the orchestration step that turns a fetched document or a
 persisted cache row into the canonical ``ContextResult`` used by the public
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from bintu_api.context import ContextResult, extract_context
+from bintu_api.extraction.context import ContextResult, extract_context
 from bintu_api.settings import Settings
 
 __all__ = [
@@ -72,3 +72,4 @@ async def run_extraction(
 async def extract_document(*args: Any, **kwargs: Any) -> ContextResult:
     """Compatibility alias for extraction pipeline consumers."""
     return await run_extraction(*args, **kwargs)
+

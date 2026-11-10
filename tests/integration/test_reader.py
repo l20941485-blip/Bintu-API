@@ -7,7 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 import pytest
 
-from bintu_api.context import TOKEN_METHOD, count_tokens
+from bintu_api.extraction.context import TOKEN_METHOD, count_tokens
 from bintu_api.reader.service import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     DocumentSnapshot,
@@ -146,6 +146,7 @@ def test_rejects_oversized_document_without_silent_truncation():
 def test_rejects_non_string_documents(text):
     with pytest.raises(ValueError, match="string"):
         DocumentSnapshot(text)
+
 
 
 
