@@ -84,7 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # dependencies on the scrape routes (bintu_api.api.routes / bintu_api.mcp) make
     # FastAPI emit components.securitySchemes (named ApiKeyAuth / BearerAuth)
     # plus the per-operation security arrays, so Swagger UI offers "Authorize".
-    # Runtime auth is unchanged Ã¢â‚¬â€ verify_api_access / verify_supabase_user
+    # Runtime auth is unchanged - verify_api_access / verify_supabase_user
     # still enforce the actual credentials; the schemes are auto_error=False
     # documentation markers only.
     # CORSMiddleware is added before RequestObservabilityMiddleware, which makes
