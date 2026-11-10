@@ -1,4 +1,4 @@
-"""Scrape-text extraction endpoints for the Bintu API.
+﻿"""Scrape-text extraction endpoints for the Bintu API.
 
 This module owns the REST scrape-text route, the mobile authenticated route,
 and the shared scrape helper that applies sections selection and token
@@ -38,7 +38,7 @@ from bintu_api.schemas import (
     MobileScrapeTextRequest,
     ScrapeTextResponse,
 )
-from bintu_api.scraper import _compute_approx_tokens
+from bintu_api.scraper.fetcher import _compute_approx_tokens
 
 router = APIRouter(tags=["Extraction"])
 
@@ -313,3 +313,4 @@ async def _scrape_text(
             url=url,
             request_id=request_id,
         ) from error
+

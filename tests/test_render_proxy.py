@@ -8,7 +8,7 @@ from dataclasses import replace
 from unittest.mock import MagicMock, patch
 
 from bintu_api.render.proxy import open_validated_socket
-from bintu_api.scraper import TargetURLRejected
+from bintu_api.scraper.fetcher import TargetURLRejected
 from bintu_api.settings import Settings
 
 
@@ -25,7 +25,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
     def test_rejected_dns_does_not_create_socket(self) -> None:
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 side_effect=TargetURLRejected("Non-public destination"),
             ),
             patch("bintu_api.render.proxy.socket.socket") as factory,
@@ -43,7 +43,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=("93.184.216.34",),
             ) as resolve,
             patch(
@@ -68,7 +68,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=("2606:4700::1111",),
             ),
             patch(
@@ -92,7 +92,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=("93.184.216.34", "1.1.1.1"),
             ) as resolve,
             patch(
@@ -117,7 +117,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=("93.184.216.34",),
             ),
             patch(
@@ -142,7 +142,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
                 )
 
                 with (
-                    patch("bintu_api.scraper.resolve_public_addresses") as resolve,
+                    patch("bintu_api.scraper.fetcher.resolve_public_addresses") as resolve,
                     patch("bintu_api.render.proxy.socket.socket") as factory,
                 ):
                     with self.assertRaises(ValueError):
@@ -161,7 +161,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=("93.184.216.34",),
             ),
             patch(
@@ -196,7 +196,7 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=("93.184.216.34", "1.1.1.1"),
             ),
             patch(
@@ -216,6 +216,8 @@ class RenderProxyConnectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
 
 
 

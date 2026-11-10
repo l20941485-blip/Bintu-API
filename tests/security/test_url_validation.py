@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from bintu_api.scraper import TargetURLRejected, _parse_target
+from bintu_api.scraper.fetcher import TargetURLRejected, _parse_target
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -154,6 +154,7 @@ class UrlValidationRouteMappingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

@@ -6,7 +6,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 """
 
 from bintu_api.api.routes import common as routes
-from bintu_api.scraper import extract_text_result
+from bintu_api.scraper.fetcher import extract_text_result
 
 
 def test_link_modes_are_defined():
@@ -34,6 +34,7 @@ def test_inline_links_are_separated():
         base_url="https://example.com/",
     )
     assert ")salt" not in result.text
+
 
 
 

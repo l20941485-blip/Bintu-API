@@ -18,7 +18,7 @@ from bintu_api.reader.extraction import (
     snapshot_from_document,
 )
 from bintu_api.reader.store import SnapshotUnavailable, StoredPage
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
@@ -233,6 +233,7 @@ async def continue_document(request: Request, payload: ContinueRequest):
     response = _response(result)
     await _record_usage(request)
     return response
+
 
 
 

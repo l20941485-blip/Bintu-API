@@ -1,11 +1,11 @@
-"""Tests for pre-DNS rejection of ambiguous numeric URL hosts."""
+﻿"""Tests for pre-DNS rejection of ambiguous numeric URL hosts."""
 
 from __future__ import annotations
 
 import unittest
 from unittest.mock import patch
 
-from bintu_api.scraper import TargetURLRejected, _parse_target
+from bintu_api.scraper.fetcher import TargetURLRejected, _parse_target
 from bintu_api.settings import Settings
 
 
@@ -29,7 +29,7 @@ class AmbiguousHostTests(unittest.TestCase):
 
         for url in urls:
             with self.subTest(url=url):
-                with patch("bintu_api.scraper.socket.getaddrinfo") as getaddrinfo:
+                with patch("bintu_api.scraper.fetcher.socket.getaddrinfo") as getaddrinfo:
                     with self.assertRaises(TargetURLRejected):
                         _parse_target(url, self.settings)
 
@@ -51,5 +51,7 @@ class AmbiguousHostTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
 
 

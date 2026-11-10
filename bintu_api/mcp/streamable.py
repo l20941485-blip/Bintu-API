@@ -121,7 +121,7 @@ from bintu_api.observability import (
     log_extraction_completed,
     log_extraction_failed,
 )
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
@@ -884,6 +884,7 @@ async def mcp_listen_nested_alias(request: Request) -> Response:
 async def mcp_unsupported_methods() -> Response:
     # Stateless server: no sessions to end (DELETE); PUT/PATCH are undefined.
     return Response(status_code=405, headers={"Allow": "POST, GET"})
+
 
 
 

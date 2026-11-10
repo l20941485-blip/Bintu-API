@@ -719,7 +719,7 @@ def extract_text_result(
 
     fallback_text = None
     if len(bs4_text) == 0 and comment_thread_root is None:
-        from bintu_api.scraper import _trafilatura_fallback as _trafilatura_fallback
+        from bintu_api.scraper.fetcher import _trafilatura_fallback as _trafilatura_fallback
 
         fallback_text = _trafilatura_fallback(
             html_bytes,
@@ -741,5 +741,6 @@ def extract_text_result(
         text,
         max_characters,
     )
+
 
 

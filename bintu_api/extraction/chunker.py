@@ -12,7 +12,7 @@ import re
 from urllib.parse import urljoin
 
 try:  # same estimator as the rest of the service
-    from bintu_api.scraper import _compute_approx_tokens as count_tokens
+    from bintu_api.scraper.fetcher import _compute_approx_tokens as count_tokens
 except ImportError:  # standalone use and tests
 
     def count_tokens(text: str) -> int:
@@ -386,3 +386,4 @@ def split_into_chunks(text: str, max_tokens: int, *, keep_lead_ins: bool = True)
 
     chunks = _pack_chunk_pieces(pieces, max_tokens, "\n")
     return _keep_lead_ins(chunks, max_tokens) if keep_lead_ins else chunks
+

@@ -7,7 +7,7 @@ patch seams in `bintu_api.api.routes.common`.
 
 from __future__ import annotations
 
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
 
 
 async def read_memory_cache(cache, cache_key: str, skip_cache: bool, sections):
@@ -27,3 +27,4 @@ def write_memory_cache(
     """Replace cached HTML only after a successful, nonempty extraction."""
     if cache_layer == "none" and extracted_text.strip():
         cache.set(cache_key, document)
+

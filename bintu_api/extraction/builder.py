@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from bintu_api.database import CachedMarkdown
 from bintu_api.extraction.context import decode_source_text
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     FetchedHTML,
     compute_approx_tokens,
     compute_tokens_saved_estimate,
@@ -42,3 +42,4 @@ def build_cached_markdown(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at or datetime.now(UTC).isoformat(),
     )
+

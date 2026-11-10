@@ -13,7 +13,7 @@ import http.client
 import unittest
 from unittest.mock import Mock, patch
 
-from bintu_api import robots
+from bintu_api.scraper import robots
 from bintu_api.settings import Settings
 
 
@@ -27,7 +27,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.clock = [100.0]
         self.enterContext(
             patch(
-                "bintu_api.robots.time.monotonic",
+                "bintu_api.scraper.robots.time.monotonic",
                 side_effect=lambda: self.clock[0],
             )
         )
@@ -43,13 +43,13 @@ class RobotsTransportTests(unittest.TestCase):
 
         self.resolve = self.enterContext(
             patch(
-                "bintu_api.robots.resolve_public_addresses",
+                "bintu_api.scraper.robots.resolve_public_addresses",
                 return_value=["93.184.216.34"],
             )
         )
         self.make_connection = self.enterContext(
             patch(
-                "bintu_api.robots._make_connection",
+                "bintu_api.scraper.robots._make_connection",
                 return_value=self.connection,
             )
         )
@@ -247,7 +247,7 @@ class RobotsTransportTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.robots.time.monotonic",
+                "bintu_api.scraper.robots.time.monotonic",
                 side_effect=lambda: clock[0],
             ),
             self.assertRaises(robots.RobotsUnreachable),
@@ -395,7 +395,7 @@ class RobotsTransportTests(unittest.TestCase):
         self.resolve.side_effect = resolve
 
         with patch(
-            "bintu_api.robots.robots_mode",
+            "bintu_api.scraper.robots.robots_mode",
             return_value="enforce",
         ):
             decision = robots.robots_decision(

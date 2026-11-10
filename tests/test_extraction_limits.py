@@ -1,10 +1,10 @@
-"""Text extraction must respect limits and avoid unsafe output expansion."""
+﻿"""Text extraction must respect limits and avoid unsafe output expansion."""
 
 from __future__ import annotations
 
 import unittest
 
-from bintu_api.scraper import extract_text_result
+from bintu_api.scraper.fetcher import extract_text_result
 
 
 class ExtractionLimitTests(unittest.TestCase):
@@ -170,5 +170,6 @@ class ExtractionVisibilityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

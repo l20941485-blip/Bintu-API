@@ -38,7 +38,7 @@ from bintu_api.extraction.request_policy import (
     validate_link_mode,
 )
 from bintu_api.extraction.scrape_options import ScrapeOptions
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
 
 logger = logging.getLogger("bintu_api.scrape")
 
@@ -225,6 +225,7 @@ class ScrapeService:
             )
 
         return document, result, cache_layer
+
 
 
 

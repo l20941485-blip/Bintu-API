@@ -40,7 +40,7 @@ from bintu_api.mcp import (
     TOOL_OUTPUT_SCHEMA,
 )
 from bintu_api.schemas import CacheInfo, Provenance
-from bintu_api.scraper import UpstreamHTTPError
+from bintu_api.scraper.fetcher import UpstreamHTTPError
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -661,6 +661,7 @@ class ResponseEnvelopeContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

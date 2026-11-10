@@ -29,7 +29,7 @@ from bintu_api.schemas import (
     RestChunk,
     ScrapeChunksResponse,
 )
-from bintu_api.scraper import FetchedHTML, _compute_approx_tokens
+from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
 
 router = APIRouter(tags=["Extraction"])
 
@@ -186,5 +186,6 @@ async def _scrape_chunks(
             url=url,
             request_id=request_id,
         ) from error
+
 
 

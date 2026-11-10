@@ -12,8 +12,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bintu_api.mcp import TOOL_NAME
-from bintu_api.robots import RobotsDecision
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
+from bintu_api.scraper.robots import RobotsDecision
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -239,6 +239,8 @@ def test_mcp_rejects_invalid_footnote_policy_arguments(client, field, value):
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "invalid_tool_arguments"
+
+
 
 
 

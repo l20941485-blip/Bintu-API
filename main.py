@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bintu_api.api.routes import router
 from bintu_api.auth import verify_api_access
-from bintu_api.cache import TTLCache
 from bintu_api.database import (
     DATABASE_TIMEOUT_SECONDS,
     close_supabase_client,
@@ -23,6 +22,7 @@ from bintu_api.observability import RequestObservabilityMiddleware, metrics_resp
 from bintu_api.rate_limit import create_rate_limiter
 from bintu_api.reader.routes import router as reader_router
 from bintu_api.reader.store import SnapshotStore
+from bintu_api.scraper.cache import TTLCache
 from bintu_api.settings import Settings
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -138,5 +138,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
+
 
 

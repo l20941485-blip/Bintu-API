@@ -1,11 +1,11 @@
-"""Redirect handling must revalidate every hop and never downgrade HTTPS."""
+﻿"""Redirect handling must revalidate every hop and never downgrade HTTPS."""
 
 from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock, patch
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     FetchedHTML,
     TargetURLRejected,
     TooManyRedirects,
@@ -60,11 +60,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ) as resolve,
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ) as make_connection,
         ):
@@ -94,11 +94,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ),
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
             self.assertRaises(TooManyRedirects),
@@ -113,11 +113,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ) as resolve,
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
             self.assertRaises(TargetURLRejected) as caught,
@@ -140,11 +140,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 side_effect=resolve_by_host,
             ) as resolve,
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
             self.assertRaises(TargetURLRejected) as caught,
@@ -166,11 +166,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ) as resolve,
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
             self.assertRaises(TargetURLRejected) as caught,
@@ -191,11 +191,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ) as resolve,
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
             self.assertRaises(TargetURLRejected) as caught,
@@ -218,11 +218,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ) as resolve,
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
         ):
@@ -247,11 +247,11 @@ class RedirectSafetyTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 return_value=(PUBLIC_ADDRESS,),
             ),
             patch(
-                "bintu_api.scraper._make_connection",
+                "bintu_api.scraper.fetcher._make_connection",
                 return_value=connection,
             ),
             self.assertRaises(UpstreamHTTPError),
@@ -264,5 +264,8 @@ class RedirectSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+
 
 

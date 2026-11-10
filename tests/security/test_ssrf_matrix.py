@@ -1,4 +1,4 @@
-"""Table-driven SSRF regression matrix for the web scraper.
+﻿"""Table-driven SSRF regression matrix for the web scraper.
 
 Every row below is a request an attacker would try to turn Bintu into
 an open proxy into the host's private network, or to smuggle a request
@@ -15,7 +15,7 @@ import socket
 import unittest
 from unittest.mock import patch
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
@@ -284,7 +284,7 @@ class SSRFMatrixTests(unittest.TestCase):
             with (
                 self.subTest(address=address),
                 patch(
-                    "bintu_api.scraper.socket.getaddrinfo",
+                    "bintu_api.scraper.fetcher.socket.getaddrinfo",
                     return_value=[dns_result(address, family)],
                 ),
                 self.assertRaises(TargetURLRejected),
@@ -297,7 +297,7 @@ class SSRFMatrixTests(unittest.TestCase):
             with (
                 self.subTest(address=address),
                 patch(
-                    "bintu_api.scraper.socket.getaddrinfo",
+                    "bintu_api.scraper.fetcher.socket.getaddrinfo",
                     return_value=[dns_result(address, family)],
                 ),
             ):
@@ -307,7 +307,7 @@ class SSRFMatrixTests(unittest.TestCase):
         """A mixed public/private answer set is rejected as a whole."""
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[
                     dns_result("93.184.216.34"),
                     dns_result("192.168.1.20"),
@@ -327,7 +327,7 @@ class SSRFMatrixTests(unittest.TestCase):
         """A hostname that does not resolve is refused, not retried blindly."""
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=socket.gaierror("name does not resolve"),
             ),
             self.assertRaises(TargetURLRejected),
@@ -379,10 +379,10 @@ class SSRFMatrixTests(unittest.TestCase):
         first = FakeConnection(FakeResponse(status=302, headers={"Location": "http://example.com/"}))
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=first),
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=first),
             self.assertRaises(TargetURLRejected),
         ):
             fetch_html("https://example.com/", self.settings)
@@ -393,13 +393,13 @@ class SSRFMatrixTests(unittest.TestCase):
         connection = FakeConnection(redirect)
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=[
                     [dns_result("93.184.216.34")],
                     [dns_result("192.168.1.20")],
                 ],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection) as make_connection,
             self.assertRaises(TargetURLRejected),
         ):
             fetch_html("http://public.example/", self.settings)
@@ -413,13 +413,13 @@ class SSRFMatrixTests(unittest.TestCase):
         connection = FakeConnection(redirect)
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=[
                     [dns_result("93.184.216.34")],
                     [dns_result("127.0.0.1")],
                 ],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection) as make_connection,
             self.assertRaises(TargetURLRejected),
         ):
             fetch_html("http://public.example/", self.settings)
@@ -437,10 +437,10 @@ class SSRFMatrixTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", side_effect=capture),
+            patch("bintu_api.scraper.fetcher._make_connection", side_effect=capture),
             self.assertRaises(RuntimeError),
         ):
             fetch_html("http://public.example/", self.settings)
@@ -455,10 +455,10 @@ class SSRFMatrixTests(unittest.TestCase):
         connection = FakeConnection(redirect)
         with (
             patch(
-                "bintu_api.scraper.socket.getaddrinfo",
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 return_value=[dns_result("93.184.216.34")],
             ),
-            patch("bintu_api.scraper._make_connection", return_value=connection) as make_connection,
+            patch("bintu_api.scraper.fetcher._make_connection", return_value=connection) as make_connection,
             self.assertRaises(TooManyRedirects),
         ):
             fetch_html("http://loop.example/", settings)
@@ -517,5 +517,8 @@ class SSRFMatrixTests(unittest.TestCase):
         response = FakeResponse(headers={"Content-Type": "text/html", "Content-Encoding": "br"}, body=b"x")
         with self.assertRaises(UnsupportedContentEncoding):
             _read_html_response(response, 1024)
+
+
+
 
 

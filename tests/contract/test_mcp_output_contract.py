@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from bintu_api.mcp import TOOL_NAME, TOOL_OUTPUT_SCHEMA
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -301,6 +301,7 @@ class MCPOutputContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

@@ -1,4 +1,4 @@
-"""HTML media-type, encoding, and payload-limit handling must fail safely."""
+﻿"""HTML media-type, encoding, and payload-limit handling must fail safely."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import gzip
 import unittest
 from unittest.mock import MagicMock
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     UnsupportedContentEncoding,
     UnsupportedMediaType,
@@ -204,5 +204,6 @@ class PayloadLimitSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

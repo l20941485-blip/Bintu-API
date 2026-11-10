@@ -26,7 +26,7 @@ def open_validated_socket(url: str, settings: Settings) -> socket.socket:
     The timeout applies per connection attempt, not to DNS resolution
     or the complete operation. This function is blocking.
     """
-    from bintu_api.scraper import _parse_target, resolve_public_addresses
+    from bintu_api.scraper.fetcher import _parse_target, resolve_public_addresses
 
     timeout = float(settings.request_timeout_seconds)
     if not math.isfinite(timeout) or timeout <= 0:
@@ -111,4 +111,5 @@ def read_connect_request_head(
                 return head, bytes(buffer[end:])
     finally:
         client.settimeout(original_timeout)
+
 

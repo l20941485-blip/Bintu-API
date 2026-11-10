@@ -1,4 +1,4 @@
-﻿"""Route-level regression tests for robots enforcement.
+"""Route-level regression tests for robots enforcement.
 
 These tests exercise the real robots decision and route enforcement code.
 Robots.txt retrieval, page fetching, and persistent-cache access are mocked.
@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from fastapi.testclient import TestClient
 
 from bintu_api.database import CachedMarkdown
-from bintu_api.robots import (
+from bintu_api.scraper.robots import (
     RobotsUnreachable,
     clear_robots_cache,
     robots_decision,
@@ -83,7 +83,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                         return_value="enforce",
                     ),
                     patch(
-                        "bintu_api.robots.robots_mode",
+                        "bintu_api.scraper.robots.robots_mode",
                         return_value="enforce",
                     ),
                     patch(
@@ -91,7 +91,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                         side_effect=robots_decision,
                     ) as decision_call,
                     patch(
-                        "bintu_api.robots._fetch_robots_text",
+                        "bintu_api.scraper.robots._fetch_robots_text",
                         new=robots_fetch,
                     ),
                     patch(
@@ -250,6 +250,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

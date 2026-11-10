@@ -1,10 +1,10 @@
-"""Direct HTTPS pinning tests; sockets and TLS wrapping are mocked."""
+﻿"""Direct HTTPS pinning tests; sockets and TLS wrapping are mocked."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bintu_api.scraper import _PinnedHTTPSConnection
+from bintu_api.scraper.fetcher import _PinnedHTTPSConnection
 
 
 @pytest.mark.parametrize(
@@ -18,7 +18,7 @@ def test_https_connects_to_validated_ip_and_preserves_tls_hostname(address):
     context.wrap_socket.return_value = tls_socket
 
     with patch(
-        "bintu_api.scraper.ssl.create_default_context",
+        "bintu_api.scraper.fetcher.ssl.create_default_context",
         return_value=context,
     ) as default_context:
         connection = _PinnedHTTPSConnection(
@@ -30,7 +30,7 @@ def test_https_connects_to_validated_ip_and_preserves_tls_hostname(address):
 
     try:
         with patch(
-            "bintu_api.scraper.socket.create_connection",
+            "bintu_api.scraper.fetcher.socket.create_connection",
             return_value=raw_socket,
         ) as connect:
             connection.connect()
@@ -44,5 +44,8 @@ def test_https_connects_to_validated_ip_and_preserves_tls_hostname(address):
         assert connection.sock is tls_socket
     finally:
         connection.close()
+
+
+
 
 

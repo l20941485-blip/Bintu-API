@@ -16,7 +16,7 @@ from bintu_api.middleware.usage import UsageMeteringMiddleware
 from bintu_api.rate_limit import BurstRateLimiter
 from bintu_api.reader.routes import router
 from bintu_api.reader.store import SnapshotStore
-from bintu_api.scraper import FetchedHTML, TargetURLRejected
+from bintu_api.scraper.fetcher import FetchedHTML, TargetURLRejected
 from bintu_api.settings import Settings
 
 KEY = "reader-route-test-key"
@@ -367,6 +367,7 @@ def test_reader_through_real_application():
 
             fetch.assert_called_once()
             startup.assert_awaited_once_with(config)
+
 
 
 

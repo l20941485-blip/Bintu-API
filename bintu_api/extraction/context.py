@@ -33,7 +33,7 @@ from bintu_api.observability import (
     record_cache_tokens_saved,
 )
 from bintu_api.schemas import CacheInfo
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.context")
@@ -99,7 +99,7 @@ TOKEN_METHOD = "ceil(characters/4)"
 
 def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
-    from bintu_api.scraper import _compute_approx_tokens
+    from bintu_api.scraper.fetcher import _compute_approx_tokens
 
     return _compute_approx_tokens(text)
 
@@ -438,6 +438,7 @@ async def extract_context(
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:
     """Return the non-negative token savings estimate for a delivered response."""
     return max(0, html_tokens - approx_tokens)
+
 
 
 

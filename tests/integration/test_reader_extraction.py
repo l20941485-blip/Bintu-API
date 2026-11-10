@@ -16,7 +16,7 @@ from bintu_api.reader.service import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     read_page,
 )
-from bintu_api.scraper import FetchedHTML, extract_text_result
+from bintu_api.scraper.fetcher import FetchedHTML, extract_text_result
 
 URL = "https://example.com/start"
 
@@ -141,6 +141,7 @@ def test_preserves_existing_heading_and_table_extraction():
     assert "# Reference" in snapshot.text
     assert "Name | Value" in snapshot.text
     assert "Alpha | 1" in snapshot.text
+
 
 
 

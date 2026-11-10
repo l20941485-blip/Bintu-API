@@ -1,4 +1,4 @@
-"""Renderer preflight checks.
+﻿"""Renderer preflight checks.
 
 These tests do not establish browser connection pinning or close S9.
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     TargetURLRejected,
     fetch_rendered_html_document,
 )
@@ -25,7 +25,7 @@ class RenderPreflightSecurityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_scheme_is_rejected_before_browser_start(self) -> None:
         with (
-            patch("bintu_api.scraper.resolve_public_addresses") as resolve,
+            patch("bintu_api.scraper.fetcher.resolve_public_addresses") as resolve,
             patch("playwright.async_api.async_playwright") as start_playwright,
             self.assertRaises(TargetURLRejected),
         ):
@@ -40,7 +40,7 @@ class RenderPreflightSecurityTests(unittest.IsolatedAsyncioTestCase):
     async def test_rejected_dns_stops_before_browser_start(self) -> None:
         with (
             patch(
-                "bintu_api.scraper.resolve_public_addresses",
+                "bintu_api.scraper.fetcher.resolve_public_addresses",
                 side_effect=TargetURLRejected("The target hostname resolves to a non-public address"),
             ) as resolve,
             patch("playwright.async_api.async_playwright") as start_playwright,
@@ -53,5 +53,7 @@ class RenderPreflightSecurityTests(unittest.IsolatedAsyncioTestCase):
 
         resolve.assert_called_once_with("private.example", 443)
         start_playwright.assert_not_called()
+
+
 
 

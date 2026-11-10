@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from bintu_api.robots import (
+from bintu_api.scraper.robots import (
     RobotsUnreachable,
     clear_robots_cache,
     robots_decision,
@@ -21,11 +21,11 @@ class RobotsUnreachableTests(unittest.TestCase):
     def test_connection_failure_is_robots_unreachable(self) -> None:
         with (
             patch(
-                "bintu_api.robots.robots_mode",
+                "bintu_api.scraper.robots.robots_mode",
                 return_value="enforce",
             ),
             patch(
-                "bintu_api.robots._fetch_robots_text",
+                "bintu_api.scraper.robots._fetch_robots_text",
                 side_effect=RobotsUnreachable("connection problem (TimeoutError)"),
             ),
         ):
@@ -38,11 +38,11 @@ class RobotsUnreachableTests(unittest.TestCase):
     def test_explicit_disallow_is_blocked_by_robots(self) -> None:
         with (
             patch(
-                "bintu_api.robots.robots_mode",
+                "bintu_api.scraper.robots.robots_mode",
                 return_value="enforce",
             ),
             patch(
-                "bintu_api.robots._fetch_robots_text",
+                "bintu_api.scraper.robots._fetch_robots_text",
                 return_value="User-agent: *\nDisallow: /private\n",
             ),
         ):
@@ -55,11 +55,11 @@ class RobotsUnreachableTests(unittest.TestCase):
     def test_allowed_page_is_allowed(self) -> None:
         with (
             patch(
-                "bintu_api.robots.robots_mode",
+                "bintu_api.scraper.robots.robots_mode",
                 return_value="enforce",
             ),
             patch(
-                "bintu_api.robots._fetch_robots_text",
+                "bintu_api.scraper.robots._fetch_robots_text",
                 return_value="User-agent: *\nAllow: /\n",
             ),
         ):
@@ -71,5 +71,6 @@ class RobotsUnreachableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

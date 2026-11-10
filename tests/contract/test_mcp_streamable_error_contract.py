@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from bintu_api.errors.tool_errors import ToolError
 from bintu_api.mcp import TOOL_NAME
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TargetURLRejected,
     TooManyRedirects,
@@ -227,6 +227,7 @@ class McpStreamableErrorContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

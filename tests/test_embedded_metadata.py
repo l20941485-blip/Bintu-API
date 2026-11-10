@@ -1,4 +1,4 @@
-"""Regression coverage for metadata IPv4 embedded in IPv6 addresses."""
+﻿"""Regression coverage for metadata IPv4 embedded in IPv6 addresses."""
 
 import ipaddress
 import socket
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bintu_api.scraper import (
+from bintu_api.scraper.fetcher import (
     TargetURLRejected,
     _embedded_ipv4,
     _parse_target,
@@ -30,7 +30,7 @@ def test_embedded_metadata_ipv4_is_extracted_correctly(address):
 def test_embedded_metadata_literal_is_rejected_without_dns(address):
     settings = Settings(api_key="", rapidapi_proxy_secret="")
 
-    with patch("bintu_api.scraper.socket.getaddrinfo") as lookup, pytest.raises(TargetURLRejected):
+    with patch("bintu_api.scraper.fetcher.socket.getaddrinfo") as lookup, pytest.raises(TargetURLRejected):
         _parse_target(f"http://[{address}]/", settings)
 
     lookup.assert_not_called()
@@ -48,7 +48,7 @@ def test_dns_answer_with_embedded_metadata_is_rejected(address):
 
     with (
         patch(
-            "bintu_api.scraper.socket.getaddrinfo",
+            "bintu_api.scraper.fetcher.socket.getaddrinfo",
             return_value=[answer],
         ),
         pytest.raises(TargetURLRejected),
@@ -77,11 +77,13 @@ def test_public_answer_does_not_hide_embedded_metadata(address):
 
     with (
         patch(
-            "bintu_api.scraper.socket.getaddrinfo",
+            "bintu_api.scraper.fetcher.socket.getaddrinfo",
             return_value=answers,
         ),
         pytest.raises(TargetURLRejected),
     ):
         resolve_public_addresses("metadata-wrapper.example", 80)
+
+
 
 

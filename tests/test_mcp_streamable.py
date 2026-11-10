@@ -14,8 +14,8 @@ from bintu_api.mcp import (
     TOOL_NAME,
     TOOL_OUTPUT_SCHEMA,
 )
-from bintu_api.robots import RobotsDecision
-from bintu_api.scraper import FetchedHTML
+from bintu_api.scraper.fetcher import FetchedHTML
+from bintu_api.scraper.robots import RobotsDecision
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -698,5 +698,7 @@ class McpScopedApiKeyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
 
 

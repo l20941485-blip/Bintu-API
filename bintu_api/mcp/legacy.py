@@ -63,7 +63,7 @@ from bintu_api.mcp_descriptions import (
     TOOL_DESCRIPTION as NEW_TOOL_DESCRIPTION,
 )
 from bintu_api.observability import log_extraction_completed
-from bintu_api.scraper import TargetURLRejected
+from bintu_api.scraper.fetcher import TargetURLRejected
 from bintu_api.settings import Settings
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
@@ -494,6 +494,7 @@ async def call_tool(
         "structuredContent": envelope,
         "isError": False,
     }
+
 
 
 
