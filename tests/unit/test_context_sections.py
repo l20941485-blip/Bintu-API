@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from bintu_api.context import extract_context
+from bintu_api.extraction.context import extract_context
 
 
 @pytest.mark.asyncio
@@ -77,5 +77,6 @@ async def test_chunk_mode_ignores_sections():
         )
 
         assert result.selected_sections is None
+
 
 

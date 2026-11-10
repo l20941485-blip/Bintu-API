@@ -1,10 +1,10 @@
-"""Chunking must preserve sentence punctuation and Markdown table rows."""
+﻿"""Chunking must preserve sentence punctuation and Markdown table rows."""
 
 from __future__ import annotations
 
 import unittest
 
-from bintu_api.context import split_into_chunks
+from bintu_api.extraction.context import split_into_chunks
 
 
 class ChunkQualityTests(unittest.TestCase):
@@ -70,5 +70,6 @@ class ChunkQualityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

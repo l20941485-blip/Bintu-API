@@ -1,4 +1,4 @@
-"""Pure cache-policy decisions for the shared extraction pipeline.
+﻿"""Pure cache-policy decisions for the shared extraction pipeline.
 
 These helpers encapsulate extraction limits, persistent-cache eligibility,
 credential safety, and canonical cache-key construction. They perform no I/O.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 
-from bintu_api.context import (
+from bintu_api.extraction.context import (
     DEFAULT_MAX_TEXT_CHARACTERS,
     MAX_EXTRACTION_CHARACTERS,
 )

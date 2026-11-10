@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from bintu_api.auth import mcp_rate_limit_identity, rate_limit_identity
-from bintu_api.context import normalize_mode
+from bintu_api.extraction.context import normalize_mode
 from bintu_api.mcp import TOOL_DESCRIPTION, TOOL_INPUT_SCHEMA, ToolArguments
 from bintu_api.robots import RobotsDecision
 from bintu_api.scraper import (
@@ -636,6 +636,7 @@ def test_rest_rejects_max_tokens_below_minimum():
 
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_max_tokens"
+
 
 
 

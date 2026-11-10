@@ -24,7 +24,8 @@ from typing import Any, Literal
 from fastapi import Request
 
 from bintu_api.auth import rate_limit_identity
-from bintu_api.context_chunking import split_into_chunks, summarize_text
+from bintu_api.extraction.chunker import split_into_chunks
+from bintu_api.extraction.summarizer import summarize_text
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.extraction.sections import select_sections
 from bintu_api.observability import (
@@ -437,6 +438,7 @@ async def extract_context(
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:
     """Return the non-negative token savings estimate for a delivered response."""
     return max(0, html_tokens - approx_tokens)
+
 
 
 

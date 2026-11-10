@@ -1,10 +1,10 @@
-"""Tests for token-budgeted, fence-aware chunking."""
+﻿"""Tests for token-budgeted, fence-aware chunking."""
 
 from __future__ import annotations
 
 import unittest
 
-from bintu_api.context import count_tokens, split_into_chunks
+from bintu_api.extraction.context import count_tokens, split_into_chunks
 
 
 class SplitIntoChunksTests(unittest.TestCase):
@@ -71,5 +71,6 @@ class SplitIntoChunksTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

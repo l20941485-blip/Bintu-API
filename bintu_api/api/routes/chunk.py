@@ -1,4 +1,4 @@
-"""Chunked extraction endpoint for the Bintu API.
+﻿"""Chunked extraction endpoint for the Bintu API.
 
 This module owns the POST /api/v1/scrape/chunks route and its helper, which
 fetch a page, extract readable text, and split it into token-budgeted chunks.
@@ -17,7 +17,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, Security
 
 from bintu_api.auth import api_key_scheme
-from bintu_api.context import split_into_chunks
+from bintu_api.extraction.context import split_into_chunks
 from bintu_api.database import CachedMarkdown
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction import service as routes_common
@@ -186,4 +186,5 @@ async def _scrape_chunks(
             url=url,
             request_id=request_id,
         ) from error
+
 

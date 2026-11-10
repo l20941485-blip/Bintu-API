@@ -1,4 +1,4 @@
-"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
+﻿"""Standard MCP Streamable HTTP endpoint (JSON-RPC 2.0, stateless).
 
 Exposes the single ``bintu_scrape_text`` tool to real MCP clients Ã¢â'¬â€ Claude
 custom connectors (web and Desktop, both account-brokered), Claude Code, and
@@ -57,7 +57,7 @@ from bintu_api.auth import (
     mcp_upgrade_url,
     verify_mcp_execution_access,
 )
-from bintu_api.context import (
+from bintu_api.extraction.context import (
     _decode_source_text,
     normalize_mode,
 )
@@ -884,5 +884,6 @@ async def mcp_listen_nested_alias(request: Request) -> Response:
 async def mcp_unsupported_methods() -> Response:
     # Stateless server: no sessions to end (DELETE); PUT/PATCH are undefined.
     return Response(status_code=405, headers={"Allow": "POST, GET"})
+
 
 

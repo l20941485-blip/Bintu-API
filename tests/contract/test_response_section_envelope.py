@@ -1,6 +1,6 @@
-"""Contract tests for selected_sections response-envelope behavior."""
+﻿"""Contract tests for selected_sections response-envelope behavior."""
 
-from bintu_api.context import ContextResult
+from bintu_api.extraction.context import ContextResult
 from bintu_api.extraction.response import build_mcp_envelope, build_rest_response
 
 
@@ -64,4 +64,5 @@ def test_rest_response_omits_selected_sections_when_absent():
     response = build_rest_response(context, "https://example.com")
 
     assert "selected_sections" not in response
+
 

@@ -1,4 +1,4 @@
-"""Test Chunk Budget for Bintu.
+﻿"""Test Chunk Budget for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -7,7 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 from __future__ import annotations
 
-from bintu_api.context import split_into_chunks
+from bintu_api.extraction.context import split_into_chunks
 from bintu_api.scraper import extract_text_result
 
 
@@ -39,5 +39,6 @@ def test_oversized_table_row_respects_budget_and_repeats_header():
 
     for index, chunk in enumerate(data_chunks, start=1):
         assert "Country" in chunk and "---" in chunk, f"Data chunk {index} must repeat the table header"
+
 
 
