@@ -1,10 +1,10 @@
-"""CONNECT authority syntax tests; no network access."""
+﻿"""CONNECT authority syntax tests; no network access."""
 
 from __future__ import annotations
 
 import unittest
 
-from bintu_api.render_proxy_protocol import (
+from bintu_api.render.proxy_protocol import (
     ConnectTarget,
     ProxyRequestRejected,
     parse_connect_authority,
@@ -73,5 +73,6 @@ class ConnectAuthorityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

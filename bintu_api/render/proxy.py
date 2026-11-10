@@ -1,4 +1,4 @@
-"""Connection primitives for a future guarded rendering proxy.
+﻿"""Connection primitives for a future guarded rendering proxy.
 
 Not a complete proxy. Not integrated with Chromium. S9 remains open.
 """
@@ -10,7 +10,7 @@ import math
 import socket
 import time
 
-from bintu_api.render_proxy_protocol import (
+from bintu_api.render.proxy_protocol import (
     MAX_CONNECT_HEAD_BYTES,
     ConnectRequestHead,
     ProxyRequestRejected,
@@ -111,3 +111,4 @@ def read_connect_request_head(
                 return head, bytes(buffer[end:])
     finally:
         client.settimeout(original_timeout)
+

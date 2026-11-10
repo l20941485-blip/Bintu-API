@@ -5,8 +5,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from bintu_api.render_proxy import read_connect_request_head
-from bintu_api.render_proxy_protocol import (
+from bintu_api.render.proxy import read_connect_request_head
+from bintu_api.render.proxy_protocol import (
     MAX_CONNECT_HEAD_BYTES,
     ConnectTarget,
     ProxyRequestRejected,
@@ -197,5 +197,6 @@ class ConnectHeadReaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
