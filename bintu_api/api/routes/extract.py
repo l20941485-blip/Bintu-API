@@ -22,17 +22,17 @@ from fastapi import APIRouter, HTTPException, Query, Request, Security
 from bintu_api.api.routes.common import (
     _build_response,
 )
+from bintu_api.api.schemas import (
+    ErrorResponse,
+    MobileScrapeTextRequest,
+    ScrapeTextResponse,
+)
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction import service as routes_common
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.token_budget import truncate_to_token_budget
 from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.observability import log_extraction_completed
-from bintu_api.schemas import (
-    ErrorResponse,
-    MobileScrapeTextRequest,
-    ScrapeTextResponse,
-)
 from bintu_api.scraper.fetcher import _compute_approx_tokens
 from bintu_api.security.auth import (
     api_key_scheme,

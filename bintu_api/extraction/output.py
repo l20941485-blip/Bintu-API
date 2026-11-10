@@ -10,10 +10,10 @@ import hashlib
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from bintu_api.api.schemas import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.extraction.cache import compute_saved_tokens
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.quality import assess_yield
-from bintu_api.schemas import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
 from bintu_api.security.credentials import CREDENTIAL_QUERY_PARAMS
 from bintu_api.security.url_safety import (
