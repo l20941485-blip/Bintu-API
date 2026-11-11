@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
-import smoke_check
+from scripts import smoke_check
 
 SENSITIVE = "PRIVATE_RESPONSE_BODY_DO_NOT_LOG"
 
@@ -40,11 +40,11 @@ class SmokeCheckFailurePrivacyTests(unittest.TestCase):
         with (
             patch.dict(smoke_check.os.environ, env, clear=True),
             patch(
-                "smoke_check._request",
+                "scripts.smoke_check._request",
                 side_effect=responses,
             ),
-            patch("smoke_check.check_discovery"),
-            patch("smoke_check.check_mcp_cache"),
+            patch("scripts.smoke_check.check_discovery"),
+            patch("scripts.smoke_check.check_mcp_cache"),
             redirect_stdout(stdout),
             redirect_stderr(stderr),
             self.assertRaises(SystemExit) as raised,

@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from smoke_discovery import check_discovery
+from scripts.smoke_discovery import check_discovery
 
 
 class SmokeDiscoveryTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class SmokeDiscoveryTests(unittest.TestCase):
         ]
 
     def test_valid_discovery_passes(self):
-        with patch("smoke_discovery._fetch", side_effect=self.responses()) as fetch:
+        with patch("scripts.smoke_discovery._fetch", side_effect=self.responses()) as fetch:
             check_discovery("https://service.invalid")
         self.assertEqual(fetch.call_count, 3)
         payload = fetch.call_args.args[1]
@@ -47,7 +47,7 @@ class SmokeDiscoveryTests(unittest.TestCase):
             content_type,
             text.replace(url, "[" + url + "](" + url + ")"),
         )
-        with patch("smoke_discovery._fetch", side_effect=responses):
+        with patch("scripts.smoke_discovery._fetch", side_effect=responses):
             with self.assertRaisesRegex(ValueError, "plain URL"):
                 check_discovery("https://service.invalid")
 
@@ -64,7 +64,7 @@ class SmokeDiscoveryTests(unittest.TestCase):
                 }
             ),
         )
-        with patch("smoke_discovery._fetch", side_effect=responses):
+        with patch("scripts.smoke_discovery._fetch", side_effect=responses):
             with self.assertRaisesRegex(ValueError, "JSON-RPC error"):
                 check_discovery("https://service.invalid")
 

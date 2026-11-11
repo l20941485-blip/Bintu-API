@@ -3,12 +3,12 @@
 Usage (PowerShell):
   $env:BINTU_BASE_URL = "https://your-service.onrender.com"
   $env:BINTU_API_KEY = "your-api-key"
-  python smoke_check.py
+  python -m scripts.smoke_check
 
 Optional authenticated MCP refresh -> persistent-cache check:
   $env:BINTU_SMOKE_MCP_CACHE = "1"
   $env:BINTU_MCP_API_KEY = "your-scoped-mcp-key"
-  python smoke_check.py
+  python -m scripts.smoke_check
 
 BINTU_MCP_API_KEY is optional when BINTU_API_KEY is available.
 REST scrape and metrics checks still use BINTU_API_KEY.
@@ -23,8 +23,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from smoke_discovery import check_discovery
-from smoke_mcp_cache import check_mcp_cache
+from scripts.smoke_discovery import check_discovery
+from scripts.smoke_mcp_cache import check_mcp_cache
 
 DEFAULT_TARGET_URL = "https://example.com/"
 UNSAFE_TARGET_URL = "http://127.0.0.1/"

@@ -53,4 +53,4 @@ jobs:
               )
               raise SystemExit(1)
           PY
-          python smoke_check.py
+          python -m scripts.smoke_check

@@ -27,4 +27,4 @@ render.yaml
 requirements-dev.txt
 test_*.py
 tests/
-smoke_check.py
+scripts/smoke_check.py

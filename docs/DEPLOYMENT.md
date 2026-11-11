@@ -107,7 +107,7 @@ $secure = Read-Host "Production API key" -AsSecureString
 $env:BINTU_API_KEY = [System.Net.NetworkCredential]::new("", $secure).Password
 Remove-Variable secure
 
-python smoke_check.py
+python -m scripts.smoke_check
 
 if ($LASTEXITCODE -ne 0) {
     throw "Production smoke check failed. Investigate before release sign-off."
