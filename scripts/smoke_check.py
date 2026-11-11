@@ -1,4 +1,4 @@
-"""Post-deploy smoke check against a live Bintu API instance.
+﻿"""Post-deploy smoke check against a live Bintu API instance.
 
 Usage (PowerShell):
   $env:BINTU_BASE_URL = "https://your-service.onrender.com"
@@ -98,6 +98,7 @@ def _check_metrics(base_url: str, api_key: str) -> None:
     print("Checking metrics ...")
 
     status, _headers, body = _request(
+        f"{base_url}/metrics",
         headers={"X-API-Key": api_key},
     )
 

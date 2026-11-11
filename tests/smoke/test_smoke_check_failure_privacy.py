@@ -1,4 +1,4 @@
-"""Response bodies must not appear in smoke-check failure output."""
+﻿"""Response bodies must not appear in smoke-check failure output."""
 
 import io
 import json
@@ -152,6 +152,40 @@ class SmokeCheckFailurePrivacyTests(unittest.TestCase):
             "/metrics returned HTTP 503.",
         )
 
+    def test_metrics_request_includes_url_and_api_key(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        metrics_body = (
+            b"bintu_cache_hits_total 2\n"
+            b"bintu_cache_misses_total 3\n"
+            b"bintu_tokens_saved_estimate_total 10\n"
+        )
+
+        env = {
+            "BINTU_BASE_URL": "https://service.invalid",
+            "BINTU_API_KEY": "offline-service-key",
+            "BINTU_SMOKE_TARGET_URL": "https://example.com/",
+        }
+
+        with (
+            patch.dict(smoke_check.os.environ, env, clear=True),
+            patch(
+                "scripts.smoke_check._request",
+                return_value=(200, {}, metrics_body),
+            ) as request,
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            smoke_check._check_metrics(
+                "https://service.invalid",
+                "offline-service-key",
+            )
+
+        request.assert_called_once_with(
+            "https://service.invalid/metrics",
+            headers={"X-API-Key": "offline-service-key"},
+        )
     def test_metrics_numeric_failure_is_private(self):
         metrics_body = ("bintu_cache_hits_total " + SENSITIVE).encode("utf-8")
 
