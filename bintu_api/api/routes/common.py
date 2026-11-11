@@ -17,6 +17,7 @@ from typing import Literal
 
 from fastapi import Request
 
+from bintu_api.api.scrape_context import build_scrape_request_context
 from bintu_api.extraction.cache_store import CachedMarkdown, get_cached_markdown, upsert_cached_markdown
 from bintu_api.extraction.context import _decode_source_text
 from bintu_api.extraction.output import (  # noqa: F401
@@ -32,7 +33,6 @@ from bintu_api.extraction.output import (
 from bintu_api.extraction.output import (
     is_sensitive_query_parameter as _is_sensitive_query_parameter,  # noqa: F401
 )
-from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.scrape_service import ScrapeService
 from bintu_api.extraction.service import (
@@ -116,11 +116,7 @@ async def _fetch_and_extract(
     sections: list[str] | None = None,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Compatibility boundary preserving the established scrape patch seams."""
-    context = ScrapeRequestContext(
-        settings=request.app.state.settings,
-        database_client=getattr(request.app.state, "supabase_client", None),
-        request_id=getattr(getattr(request, "state", None), "request_id", None),
-    )
+    context = build_scrape_request_context(request)
     service = build_scrape_service(request)
     options = ScrapeOptions(
         include_nav=include_nav,
