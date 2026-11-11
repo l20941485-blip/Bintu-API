@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from bintu_api.extraction.cache_store import CachedMarkdown
-from bintu_api.extraction.context import decode_source_text
-from bintu_api.scraper.fetcher import (
+from bintu_api.common.fetch import (
     FetchedHTML,
     compute_approx_tokens,
     compute_tokens_saved_estimate,
 )
+from bintu_api.extraction.cache_store import CachedMarkdown
+from bintu_api.extraction.context import decode_source_text
 
 
 def build_cached_markdown(

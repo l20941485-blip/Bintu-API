@@ -1,4 +1,4 @@
-﻿"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
+"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
 
 Modes:
@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 from fastapi import Request
 
+from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.chunker import split_into_chunks
 from bintu_api.extraction.models import CacheInfo
 from bintu_api.extraction.quality import assess_yield
@@ -32,7 +33,6 @@ from bintu_api.observability import (
     log_cache_lookup_completed,
     record_cache_tokens_saved,
 )
-from bintu_api.scraper.fetcher import FetchedHTML
 from bintu_api.security.auth import rate_limit_identity
 from bintu_api.settings import Settings
 
@@ -99,9 +99,9 @@ TOKEN_METHOD = "ceil(characters/4)"
 
 def count_tokens(text: str) -> int:
     """Return an approximate token count for ``text`` (dependency-free)."""
-    from bintu_api.scraper.fetcher import _compute_approx_tokens
+    from bintu_api.common.fetch import compute_approx_tokens
 
-    return _compute_approx_tokens(text)
+    return compute_approx_tokens(text)
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-﻿"""Token-budgeted Markdown chunking utilities.
+"""Token-budgeted Markdown chunking utilities.
 
 This module owns the deterministic transformation of extracted text into
 retrieval-friendly chunks: sentence/whitespace splitting, table handling,
@@ -12,7 +12,7 @@ import re
 from urllib.parse import urljoin
 
 try:  # same estimator as the rest of the service
-    from bintu_api.scraper.fetcher import _compute_approx_tokens as count_tokens
+    from bintu_api.common.fetch import compute_approx_tokens as count_tokens
 except ImportError:  # standalone use and tests
 
     def count_tokens(text: str) -> int:

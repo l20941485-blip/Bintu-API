@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import ast
 from pathlib import Path
@@ -59,13 +59,6 @@ def _assert_no_imports(source_package: str, forbidden_packages: set[str]) -> Non
         )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Extraction currently reaches into a private scraper fallback symbol; "
-        "remove this exception when the trafilatura fallback boundary is repaired."
-    ),
-    strict=True,
-)
 def test_extraction_does_not_import_scraper() -> None:
     _assert_no_imports("extraction", {"bintu_api.scraper"})
 

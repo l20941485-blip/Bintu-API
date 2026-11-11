@@ -7,7 +7,7 @@ patch seams in `bintu_api.api.scrape_adapter`.
 
 from __future__ import annotations
 
-from bintu_api.scraper.fetcher import FetchedHTML
+from bintu_api.common.fetch import FetchedHTML
 
 
 async def read_memory_cache(cache, cache_key: str, skip_cache: bool, sections):
