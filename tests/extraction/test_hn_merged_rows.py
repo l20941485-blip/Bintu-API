@@ -1,10 +1,10 @@
-﻿"""Regression coverage for nested Hacker News story and metadata rows."""
+"""Regression coverage for nested Hacker News story and metadata rows."""
 
 from pathlib import Path
 
 from bintu_api.scraper.fetcher import extract_text_result
 
-FIXTURE = Path(__file__).parent / "fixtures" / "hn_merged_rows_synthetic.html"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "hn_merged_rows_synthetic.html"
 
 
 def test_nested_hn_rows_preserve_comments_and_the_following_story():
