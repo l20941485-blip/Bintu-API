@@ -1,4 +1,4 @@
-"""Scrape output, provenance, and cache-URL redaction helpers.
+﻿"""Scrape output, provenance, and cache-URL redaction helpers.
 
 This module owns the shared output boundary used by REST and MCP extraction
 surfaces. It does not perform metering or MCP JSON-RPC formatting.
@@ -10,9 +10,9 @@ import hashlib
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from bintu_api.api.schemas import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.extraction.cache import compute_saved_tokens
 from bintu_api.extraction.cache_store import CachedMarkdown
+from bintu_api.extraction.models import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
 from bintu_api.security.credentials import CREDENTIAL_QUERY_PARAMS
