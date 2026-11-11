@@ -143,7 +143,7 @@ curl.exe -s http://127.0.0.1:8000/healthz
 curl.exe -s -H "X-API-Key: $env:API_KEY" http://127.0.0.1:8000/version
 curl.exe -s -H "X-API-Key: $env:API_KEY" "http://127.0.0.1:8000/api/v1/scrape/text?url=https://example.com/"
 
-python smoke_check.py          # against the deployed URL, not localhost
+python -m scripts.smoke_check          # against the deployed URL, not localhost
 ```
 
 Expected outcomes, per `README.md`: 400 invalid URL, 401 missing or wrong
@@ -193,7 +193,7 @@ paywall, CAPTCHA, or anti-bot control are declined, not deferred.
 
 1. Offline suite green: `python -m pytest tests -q` (CI runs
    this on push/PR; Render deploys linked commits only once checks pass).
-2. `python smoke_check.py` green against the deployed instance.
+2. `python -m scripts.smoke_check` green against the deployed instance.
 3. `/version` reviewed to confirm no secret material is echoed.
 4. New findings logged above with an ID and severity.
 

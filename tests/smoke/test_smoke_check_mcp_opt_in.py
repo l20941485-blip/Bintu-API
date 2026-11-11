@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
-import smoke_check
+from scripts import smoke_check
 
 
 class SmokeCheckMcpOptInTests(unittest.TestCase):
@@ -43,13 +43,13 @@ class SmokeCheckMcpOptInTests(unittest.TestCase):
         with (
             patch.dict(smoke_check.os.environ, env, clear=True),
             patch(
-                "smoke_check._request",
+                "scripts.smoke_check._request",
                 side_effect=responses,
             ) as request,
-            patch("smoke_check._check_metrics") as metrics,
-            patch("smoke_check.check_discovery") as discovery,
+            patch("scripts.smoke_check._check_metrics") as metrics,
+            patch("scripts.smoke_check.check_discovery") as discovery,
             patch(
-                "smoke_check.check_mcp_cache",
+                "scripts.smoke_check.check_mcp_cache",
                 side_effect=helper_error,
             ) as helper,
             redirect_stdout(stdout),

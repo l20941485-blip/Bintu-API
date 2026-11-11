@@ -6,7 +6,7 @@ import unittest
 from email.message import Message
 from unittest.mock import MagicMock, patch
 
-from smoke_mcp_cache import _call, check_mcp_cache
+from scripts.smoke_mcp_cache import _call, check_mcp_cache
 
 
 def envelopes():
@@ -50,7 +50,7 @@ class SmokeMcpCacheTests(unittest.TestCase):
 
     def test_refresh_then_persistent_hit(self):
         with patch(
-            "smoke_mcp_cache._call",
+            "scripts.smoke_mcp_cache._call",
             side_effect=envelopes(),
         ) as call:
             self.run_check()
@@ -71,7 +71,7 @@ class SmokeMcpCacheTests(unittest.TestCase):
 
         with (
             patch(
-                "smoke_mcp_cache._call",
+                "scripts.smoke_mcp_cache._call",
                 side_effect=[fresh, cached],
             ),
             self.assertRaisesRegex(
@@ -87,7 +87,7 @@ class SmokeMcpCacheTests(unittest.TestCase):
 
         with (
             patch(
-                "smoke_mcp_cache._call",
+                "scripts.smoke_mcp_cache._call",
                 side_effect=[fresh, cached],
             ) as call,
             self.assertRaisesRegex(ValueError, "bypass"),
@@ -109,7 +109,7 @@ class SmokeMcpCacheTests(unittest.TestCase):
 
                 with (
                     patch(
-                        "smoke_mcp_cache._call",
+                        "scripts.smoke_mcp_cache._call",
                         side_effect=[fresh, cached],
                     ),
                     self.assertRaisesRegex(
@@ -125,7 +125,7 @@ class SmokeMcpCacheTests(unittest.TestCase):
 
         with (
             patch(
-                "smoke_mcp_cache._call",
+                "scripts.smoke_mcp_cache._call",
                 return_value=fresh,
             ),
             self.assertRaisesRegex(ValueError, "empty"),
@@ -133,7 +133,7 @@ class SmokeMcpCacheTests(unittest.TestCase):
             self.run_check()
 
     def test_missing_credential_makes_no_request(self):
-        with patch("smoke_mcp_cache._call") as call, self.assertRaisesRegex(ValueError, "credential"):
+        with patch("scripts.smoke_mcp_cache._call") as call, self.assertRaisesRegex(ValueError, "credential"):
             check_mcp_cache(
                 "https://service.invalid",
                 "",
@@ -170,7 +170,7 @@ class SmokeMcpTransportTests(unittest.TestCase):
         response.headers = headers
         response.read.return_value = json.dumps(rpc).encode("utf-8")
 
-        with patch("smoke_mcp_cache.urllib.request.urlopen") as urlopen:
+        with patch("scripts.smoke_mcp_cache.urllib.request.urlopen") as urlopen:
             urlopen.return_value.__enter__.return_value = response
             result = _call(
                 "https://service.invalid",
@@ -277,7 +277,7 @@ class SmokeMcpTransportTests(unittest.TestCase):
         response.headers["Content-Type"] = "application/json"
         response.read.return_value = b"not-json"
 
-        with patch("smoke_mcp_cache.urllib.request.urlopen") as urlopen:
+        with patch("scripts.smoke_mcp_cache.urllib.request.urlopen") as urlopen:
             urlopen.return_value.__enter__.return_value = response
             with self.assertRaises(json.JSONDecodeError):
                 _call(
