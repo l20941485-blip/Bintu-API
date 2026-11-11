@@ -1,4 +1,4 @@
-﻿"""Table-driven SSRF regression matrix for the web scraper.
+"""Table-driven SSRF regression matrix for the web scraper.
 
 Every row below is a request an attacker would try to turn Bintu into
 an open proxy into the host's private network, or to smuggle a request
@@ -322,6 +322,18 @@ class SSRFMatrixTests(unittest.TestCase):
         for host in NUMERIC_IP_LITERALS:
             with self.subTest(host=host), self.assertRaises(TargetURLRejected):
                 resolve_public_addresses(host, 80)
+
+
+    def test_non_gaierror_resolver_failure_maps_to_connection_error(self):
+        """A resolver/network failure other than gaierror must not be treated as an invalid URL."""
+        with (
+            patch(
+                "bintu_api.scraper.fetcher.socket.getaddrinfo",
+                side_effect=OSError("resolver unavailable"),
+            ),
+            self.assertRaises(OSError),
+        ):
+            resolve_public_addresses("resolver-outage.example", 80)
 
     def test_unresolvable_hostname_is_rejected(self):
         """A hostname that does not resolve is refused, not retried blindly."""
