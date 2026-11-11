@@ -11,7 +11,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from bintu_api.api.routes import common as routes
+from bintu_api.api import scrape_adapter as routes
+from bintu_api.api.routes.extract import _scrape_text as scrape_text
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.settings import Settings
 
@@ -53,7 +54,7 @@ def cache_key():
 
 def run(request, skip_cache=False, sections=None):
     return asyncio.run(
-        routes._scrape_text(
+        scrape_text(
             request,
             URL,
             False,

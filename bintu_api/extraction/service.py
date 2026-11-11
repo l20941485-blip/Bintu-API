@@ -2,7 +2,7 @@
 
 Builds the scrape service from explicit collaborators and executes it using
 ScrapeRequestContext and ScrapeOptions. HTTP request adaptation remains in
-bintu_api.api.routes.common; this module does not import the route layer.
+bintu_api.api.scrape_adapter; this module does not import the route layer.
 """
 
 from __future__ import annotations

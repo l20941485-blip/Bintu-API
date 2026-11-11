@@ -19,14 +19,14 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Security
 
-from bintu_api.api.routes import common as routes_common
-from bintu_api.api.routes.common import (
-    _build_response,
-)
+from bintu_api.api import scrape_adapter as routes_common
 from bintu_api.api.schemas import (
     ErrorResponse,
     MobileScrapeTextRequest,
     ScrapeTextResponse,
+)
+from bintu_api.api.scrape_adapter import (
+    _build_response,
 )
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction.sections import select_sections

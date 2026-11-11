@@ -1,4 +1,4 @@
-﻿"""Test Access Denied for Bintu.
+"""Test Access Denied for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -12,7 +12,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from bintu_api.api.routes import common as routes
+from bintu_api.api import scrape_adapter as routes
 from bintu_api.api.routes.extract import _scrape_text
 from bintu_api.scraper.fetcher import UpstreamHTTPError
 from bintu_api.settings import Settings

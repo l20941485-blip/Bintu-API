@@ -1,4 +1,4 @@
-﻿"""Test Footnote Policy Api for Bintu.
+"""Test Footnote Policy Api for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -27,7 +27,7 @@ LONG_URL_HTML = (
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(
-        "bintu_api.api.routes.common.robots_decision",
+        "bintu_api.api.scrape_adapter.robots_decision",
         lambda *args, **kwargs: RobotsDecision(
             allowed=True,
             reason="disabled in tests",
@@ -89,7 +89,7 @@ def test_rest_openapi_exposes_footnote_policy_options(client):
 
 def test_rest_default_policy_truncates_and_reduces_tokens(client):
     with patch(
-        "bintu_api.api.routes.common.fetch_html_document",
+        "bintu_api.api.scrape_adapter.fetch_html_document",
         return_value=FetchedHTML(body=LONG_URL_HTML, charset="utf-8"),
     ):
         full_response = client.get(
@@ -154,7 +154,7 @@ def test_rest_rejects_non_positive_footnote_url_length(client, length):
 
 def test_rest_footnote_options_do_not_change_inline_links(client):
     with patch(
-        "bintu_api.api.routes.common.fetch_html_document",
+        "bintu_api.api.scrape_adapter.fetch_html_document",
         return_value=FetchedHTML(body=LONG_URL_HTML, charset="utf-8"),
     ):
         response = client.get(
@@ -198,7 +198,7 @@ def test_mcp_defaults_to_truncated_policy_for_footnote_extractor(
     transport,
 ):
     with patch(
-        "bintu_api.api.routes.common.fetch_html_document",
+        "bintu_api.api.scrape_adapter.fetch_html_document",
         return_value=FetchedHTML(body=LONG_URL_HTML, charset="utf-8"),
     ):
         response = _mcp_call(

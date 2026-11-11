@@ -1,4 +1,4 @@
-"""Shared fetch, robots, cache, and provenance helpers for API routes.
+"""Shared HTTP scrape adapter for REST and MCP transports.
 
 This module owns the fetch -> robots -> cache -> extract boundary shared by
 the REST scrape and chunk endpoints, plus the URL redaction and provenance
@@ -76,11 +76,6 @@ async def _enforce_robots(
         robots_decision_fn=robots_decision,
     )
 
-async def _scrape_text(*args, **kwargs):
-    """Compatibility delegate for the route-level text extraction helper."""
-    from bintu_api.api.routes.extract import _scrape_text as implementation
-
-    return await implementation(*args, **kwargs)
 
 def build_scrape_service(request: Request) -> ScrapeService:
     """Build a scrape service using the request-scoped collaborators."""
@@ -172,32 +167,3 @@ async def fetch_and_extract(
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

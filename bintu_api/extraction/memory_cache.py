@@ -1,8 +1,8 @@
-﻿"""Perform memory-cache operations for freshly fetched documents.
+"""Perform memory-cache operations for freshly fetched documents.
 
 This module owns the memory-cache read and conditional-write boundary.
 Callers supply the cache and fetch dependencies, preserving the established
-patch seams in `bintu_api.api.routes.common`.
+patch seams in `bintu_api.api.scrape_adapter`.
 """
 
 from __future__ import annotations

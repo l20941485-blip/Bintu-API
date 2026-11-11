@@ -1,4 +1,4 @@
-﻿"""URL validation must reject unsafe targets before DNS or network access."""
+"""URL validation must reject unsafe targets before DNS or network access."""
 
 from __future__ import annotations
 
@@ -125,11 +125,11 @@ class UrlValidationRouteMappingTests(unittest.TestCase):
     def test_route_maps_target_rejection_to_400(self) -> None:
         with (
             patch(
-                "bintu_api.api.routes.common._enforce_robots",
+                "bintu_api.api.scrape_adapter._enforce_robots",
                 new=AsyncMock(),
             ) as robots,
             patch(
-                "bintu_api.api.routes.common.fetch_html_document",
+                "bintu_api.api.scrape_adapter.fetch_html_document",
                 side_effect=TargetURLRejected("The target hostname resolves to a non-public address"),
             ) as fetch,
         ):

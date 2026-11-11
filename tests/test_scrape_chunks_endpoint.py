@@ -1,4 +1,4 @@
-﻿"""Tests for the /api/v1/scrape/chunks endpoint."""
+"""Tests for the /api/v1/scrape/chunks endpoint."""
 
 from __future__ import annotations
 
@@ -41,9 +41,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload()
 
         with (
-            patch("bintu_api.api.routes.common.verify_api_access"),
+            patch("bintu_api.api.scrape_adapter.verify_api_access"),
             patch(
-                "bintu_api.api.routes.common.rate_limit_identity",
+                "bintu_api.api.scrape_adapter.rate_limit_identity",
                 return_value="test-client",
             ),
             self.assertRaises(HTTPException) as caught,
@@ -67,9 +67,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload()
 
         with (
-            patch("bintu_api.api.routes.common.verify_api_access"),
+            patch("bintu_api.api.scrape_adapter.verify_api_access"),
             patch(
-                "bintu_api.api.routes.common.rate_limit_identity",
+                "bintu_api.api.scrape_adapter.rate_limit_identity",
                 return_value="test-client",
             ),
             self.assertRaises(HTTPException) as caught,
@@ -93,9 +93,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         payload = self._payload(render_js=True)
 
         with (
-            patch("bintu_api.api.routes.common.verify_api_access"),
+            patch("bintu_api.api.scrape_adapter.verify_api_access"),
             patch(
-                "bintu_api.api.routes.common.rate_limit_identity",
+                "bintu_api.api.scrape_adapter.rate_limit_identity",
                 return_value="test-client",
             ),
             self.assertRaises(HTTPException) as caught,
@@ -125,9 +125,9 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
         result.extracted_at = "2026-10-29T00:00:00+00:00"
 
         with (
-            patch("bintu_api.api.routes.common.verify_api_access"),
+            patch("bintu_api.api.scrape_adapter.verify_api_access"),
             patch(
-                "bintu_api.api.routes.common.rate_limit_identity",
+                "bintu_api.api.scrape_adapter.rate_limit_identity",
                 return_value="test-client",
             ),
             patch(

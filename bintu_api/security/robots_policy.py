@@ -4,7 +4,7 @@ This module owns the robots enforcement boundary. The low-level robots
 protocol, parsing, caching, and decision logic remain in ``bintu_api.scraper.robots``.
 
 The dependency parameters preserve the established patch seam in
-``bintu_api.api.routes.common`` during the modularization transition.
+``bintu_api.api.scrape_adapter`` during the modularization transition.
 """
 
 from __future__ import annotations

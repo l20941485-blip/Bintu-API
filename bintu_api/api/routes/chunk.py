@@ -16,7 +16,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Security
 
-from bintu_api.api.routes import common as routes_common
+from bintu_api.api import scrape_adapter as routes_common
 from bintu_api.api.schemas import (
     ErrorResponse,
     MobileScrapeTextRequest,

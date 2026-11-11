@@ -21,7 +21,7 @@ from bintu_api.settings import Settings
 from main import create_app
 
 _robots_patch = mock.patch(
-    "bintu_api.api.routes.common.robots_decision",
+    "bintu_api.api.scrape_adapter.robots_decision",
     return_value=RobotsDecision(allowed=True, reason="disabled in tests", checked=False),
 )
 
@@ -80,7 +80,7 @@ class TokenMeteringTests(unittest.TestCase):
         nav = "<nav>" + "menu link " * 60 + "</nav>"
         html = f"<html><body>{nav}<main>Real article body text here.</main></body></html>"
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=html.encode(), charset=None),
         ):
             response = self.rpc(
@@ -98,7 +98,7 @@ class TokenMeteringTests(unittest.TestCase):
 
     def test_approx_tokens_is_the_canonical_field_and_tokens_is_kept(self) -> None:
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>Hello world metering</main>", charset=None),
         ):
             response = self.rpc(
@@ -122,7 +122,7 @@ class TokenMeteringTests(unittest.TestCase):
         capped_app = create_app(Settings(api_key="", rapidapi_proxy_secret="", max_text_characters=40))
         capped_client = TestClient(capped_app)
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>" + b"word " * 200 + b"</main>", charset=None),
         ):
             capped = capped_client.post(
@@ -157,7 +157,7 @@ class TokenMeteringTests(unittest.TestCase):
 
     def test_metering_header_uses_approx_tokens(self) -> None:
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>Header check words</main>", charset=None),
         ):
             response = self.rpc(
@@ -176,7 +176,7 @@ class TokenMeteringTests(unittest.TestCase):
         self.app.state.supabase_client = supabase
 
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>Metered success</main>", charset=None),
         ):
             response = self.client.post(
@@ -259,7 +259,7 @@ class TokenMeteringTests(unittest.TestCase):
 
     def test_scrape_returns_unified_envelope(self) -> None:
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>Hello world metering</main>", charset=None),
         ):
             response = self.rpc(
@@ -288,7 +288,7 @@ class TokenMeteringTests(unittest.TestCase):
     def test_chunk_alias_returns_budgeted_chunks(self) -> None:
         long_text = "Sentence one. " * 200
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -315,7 +315,7 @@ class TokenMeteringTests(unittest.TestCase):
         app = create_app(Settings(api_key="", rapidapi_proxy_secret="", max_text_characters=40))
         client = TestClient(app)
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=long_html, charset=None),
         ):
             response = client.post(
@@ -338,7 +338,7 @@ class TokenMeteringTests(unittest.TestCase):
         """P2: chunking delivers every token, so it must report truncated=False."""
         long_text = "Sentence one. " * 200
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -363,7 +363,7 @@ class TokenMeteringTests(unittest.TestCase):
     def test_summarize_mode_still_reports_content_loss(self) -> None:
         long_text = "Sentence one is here. " * 300
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -383,7 +383,7 @@ class TokenMeteringTests(unittest.TestCase):
 
     def test_envelope_always_carries_split_flag(self) -> None:
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>tiny page</main>", charset=None),
         ):
             response = self.rpc(
@@ -414,7 +414,7 @@ class TokenMeteringTests(unittest.TestCase):
             with (
                 self.subTest(mode=mode),
                 patch(
-                    "bintu_api.api.routes.common.fetch_html_document",
+                    "bintu_api.api.scrape_adapter.fetch_html_document",
                     return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
                 ),
             ):
@@ -448,7 +448,7 @@ class TokenMeteringTests(unittest.TestCase):
     def test_summarize_mode_reports_real_savings(self) -> None:
         long_text = "Sentence one is here and it is long. " * 200
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=f"<main>{long_text}</main>".encode(), charset=None),
         ):
             response = self.rpc(
@@ -480,7 +480,7 @@ class TokenMeteringTests(unittest.TestCase):
         app = create_app(Settings(api_key="", rapidapi_proxy_secret="", mcp_api_key="shared-mcp-key"))
         client = TestClient(app)
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>identity check</main>", charset=None),
         ):
             first = client.post(
@@ -565,7 +565,7 @@ class TokenMeteringTests(unittest.TestCase):
 
     def test_metering_header_present(self) -> None:
         with patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=FetchedHTML(body=b"<main>Header check</main>", charset=None),
         ):
             response = self.rpc(
