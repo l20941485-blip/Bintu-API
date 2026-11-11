@@ -1,4 +1,4 @@
-﻿"""Regression coverage for nested Hacker News story and metadata rows."""
+"""Regression coverage for nested Hacker News story and metadata rows."""
 
 from pathlib import Path
 
@@ -22,7 +22,7 @@ def test_nested_hn_rows_preserve_comments_and_the_following_story():
 
     metadata_row = next(index for index, line in enumerate(lines) if "848 comments" in line)
     next_story_row = next(
-        index for index, line in enumerate(lines) if "2. | Second story title" in line
+        index for index, line in enumerate(lines) if "2. Second story title" in line
     )
     next_metadata_row = next(
         index for index, line in enumerate(lines) if "24 points" in line
