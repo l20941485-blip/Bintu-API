@@ -197,3 +197,24 @@ paywall, CAPTCHA, or anti-bot control are declined, not deferred.
 3. `/version` reviewed to confirm no secret material is echoed.
 4. New findings logged above with an ID and severity.
 
+
+
+## 2026-11-11 — Production smoke validation
+
+- Branch: `fix/smoke-metrics-request`
+- Commit: `00852bc`
+- Target: `https://bintu-api.onrender.com`
+- Default smoke checks: passed
+  - `/healthz`
+  - authenticated `/api/v1/scrape/text` against `https://example.com/`
+  - unsafe-URL rejection for `http://127.0.0.1/`
+  - `/metrics`
+  - `/robots.txt`
+  - `/llms.txt`
+  - public MCP `tools/list`
+- Opt-in MCP persistent-cache check: passed
+  - authenticated MCP refresh
+  - MCP persistent-cache fidelity
+- Metrics snapshot: 4 cache hits, 60 cache misses, 6.2% cache hit rate, 939,299 estimated tokens saved.
+- Smoke-script fix: `fix(smoke): pass metrics URL to smoke request helper` repaired the missing metrics URL argument in `_check_metrics()`.
+- Interpretation: persistent-cache path is operational for the exercised MCP URL; aggregate hit rate remains a weak operational signal because counters are cumulative and traffic/url diversity affects misses.
