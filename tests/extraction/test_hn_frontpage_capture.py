@@ -1,8 +1,8 @@
-"""Extraction checks against a saved, point-in-time Hacker News page."""
+﻿"""Extraction checks against a saved, point-in-time Hacker News page."""
 
 from pathlib import Path
 
-from bintu_api.scraper.fetcher import extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "hn_frontpage_capture.html"
 

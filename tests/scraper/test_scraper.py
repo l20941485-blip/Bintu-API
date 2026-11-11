@@ -1,4 +1,4 @@
-﻿"""Web fetching and HTML extraction for Bintu.
+"""Web fetching and HTML extraction for Bintu.
 
 This module owns network fetching, safety checks, and article extraction without making metering or HTTP route decisions.
 
@@ -11,6 +11,7 @@ import socket
 import unittest
 from unittest.mock import MagicMock, patch
 
+from bintu_api.extraction.html_extract import extract_text_result
 from bintu_api.scraper.fetcher import (
     PayloadTooLarge,
     TargetURLRejected,
@@ -21,7 +22,6 @@ from bintu_api.scraper.fetcher import (
     _parse_target,
     _PinnedHTTPConnection,
     _read_html_response,
-    extract_text_result,
     fetch_html,
     fetch_html_document,
     resolve_public_addresses,

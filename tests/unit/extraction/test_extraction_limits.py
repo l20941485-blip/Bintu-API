@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from bintu_api.scraper.fetcher import extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
 
 
 class ExtractionLimitTests(unittest.TestCase):

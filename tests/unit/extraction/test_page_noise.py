@@ -193,7 +193,7 @@ def test_same_document_rules():
 
 
 def _real_extract(html):
-    from bintu_api.scraper.fetcher import extract_text_result
+    from bintu_api.extraction.html_extract import extract_text_result
 
     return extract_text_result(
         html.encode("utf-8"),

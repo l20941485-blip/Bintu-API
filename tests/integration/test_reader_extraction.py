@@ -7,6 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 import pytest
 
+from bintu_api.extraction.html_extract import extract_text_result
 from bintu_api.reader.extraction import (
     ReaderDocumentEmpty,
     ReaderDocumentTooLarge,
@@ -16,7 +17,7 @@ from bintu_api.reader.service import (
     DEFAULT_MAX_DOCUMENT_CHARACTERS,
     read_page,
 )
-from bintu_api.scraper.fetcher import FetchedHTML, extract_text_result
+from bintu_api.scraper.fetcher import FetchedHTML
 
 URL = "https://example.com/start"
 

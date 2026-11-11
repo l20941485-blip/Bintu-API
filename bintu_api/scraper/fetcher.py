@@ -767,8 +767,3 @@ def _read_html_response(
         return decoded
 
     return bytes(html_bytes)
-
-from bintu_api.extraction.html_extract import _trafilatura_fallback as _trafilatura_fallback
-from bintu_api.extraction.html_extract import extract_text as extract_text
-from bintu_api.extraction.html_extract import extract_text_result as extract_text_result
-

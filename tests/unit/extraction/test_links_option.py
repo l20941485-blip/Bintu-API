@@ -7,7 +7,8 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 import pytest
 
-from bintu_api.scraper.fetcher import _compute_approx_tokens, extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
+from bintu_api.scraper.fetcher import _compute_approx_tokens
 
 
 def test_links_false_separates_link_and_span():

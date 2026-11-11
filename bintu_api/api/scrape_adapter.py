@@ -1,4 +1,4 @@
-"""Shared HTTP scrape adapter for REST and MCP transports.
+﻿"""Shared HTTP scrape adapter for REST and MCP transports.
 
 This module owns the fetch -> robots -> cache -> extract boundary shared by
 the REST scrape and chunk endpoints, plus the URL redaction and provenance
@@ -20,6 +20,7 @@ from fastapi import Request
 from bintu_api.api.scrape_context import build_scrape_request_context
 from bintu_api.extraction.cache_store import CachedMarkdown, get_cached_markdown, upsert_cached_markdown
 from bintu_api.extraction.context import _decode_source_text
+from bintu_api.extraction.html_extract import extract_text_result
 from bintu_api.extraction.output import (  # noqa: F401
     TOKEN_METHOD,
     redact_cache_url,
@@ -44,7 +45,6 @@ from bintu_api.extraction.service import (
 from bintu_api.observability import log_cache_event
 from bintu_api.scraper.fetcher import (
     FetchedHTML,
-    extract_text_result,
     fetch_html_document,
     fetch_rendered_html_document,
 )

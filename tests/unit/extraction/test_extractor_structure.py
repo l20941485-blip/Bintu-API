@@ -1,11 +1,11 @@
-﻿"""Regression tests for extractor structure and content-root selection."""
+"""Regression tests for extractor structure and content-root selection."""
 
 from __future__ import annotations
 
 import unittest
 import unittest.mock
 
-from bintu_api.scraper.fetcher import extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
 
 
 class ExtractorStructureTests(unittest.TestCase):
@@ -93,7 +93,7 @@ class ExtractorStructureTests(unittest.TestCase):
         <html><body><script>ignored</script></body></html>
         """
         with unittest.mock.patch(
-            "bintu_api.scraper.fetcher._trafilatura_fallback",
+            "bintu_api.extraction.html_extract._trafilatura_fallback",
             return_value="A much longer fallback article body with enough content to replace the sparse BeautifulSoup extraction result.",
         ) as fallback:
             result = self.extract(html)
@@ -114,7 +114,7 @@ class ExtractorStructureTests(unittest.TestCase):
         </body></html>
         """
         with unittest.mock.patch(
-            "bintu_api.scraper.fetcher._trafilatura_fallback",
+            "bintu_api.extraction.html_extract._trafilatura_fallback",
         ) as fallback:
             result = self.extract(html)
 
