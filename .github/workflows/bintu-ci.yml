@@ -52,7 +52,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      # Mirrors what Render builds for the Bintu-API service (Dockerfile at repo root).
+      # Build the repository Docker image without publishing it.
       - name: Build image (no push)
         uses: docker/build-push-action@v6
         with:
