@@ -66,5 +66,11 @@ def test_mcp_does_not_directly_import_scraper_or_extraction() -> None:
         "mcp",
         {"bintu_api.scraper", "bintu_api.extraction"},
     )
+
+
 def test_extraction_does_not_import_api() -> None:
     _assert_no_imports("extraction", {"bintu_api.api"})
+
+
+def test_security_does_not_import_scraper() -> None:
+    _assert_no_imports("security", {"bintu_api.scraper"})

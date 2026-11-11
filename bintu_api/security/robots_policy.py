@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import HTTPException
 
-from bintu_api.scraper.robots import RobotsDecision, robots_decision, robots_mode
+from bintu_api.common.robots import RobotsDecision
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.scrape")
@@ -26,8 +26,8 @@ async def enforce_robots(
     settings: Settings,
     url_hash: str,
     *,
-    robots_mode_fn: Callable[[Settings], str] = robots_mode,
-    robots_decision_fn: Callable[[str, Settings], Awaitable[RobotsDecision]] = robots_decision,
+    robots_mode_fn: Callable[[Settings], str],
+    robots_decision_fn: Callable[[str, Settings], Awaitable[RobotsDecision]],
 ) -> None:
     """Check robots.txt before any network fetch of the page.
 
