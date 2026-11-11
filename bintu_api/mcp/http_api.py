@@ -21,11 +21,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
-from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
-from bintu_api.extraction.cache import build_cache_economics
-from bintu_api.extraction.context import (
-    _decode_source_text,
-)
+from bintu_api.api import mcp_adapter
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -36,7 +32,6 @@ from bintu_api.mcp.schemas import (
 )
 from bintu_api.mcp.tools import ToolArguments, ToolCallRequest
 from bintu_api.observability import log_extraction_completed
-from bintu_api.scraper.fetcher import TargetURLRejected
 from bintu_api.security.auth import (
     api_key_scheme,
     mcp_rate_limit_identity,
@@ -135,7 +130,7 @@ async def call_tool(
     sections = arguments.sections
 
     try:
-        document, cached, cache_layer = await routes_common_fetch_and_extract(
+        document, cached, cache_layer = await mcp_adapter.fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
@@ -150,7 +145,7 @@ async def call_tool(
             max_footnote_url_length=arguments.max_footnote_url_length,
             )
 
-    except TargetURLRejected as error:
+    except mcp_adapter.TargetURLRejected as error:
         return _mcp_error_response(
             "invalid_or_unsafe_url",
             str(error),
@@ -169,11 +164,11 @@ async def call_tool(
             )
         raise
 
-    cache_economics = build_cache_economics(document, cached, cache_layer)
+    cache_economics = mcp_adapter.build_cache_economics(document, cached, cache_layer)
 
-    from bintu_api.extraction.pipeline import run_extraction
 
-    context = await run_extraction(
+
+    context = await mcp_adapter.run_extraction(
         request,
         arguments.url,
         mode=arguments.mode,
@@ -187,7 +182,7 @@ async def call_tool(
         identity=mcp_rate_limit_identity(request, settings),
         raw_text=cached.markdown,
         content_truncated=cached.truncated,
-        html_source_text=(_decode_source_text(document) if document is not None else ""),
+        html_source_text=(mcp_adapter.decode_source_text(document) if document is not None else ""),
         cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
         document=document,
@@ -213,9 +208,9 @@ async def call_tool(
         limiting_factor=context.limiting_factor,
     )
 
-    from bintu_api.extraction.response import build_mcp_envelope
 
-    envelope = build_mcp_envelope(context, arguments.url)
+
+    envelope = mcp_adapter.build_mcp_envelope(context, arguments.url)
 
     return {
         "content": [
