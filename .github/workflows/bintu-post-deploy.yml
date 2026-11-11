@@ -1,4 +1,4 @@
-name: bintu-post-deploy
+﻿name: bintu-post-deploy
 
 on:
   workflow_dispatch:

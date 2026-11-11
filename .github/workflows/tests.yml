@@ -1,4 +1,4 @@
-name: tests
+﻿name: tests
 
 on:
   push:
@@ -38,3 +38,5 @@ jobs:
           RAPIDAPI_PROXY_SECRET: ci_test_placeholder_proxy_secret_string
         run: |
           python -m pytest tests -q --ignore=tests/regression/test_bintu_full_suite.py --ignore=tests/regression/test_bintu_regressions.py
+
+
