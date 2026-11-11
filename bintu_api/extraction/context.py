@@ -1,4 +1,4 @@
-"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
+﻿"""Context pipeline: token-counted, cache-aware extraction modes for RAG-ready documents.
 
 
 Modes:
@@ -23,8 +23,8 @@ from typing import Any, Literal
 
 from fastapi import Request
 
-from bintu_api.api.schemas import CacheInfo
 from bintu_api.extraction.chunker import split_into_chunks
+from bintu_api.extraction.models import CacheInfo
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.summarizer import summarize_text
