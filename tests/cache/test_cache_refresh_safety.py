@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from bintu_api.api import scrape_adapter as routes
-from tests.test_cache_bypass import (
+from tests.cache.test_cache_bypass import (
     URL,
     FakeCache,
     cache_key,

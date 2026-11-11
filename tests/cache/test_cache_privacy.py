@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from bintu_api.api import scrape_adapter as routes
 from bintu_api.api.routes.extract import _scrape_text as scrape_text
 from bintu_api.api.scrape_adapter import redact_cache_url
-from tests.test_cache_bypass import (
+from tests.cache.test_cache_bypass import (
     URL,
     FakeCache,
     cache_key,
