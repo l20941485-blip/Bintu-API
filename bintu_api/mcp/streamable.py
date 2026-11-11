@@ -52,12 +52,9 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from bintu_api.api import mcp_adapter
 from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
-from bintu_api.extraction.context import (
-    _decode_source_text,
-    normalize_mode,
-)
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,
@@ -115,15 +112,6 @@ from bintu_api.mcp.tools import ToolArguments
 from bintu_api.observability import (
     log_extraction_completed,
     log_extraction_failed,
-)
-from bintu_api.scraper.fetcher import (
-    PayloadTooLarge,
-    TargetURLRejected,
-    TooManyRedirects,
-    UnsupportedContentEncoding,
-    UnsupportedMediaType,
-    UpstreamHTTPError,
-    UpstreamRenderError,
 )
 from bintu_api.security.auth import (
     mcp_rate_limit_identity,
@@ -276,7 +264,7 @@ def _tool_error_for_http_exception(error: HTTPException) -> ToolError:
 
 
 def _tool_error_for_extraction_exception(error: Exception) -> ToolError:
-    if isinstance(error, UpstreamHTTPError):
+    if isinstance(error, mcp_adapter.UpstreamHTTPError):
         if error.status_code == 429:
             return ToolError(
                 "upstream_rate_limited",
@@ -299,31 +287,31 @@ def _tool_error_for_extraction_exception(error: Exception) -> ToolError:
             retryable=retryable,
             retry_with="retry_later" if retryable else None,
         )
-    if isinstance(error, UnsupportedMediaType):
+    if isinstance(error, mcp_adapter.UnsupportedMediaType):
         return ToolError(
             "unsupported_media_type",
             "Only HTML and XHTML pages are supported.",
             "Use a public HTML page.",
         )
-    if isinstance(error, UnsupportedContentEncoding):
+    if isinstance(error, mcp_adapter.UnsupportedContentEncoding):
         return ToolError(
             "unsupported_content_encoding",
             "The target returned an unsupported or invalid compressed response.",
             "Use a page served with a supported content encoding.",
         )
-    if isinstance(error, PayloadTooLarge):
+    if isinstance(error, mcp_adapter.PayloadTooLarge):
         return ToolError(
             "payload_too_large",
             "The page exceeds the 1 MiB size limit.",
             "Try a smaller page.",
         )
-    if isinstance(error, TooManyRedirects):
+    if isinstance(error, mcp_adapter.TooManyRedirects):
         return ToolError(
             "too_many_redirects",
             "The page has too many redirects.",
             "Try the final destination URL.",
         )
-    if isinstance(error, UpstreamRenderError):
+    if isinstance(error, mcp_adapter.UpstreamRenderError):
         return ToolError(
             "upstream_render_error",
             "The target page could not be rendered.",
@@ -437,7 +425,7 @@ async def _tools_call_result(
         raw_arguments = dict(raw_arguments)
         if "mode" in raw_arguments:
             try:
-                raw_arguments["mode"] = normalize_mode(raw_arguments["mode"])
+                raw_arguments["mode"] = mcp_adapter.normalize_mode(raw_arguments["mode"])
             except ValueError as error:
                 return _rpc_result(
                     request_id,
@@ -529,7 +517,7 @@ async def _tools_call_result(
             max_footnote_url_length=arguments.max_footnote_url_length,
             sections=sections,
         )
-    except TargetURLRejected as error:
+    except mcp_adapter.TargetURLRejected as error:
         log_extraction_failed(
             request_id=getattr(getattr(request, "state", None), "request_id", None),
             url=arguments.url,
@@ -566,12 +554,12 @@ async def _tools_call_result(
             _tool_error_result(tool_error),
         )
     except (
-        UnsupportedMediaType,
-        UnsupportedContentEncoding,
-        PayloadTooLarge,
-        UpstreamHTTPError,
-        TooManyRedirects,
-        UpstreamRenderError,
+        mcp_adapter.UnsupportedMediaType,
+        mcp_adapter.UnsupportedContentEncoding,
+        mcp_adapter.PayloadTooLarge,
+        mcp_adapter.UpstreamHTTPError,
+        mcp_adapter.TooManyRedirects,
+        mcp_adapter.UpstreamRenderError,
         TimeoutError,
         OSError,
     ) as error:
@@ -595,14 +583,14 @@ async def _tools_call_result(
     # Preserve the original extraction economics when serving from the
     # persistent cache. The cached row no longer contains source HTML, so
     # recomputing these values would incorrectly report zero savings.
-    from bintu_api.extraction.cache import build_cache_economics
 
-    cache_economics = build_cache_economics(document, cached, cache_layer)
+
+    cache_economics = mcp_adapter.build_cache_economics(document, cached, cache_layer)
 
     try:
-        from bintu_api.extraction.pipeline import run_extraction
 
-        context = await run_extraction(
+
+        context = await mcp_adapter.run_extraction(
             request,
             arguments.url,
             mode=arguments.mode,
@@ -616,7 +604,7 @@ async def _tools_call_result(
             identity=mcp_rate_limit_identity(request, settings),
             raw_text=cached.markdown,
             content_truncated=cached.truncated,
-            html_source_text=(_decode_source_text(document) if document is not None else ""),
+            html_source_text=(mcp_adapter.decode_source_text(document) if document is not None else ""),
             cache_hit=cache_layer != "none",
             cache_layer=cache_layer,
             document=document,
@@ -660,9 +648,9 @@ async def _tools_call_result(
     # `token_method` names the counter; `html_tokens` is the fetched-document
     # baseline for `tokens_saved_estimate`; `limiting_factor` says which cap bound.
     # provenance is added additively (Phase D): same shape as REST response.
-    from bintu_api.extraction.response import build_mcp_envelope
 
-    envelope = build_mcp_envelope(
+
+    envelope = mcp_adapter.build_mcp_envelope(
         context,
         arguments.url,
         restore_section_headings=True,

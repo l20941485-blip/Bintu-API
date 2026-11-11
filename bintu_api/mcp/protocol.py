@@ -1,4 +1,4 @@
-﻿"""JSON-RPC protocol helpers for the Bintu MCP surface.
+"""JSON-RPC protocol helpers for the Bintu MCP surface.
 
 This module owns transport mechanics, protocol negotiation, and request validation without handling extraction or persistence.
 
@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
+from bintu_api.api import mcp_adapter
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -18,14 +19,6 @@ from bintu_api.mcp.schemas import (
     TOOL_NAME,
     TOOL_OUTPUT_SCHEMA,
     TOOL_TITLE,
-)
-from bintu_api.scraper.fetcher import (
-    PayloadTooLarge,
-    TooManyRedirects,
-    UnsupportedContentEncoding,
-    UnsupportedMediaType,
-    UpstreamHTTPError,
-    UpstreamRenderError,
 )
 from bintu_api.settings import Settings
 
@@ -186,21 +179,21 @@ def _origin_is_allowed(request: Request) -> bool:
 
 
 def _failure_code_for_error(error: Exception) -> str:
-    if isinstance(error, UpstreamHTTPError):
+    if isinstance(error, mcp_adapter.UpstreamHTTPError):
         if error.status_code == 429:
             return "upstream_rate_limited"
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             return "upstream_access_denied"
         return "upstream_http_error"
-    if isinstance(error, UnsupportedMediaType):
+    if isinstance(error, mcp_adapter.UnsupportedMediaType):
         return "unsupported_media_type"
-    if isinstance(error, UnsupportedContentEncoding):
+    if isinstance(error, mcp_adapter.UnsupportedContentEncoding):
         return "unsupported_content_encoding"
-    if isinstance(error, PayloadTooLarge):
+    if isinstance(error, mcp_adapter.PayloadTooLarge):
         return "payload_too_large"
-    if isinstance(error, TooManyRedirects):
+    if isinstance(error, mcp_adapter.TooManyRedirects):
         return "too_many_redirects"
-    if isinstance(error, UpstreamRenderError):
+    if isinstance(error, mcp_adapter.UpstreamRenderError):
         return "upstream_render_error"
     if isinstance(error, (TimeoutError, socket.timeout)):
         return "upstream_timeout"

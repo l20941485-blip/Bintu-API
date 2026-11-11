@@ -1,4 +1,4 @@
-﻿"""Tool validation and invocation helpers for Bintu MCP.
+"""Tool validation and invocation helpers for Bintu MCP.
 
 This module owns argument normalization and dispatch logic without importing storage or network concerns.
 
@@ -16,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from bintu_api.extraction.context import normalize_mode
+from bintu_api.api import mcp_adapter
 
 logger = logging.getLogger("bintu_api.mcp")
 
@@ -57,7 +57,7 @@ class ToolArguments(BaseModel):
         normalized = dict(data)
 
         if "mode" in normalized:
-            normalized["mode"] = normalize_mode(normalized["mode"])
+            normalized["mode"] = mcp_adapter.normalize_mode(normalized["mode"])
 
         if "chunk_token_budget" in normalized:
             if "max_tokens" in normalized:

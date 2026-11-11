@@ -3,8 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2] / "bintu_api"
 
 
@@ -63,13 +61,6 @@ def test_extraction_does_not_import_scraper() -> None:
     _assert_no_imports("extraction", {"bintu_api.scraper"})
 
 
-@pytest.mark.xfail(
-    reason=(
-        "MCP transport still directly imports scraper and extraction internals; "
-        "remove this exception during the MCP adapter migration."
-    ),
-    strict=True,
-)
 def test_mcp_does_not_directly_import_scraper_or_extraction() -> None:
     _assert_no_imports(
         "mcp",
