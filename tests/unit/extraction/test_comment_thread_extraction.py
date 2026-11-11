@@ -1,6 +1,6 @@
 ﻿"""Comment-thread pages must preserve discussion and omit site furniture."""
 
-from bintu_api.scraper.fetcher import extract_text
+from bintu_api.extraction.html_extract import extract_text
 
 HTML = b"""
 <html>

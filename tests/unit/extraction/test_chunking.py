@@ -5,7 +5,7 @@ This module owns a focused responsibility within the service and must remain iso
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
-from bintu_api.scraper.fetcher import extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
 
 
 def _assert_table_chunks_preserve_content(chunks, expected_lines, header, separator):

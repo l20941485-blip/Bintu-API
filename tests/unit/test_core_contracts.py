@@ -1,4 +1,4 @@
-"""Test Core Contracts for Bintu.
+﻿"""Test Core Contracts for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -6,7 +6,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 """
 
 from bintu_api.api import scrape_adapter as routes
-from bintu_api.scraper.fetcher import extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
 
 
 def test_link_modes_are_defined():

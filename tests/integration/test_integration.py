@@ -13,7 +13,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from bintu_api.scraper.fetcher import extract_text, extract_text_result, fetch_html
+from bintu_api.extraction.html_extract import extract_text, extract_text_result
+from bintu_api.scraper.fetcher import fetch_html
 from bintu_api.settings import Settings
 
 

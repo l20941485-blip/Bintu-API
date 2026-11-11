@@ -8,7 +8,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 from __future__ import annotations
 
 from bintu_api.extraction.context import split_into_chunks
-from bintu_api.scraper.fetcher import extract_text_result
+from bintu_api.extraction.html_extract import extract_text_result
 
 
 def _tokens(text: str) -> int:
