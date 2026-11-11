@@ -25,7 +25,6 @@ _p0_*
 .venv*/
 bintu_test_report.json
 .vscode/settings.json
-server.json
 tatus
 test_verify.py
 run_tests.py

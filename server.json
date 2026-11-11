@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.l20941485-blip/bintu",
+  "title": "Bintu Web Reader",
+  "description": "Fetch public web pages as clean, token-budgeted text for AI agents.",
+  "repository": {
+    "url": "https://github.com/l20941485-blip/Bintu-API",
+    "source": "github"
+  },
+  "version": "1.0.2",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://bintu-web-reader.mcpize.run/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <your MCPize subscription key>. Subscribe on the MCPize listing; a free plan is available.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
