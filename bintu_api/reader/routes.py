@@ -8,7 +8,6 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import BaseModel, Field, StrictInt
 
-from bintu_api.api.routes import common as scrape_routes
 from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.reader.auth import reader_owner
 from bintu_api.reader.extraction import (
@@ -24,8 +23,11 @@ from bintu_api.scraper.fetcher import (
     UnsupportedContentEncoding,
     UnsupportedMediaType,
     UpstreamHTTPError,
+    fetch_html_document,
 )
+from bintu_api.scraper.robots import robots_decision, robots_mode
 from bintu_api.security.auth import api_key_scheme, has_valid_proxy_secret
+from bintu_api.security.robots_policy import enforce_robots
 
 logger = logging.getLogger("bintu_api.reader")
 router = APIRouter(prefix="/api/v1/reader", tags=["Reader"])
@@ -97,9 +99,15 @@ async def _fetch_snapshot(request: Request, payload: ReadRequest):
     target_id = hashlib.sha256(payload.url.encode("utf-8")).hexdigest()[:12]
 
     try:
-        await scrape_routes._enforce_robots(payload.url, settings, target_id)
+        await enforce_robots(
+            payload.url,
+            settings,
+            target_id,
+            robots_mode_fn=robots_mode,
+            robots_decision_fn=robots_decision,
+        )
         document = await asyncio.to_thread(
-            scrape_routes.fetch_html_document,
+            fetch_html_document,
             payload.url,
             settings,
         )
