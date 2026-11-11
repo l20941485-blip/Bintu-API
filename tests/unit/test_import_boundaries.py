@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2] / "bintu_api"
 
 
@@ -68,3 +70,13 @@ def test_mcp_does_not_directly_import_scraper_or_extraction() -> None:
     )
 def test_extraction_does_not_import_api() -> None:
     _assert_no_imports("extraction", {"bintu_api.api"})
+
+@pytest.mark.xfail(
+    reason=(
+        "Security robots policy currently imports scraper robots implementation; "
+        "inject the robots-fetching capability or use a neutral contract."
+    ),
+    strict=True,
+)
+def test_security_does_not_import_scraper() -> None:
+    _assert_no_imports("security", {"bintu_api.scraper"})
