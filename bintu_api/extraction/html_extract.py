@@ -1,4 +1,4 @@
-﻿"""HTML-to-text extraction for Bintu.
+"""HTML-to-text extraction for Bintu.
 
 This module owns the BeautifulSoup-based extraction pipeline: content-root
 selection, noise/boilerplate removal, link handling, table/heading/pre-block
@@ -647,7 +647,11 @@ def extract_text_result(
                     ).strip()
                     for cell in cells
                 ]
-                row_text = " | ".join(cell_text)
+                is_hn_layout = row.find_parent("table", id="hnmain") is not None
+                if is_hn_layout:
+                    row_text = " ".join(value for value in cell_text if value)
+                else:
+                    row_text = " | ".join(cell_text)
 
                 if row.find("th", recursive=False):
                     row_text = f"{row_text}{boundary}{' | '.join('---' for _ in cells)}"
