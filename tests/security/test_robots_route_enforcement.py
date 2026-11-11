@@ -79,7 +79,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
 
                 with (
                     patch(
-                        "bintu_api.api.routes.common.robots_mode",
+                        "bintu_api.api.scrape_adapter.robots_mode",
                         return_value="enforce",
                     ),
                     patch(
@@ -87,7 +87,7 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                         return_value="enforce",
                     ),
                     patch(
-                        "bintu_api.api.routes.common.robots_decision",
+                        "bintu_api.api.scrape_adapter.robots_decision",
                         side_effect=robots_decision,
                     ) as decision_call,
                     patch(
@@ -95,19 +95,19 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
                         new=robots_fetch,
                     ),
                     patch(
-                        "bintu_api.api.routes.common.get_cached_markdown",
+                        "bintu_api.api.scrape_adapter.get_cached_markdown",
                         new=persistent_read,
                     ),
                     patch(
-                        "bintu_api.api.routes.common.upsert_cached_markdown",
+                        "bintu_api.api.scrape_adapter.upsert_cached_markdown",
                         new=persistent_write,
                     ),
                     patch(
-                        "bintu_api.api.routes.common.fetch_html_document",
+                        "bintu_api.api.scrape_adapter.fetch_html_document",
                         new=plain_fetch,
                     ),
                     patch(
-                        "bintu_api.api.routes.common.fetch_rendered_html_document",
+                        "bintu_api.api.scrape_adapter.fetch_rendered_html_document",
                         new=rendered_fetch,
                     ),
                 ):
@@ -213,17 +213,17 @@ class RobotsRouteEnforcementTests(unittest.TestCase):
 
         with (
             patch(
-                "bintu_api.api.routes.common.robots_decision",
+                "bintu_api.api.scrape_adapter.robots_decision",
             ) as decision_call,
             patch(
-                "bintu_api.api.routes.common.get_cached_markdown",
+                "bintu_api.api.scrape_adapter.get_cached_markdown",
                 new=AsyncMock(return_value=cached),
             ),
             patch(
-                "bintu_api.api.routes.common.fetch_html_document",
+                "bintu_api.api.scrape_adapter.fetch_html_document",
             ) as plain_fetch,
             patch(
-                "bintu_api.api.routes.common.fetch_rendered_html_document",
+                "bintu_api.api.scrape_adapter.fetch_rendered_html_document",
             ) as rendered_fetch,
         ):
             response = client.get(

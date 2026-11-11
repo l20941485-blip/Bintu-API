@@ -45,7 +45,7 @@ class PersistentCacheFidelityTests(unittest.TestCase):
 
     def test_persistent_cache_hit_preserves_newlines(self) -> None:
         with patch(
-            "bintu_api.api.routes.common.get_cached_markdown",
+            "bintu_api.api.scrape_adapter.get_cached_markdown",
             new=AsyncMock(return_value=_cached_row()),
         ):
             response = self.client.get(
@@ -64,10 +64,10 @@ class PersistentCacheFidelityTests(unittest.TestCase):
     def test_persistent_cache_hit_does_not_reextract_markdown(self) -> None:
         with (
             patch(
-                "bintu_api.api.routes.common.get_cached_markdown",
+                "bintu_api.api.scrape_adapter.get_cached_markdown",
                 new=AsyncMock(return_value=_cached_row()),
             ),
-            patch("bintu_api.api.routes.common.extract_text_result") as extract,
+            patch("bintu_api.api.scrape_adapter.extract_text_result") as extract,
         ):
             response = self.client.get(
                 "/api/v1/scrape/text",

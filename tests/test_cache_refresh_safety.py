@@ -1,11 +1,11 @@
-﻿"""Failed or empty refreshes must preserve cached raw HTML."""
+"""Failed or empty refreshes must preserve cached raw HTML."""
 
 import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from bintu_api.api.routes import common as routes
+from bintu_api.api import scrape_adapter as routes
 from tests.test_cache_bypass import (
     URL,
     FakeCache,

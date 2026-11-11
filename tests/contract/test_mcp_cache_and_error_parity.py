@@ -1,4 +1,4 @@
-﻿"""MCP cache bypass and upstream access-denial parity with REST."""
+"""MCP cache bypass and upstream access-denial parity with REST."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
         )()
 
         with patch(
-            "bintu_api.api.routes.common._fetch_and_extract",
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
             new=AsyncMock(return_value=(None, cached_row, "none")),
         ) as fetch:
             envelope = self._call_tool(
@@ -110,7 +110,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
         )()
 
         with patch(
-            "bintu_api.api.routes.common._fetch_and_extract",
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
             new=AsyncMock(return_value=(None, cached_row, "persistent")),
         ) as fetch:
             self._call_tool(
@@ -124,7 +124,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
     def test_upstream_403_maps_to_access_denied(self) -> None:
         with patch(
-            "bintu_api.api.routes.common._fetch_and_extract",
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
             new=AsyncMock(side_effect=UpstreamHTTPError(403, "Forbidden")),
         ):
             response = self._post_tool_call({"url": "https://example.com/page"})
@@ -138,7 +138,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
     def test_upstream_429_maps_to_rate_limited(self) -> None:
         with patch(
-            "bintu_api.api.routes.common._fetch_and_extract",
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
             new=AsyncMock(side_effect=UpstreamHTTPError(429, "Too Many Requests")),
         ):
             response = self._post_tool_call({"url": "https://example.com/page"})

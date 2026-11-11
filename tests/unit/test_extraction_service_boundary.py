@@ -1,10 +1,10 @@
-﻿"""Tests for the request-agnostic extraction service boundary."""
+"""Tests for the request-agnostic extraction service boundary."""
 
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from bintu_api.api.routes import common
+from bintu_api.api import scrape_adapter as common
 from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.service import (

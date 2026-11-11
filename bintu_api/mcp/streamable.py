@@ -52,7 +52,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from bintu_api.api.routes.common import fetch_and_extract as routes_common_fetch_and_extract
+from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
 from bintu_api.extraction.context import (
     _decode_source_text,
@@ -509,7 +509,7 @@ async def _tools_call_result(
         # MCP tool calls use the same robots, cache, SSRF-guarded page fetch,
         # and extractor pipeline as the REST endpoint. Call through the routes
         # module so tests can patch the shared network boundary at
-        # bintu_api.api.routes.common.fetch_html_document.
+        # bintu_api.api.scrape_adapter.fetch_html_document.
 
         sections = arguments.sections
 

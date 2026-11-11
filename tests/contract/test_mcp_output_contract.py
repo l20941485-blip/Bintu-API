@@ -1,4 +1,4 @@
-﻿"""Validate successful MCP outputs and legacy cache-argument forwarding."""
+"""Validate successful MCP outputs and legacy cache-argument forwarding."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ class MCPOutputContractTests(unittest.TestCase):
         )
 
         with patch(
-            "bintu_api.api.routes.common._fetch_and_extract",
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
             new=fetch,
         ):
             if surface == "legacy":

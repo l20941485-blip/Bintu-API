@@ -2,7 +2,7 @@
 
 This module owns the timeout and failure-logging boundary for persistent
 cache reads and writes. Callers supply the database functions, preserving
-the established patch seams in `bintu_api.api.routes.common`.
+the established patch seams in `bintu_api.api.scrape_adapter`.
 """
 
 from __future__ import annotations

@@ -87,7 +87,7 @@ def patch_fetch():
     )
 
     return patch(
-        "bintu_api.api.routes.common._fetch_and_extract",
+        "bintu_api.api.scrape_adapter._fetch_and_extract",
         new=AsyncMock(return_value=(document, cached, "persistent")),
     )
 

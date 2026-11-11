@@ -1,4 +1,4 @@
-﻿"""MCP extraction modes must be stable and semantically correct."""
+"""MCP extraction modes must be stable and semantically correct."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ class McpModeContractTests(unittest.TestCase):
     def setUp(self) -> None:
         # These contract tests isolate robots retrieval from page fetching.
         robots_patcher = patch(
-            "bintu_api.api.routes.common._enforce_robots",
+            "bintu_api.api.scrape_adapter._enforce_robots",
             new=AsyncMock(return_value=None),
         )
         self.addCleanup(robots_patcher.stop)
@@ -50,7 +50,7 @@ class McpModeContractTests(unittest.TestCase):
 
     def _patch_fetch(self):
         return patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.api.scrape_adapter.fetch_html_document",
             return_value=self.document,
         )
 

@@ -1,4 +1,4 @@
-﻿"""Test Cache Privacy for Bintu.
+"""Test Cache Privacy for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -10,8 +10,9 @@ import unittest
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
-from bintu_api.api.routes import common as routes
-from bintu_api.api.routes.common import redact_cache_url
+from bintu_api.api import scrape_adapter as routes
+from bintu_api.api.routes.extract import _scrape_text as scrape_text
+from bintu_api.api.scrape_adapter import redact_cache_url
 from tests.test_cache_bypass import (
     URL,
     FakeCache,
@@ -85,7 +86,7 @@ class PersistenceOptOutTests(unittest.TestCase):
 
     def run_scrape(self, request, url, persist):
         return asyncio.run(
-            routes._scrape_text(
+            scrape_text(
                 request,
                 url,
                 False,

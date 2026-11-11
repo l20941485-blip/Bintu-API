@@ -4,7 +4,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bintu_api.api.routes import common as routes
+from bintu_api.api import scrape_adapter as routes
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.settings import Settings
 

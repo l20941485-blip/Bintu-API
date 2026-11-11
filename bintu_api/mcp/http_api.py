@@ -21,7 +21,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
-from bintu_api.api.routes.common import fetch_and_extract as routes_common_fetch_and_extract
+from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.extraction.cache import build_cache_economics
 from bintu_api.extraction.context import (
     _decode_source_text,
