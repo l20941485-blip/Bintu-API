@@ -1,4 +1,4 @@
-﻿"""Web fetching for Bintu.
+"""Web fetching for Bintu.
 
 This module owns network fetching, safety checks, and HTML retrieval without
 making metering or HTTP route decisions. Text extraction lives in
@@ -254,7 +254,7 @@ def _parse_target(
     try:
         parsed = urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise TargetURLRejected("URL must be an absolute HTTP or HTTPSURL")
+            raise TargetURLRejected("URL must be an absolute HTTP or HTTPS URL")
         if parsed.username is not None or parsed.password is not None:
             raise TargetURLRejected("URLs containing credentials are not allowed")
 
