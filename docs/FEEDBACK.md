@@ -158,6 +158,7 @@ credentials, 413 upstream above 1 MiB, 415 non-HTML, 429 burst limit with
 | F-002 | 2026-09-30 | Low | Tests | `tests/test_integration.py` loopback cases time out on this workstation (Windows blocks the in-test HTTP listener). CI on Linux is unaffected; the two tests exercise `fetch_html` socketing only | Open, environment-specific |
 | F-003 | 2026-09-30 | Medium | Deployment | Free-tier instance sleeps when idle, so first request after inactivity can exceed RapidAPI's upstream timeout; burst buckets also reset on restart and are per-instance unless `REDIS_URL` is set | Open, accepted for free tier |
 | F-004 | 2026-09-30 | Medium | Quota | The 60/60s guard is a burst limit, not a monthly quota. Paid plan limits and billing are enforced by RapidAPI, so a plan misconfiguration shows up as billable traffic rather than a 429 here | Open, RapidAPI-owned |
+| F-005 | 2026-11-11 | Low | Production | Requests targeting numeric-IP forms (`http://2130706433`, `http://0177.0.0.1`) are blocked by Render WAF with HTML 403 before reaching Bintu, preventing Bintu's structured `invalid_or_unsafe_url` error envelope. Render WAF request IDs observed: `a59116b74eb4294f`, `a59117e97d3955f3`. No evidence of SSRF bypass or private-network access. Retain strict private-network rejection; treat as platform/WAF envelope inconsistency. | Open |
 
 Severity: **Critical** data loss, credential exposure, or SSRF/auth bypass;
 **High** wrong results or an endpoint down for real traffic; **Medium** degraded
