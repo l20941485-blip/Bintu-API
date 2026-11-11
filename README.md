@@ -1,4 +1,4 @@
-# Bintu Data Extraction API
+﻿# Bintu Data Extraction API
 
 ## Quickstart
 
@@ -149,7 +149,9 @@ Results may be served from memory or persistent cache (`cache_hit`, `cache_layer
 
 #### Rate limits
 
-The service applies a per-process burst limit (60 requests per 60 seconds by default). A burst-limit response (`429 burst_rate_limit_exceeded` on REST; `upstream_rate_limited` on MCP) includes a `Retry-After` hint. Pause and retry after that delay; do not retry immediately.
+The service applies a per-process burst limit (60 requests per 60 seconds by default). A caller-side burst-limit response returns HTTP 429 with `burst_rate_limit_exceeded` and a `Retry-After` header. On MCP, that condition is returned in-band as `upstream_rate_limited` with `retryable=true` and `retry_with="retry_after_delay"`.
+
+An upstream target returning HTTP 429 is distinct: REST returns HTTP 502 with `upstream_rate_limited`, while MCP returns the same in-band code. Wait before retrying either case; do not treat an upstream 429 as evidence that Bintu’s caller-side burst allowance was exhausted.
 
 ### Common responses
 
@@ -345,6 +347,10 @@ An invalid or unsafe URL returns HTTP 400:
 | 413 | `payload_too_large` | The HTML exceeds 1 MiB after decompression. |
 | 415 | `unsupported_media_type` | The target must return HTML or XHTML. |
 | 429 | `burst_rate_limit_exceeded` | Pause for the seconds specified in the `Retry-After` response header, then retry. |
+| 400 | `redirect_to_private_network` | The target redirected to a private-network address. Use a public HTTP or HTTPS URL. |
+| 502 | `upstream_rate_limited` | The target returned HTTP 429. Wait before retrying. |
+| 502 | `upstream_access_denied` | The target refused access with HTTP 401, 402, or 403. Do not retry unchanged. |
+| 500 | `internal_error` | An unexpected extraction failure occurred. Retry later; include the request ID when reporting an issue. |
 | 502 | `upstream_http_error`, `upstream_connection_error`, `upstream_render_error`, `unsupported_content_encoding`, or `too_many_redirects` | The target returned an error, could not be reached or rendered, used unsupported compression, or redirected too many times. |
 | 504 | `upstream_timeout` | The target did not respond in time. |
 
