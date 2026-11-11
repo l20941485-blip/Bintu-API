@@ -50,11 +50,11 @@ def env():
 
     with (
         patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.reader.routes.fetch_html_document",
             return_value=fetched,
         ) as fetch,
         patch(
-            "bintu_api.api.routes.common._enforce_robots",
+            "bintu_api.reader.routes.enforce_robots",
             new=AsyncMock(),
         ) as robots,
         TestClient(app) as client,
@@ -322,11 +322,11 @@ def test_reader_through_real_application():
             return_value=BurstRateLimiter(config),
         ),
         patch(
-            "bintu_api.api.routes.common.fetch_html_document",
+            "bintu_api.reader.routes.fetch_html_document",
             return_value=fetched,
         ) as fetch,
         patch(
-            "bintu_api.api.routes.common._enforce_robots",
+            "bintu_api.reader.routes.enforce_robots",
             new=AsyncMock(),
         ),
     ):
