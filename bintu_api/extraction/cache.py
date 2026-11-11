@@ -9,9 +9,9 @@ persisted economics instead of recomputing a misleading zero-savings baseline.
 
 from __future__ import annotations
 
+from bintu_api.common.fetch import FetchedHTML, compute_tokens_saved_estimate
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import CacheEconomics
-from bintu_api.scraper.fetcher import FetchedHTML, _compute_tokens_saved_estimate
 
 __all__ = [
     "build_cache_economics",
@@ -37,7 +37,7 @@ def compute_saved_tokens(document: FetchedHTML | None, cached: CachedMarkdown, c
     if cache_layer == "persistent" and cached.tokens_saved_estimate > 0:
         return cached.tokens_saved_estimate
     if document is not None:
-        return _compute_tokens_saved_estimate(document.body, cached.markdown)
+        return compute_tokens_saved_estimate(document.body, cached.markdown)
     return 0
 
 

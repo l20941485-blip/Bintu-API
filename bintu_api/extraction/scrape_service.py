@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.builder import build_cached_markdown
 from bintu_api.extraction.cache_policy import (
     compute_cache_key,
@@ -36,7 +37,6 @@ from bintu_api.extraction.request_policy import (
     validate_link_mode,
 )
 from bintu_api.extraction.scrape_options import ScrapeOptions
-from bintu_api.scraper.fetcher import FetchedHTML
 
 logger = logging.getLogger("bintu_api.scrape")
 
