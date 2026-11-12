@@ -219,3 +219,8 @@ paywall, CAPTCHA, or anti-bot control are declined, not deferred.
 - Metrics snapshot: 4 cache hits, 60 cache misses, 6.2% cache hit rate, 939,299 estimated tokens saved.
 - Smoke-script fix: `fix(smoke): pass metrics URL to smoke request helper` repaired the missing metrics URL argument in `_check_metrics()`.
 - Interpretation: persistent-cache path is operational for the exercised MCP URL; aggregate hit rate remains a weak operational signal because counters are cumulative and traffic/url diversity affects misses.
+## F-006 — Concurrent cache misses may fetch independently
+
+- **Severity:** Low
+- **Frequency:** Intermittent; only when multiple requests for the same uncached URL overlap
+- **Notes:** Current behavior is intentional cache-stampede behavior. Concurrent requests that miss the memory cache may each fetch and extract the target independently, then write the same cache key. Each response may therefore report a different `extracted_at`. Persistent-cache reads absorb repeat traffic across the retention window. Single-flight coalescing is deferred until duplicate-fetch cost, upstream rate limits, or multi-instance deployment makes it worthwhile.
