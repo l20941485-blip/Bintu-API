@@ -139,10 +139,12 @@ async def call_tool(
             render_js=arguments.render_js,
             skip_cache=not arguments.cache,
             persist=arguments.persist,
+            mode=arguments.mode,
             max_tokens=arguments.max_tokens,
             links=arguments.links,
             footnote_url_policy=arguments.footnote_url_policy,
             max_footnote_url_length=arguments.max_footnote_url_length,
+            sections=sections,
             )
 
     except mcp_adapter.TargetURLRejected as error:
