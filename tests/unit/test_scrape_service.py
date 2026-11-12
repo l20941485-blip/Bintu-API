@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -148,6 +149,38 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
     service.robots_enforcer.assert_awaited_once()
     service.html_fetcher.assert_called_once()
     assert list(cache.data.values()) == [document]
+
+@pytest.mark.asyncio
+async def test_concurrent_cache_misses_may_fetch_independently():
+    """Concurrent misses may each fetch and write the same cache key."""
+    cache = FakeCache()
+    request = make_request(cache)
+    document = fake_document()
+
+    fetch_calls = 0
+
+    def counting_html_fetcher(url, settings):
+        nonlocal fetch_calls
+        fetch_calls += 1
+        return document
+
+    service = make_service(
+        cache,
+        html_fetcher=MagicMock(side_effect=counting_html_fetcher),
+    )
+
+    first, second = await asyncio.gather(
+        call_service(service, request),
+        call_service(service, request),
+    )
+
+    assert len(first) == 3
+    assert len(second) == 3
+    assert first[2] == "none"
+    assert second[2] == "none"
+    assert fetch_calls == 2
+    assert len(cache.data) == 1
+
 
 
 
