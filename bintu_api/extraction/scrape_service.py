@@ -210,9 +210,11 @@ class ScrapeService:
             cacheable,
             persist,
         ):
+            from bintu_api.extraction.output import redact_cache_url
+
             await write_persistent_cache(
                 database_client,
-                url,
+                redact_cache_url(url),
                 render_js,
                 include_nav,
                 include_header,
