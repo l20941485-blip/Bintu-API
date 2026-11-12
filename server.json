@@ -7,7 +7,7 @@
     "url": "https://github.com/l20941485-blip/Bintu-API",
     "source": "github"
   },
-  "version": "1.0.2",
+  "version": "1.4.0",
   "remotes": [
     {
       "type": "streamable-http",
