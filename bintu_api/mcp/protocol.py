@@ -53,6 +53,8 @@ SERVER_INSTRUCTIONS = (
     "credential-like query parameters are never stored. robots.txt is honored.\n\n"
     "JavaScript rendering (render_js) works only if the operator enables it; if a "
     "call fails with render_js_disabled, retry with render_js=false.\n\n"
+    "If low_yield is true, read yield_hint and try the suggested alternative, such "
+    "as a print, AMP, RSS, or server-rendered version of the page.\n\n"
     "Every mode returns the unified JSON envelope "
     "{mode, tokens, approx_tokens, html_tokens, token_method, limiting_factor, "
     "chunk_count, cache_hit, cache_layer, source_url, extracted_at,    "
