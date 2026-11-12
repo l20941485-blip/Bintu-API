@@ -28,6 +28,70 @@ READ_CHUNK_BYTES = 4096
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
+def _normalize_numeric_ip(host: str) -> str | None:
+    """Return a canonical form for an ambiguous numeric IP host.
+
+    Returns ``None`` for canonical dotted-decimal IPv4 literals and
+    non-numeric hostnames. Returns a non-``None`` value for decimal integers,
+    shortened dotted forms, and leading-zero dotted forms, all of which must be
+    rejected before DNS resolution or a network connection.
+    """
+    if re.fullmatch(r"\d+", host):
+        value = int(host)
+        if value <= 0xFFFFFFFF:
+            return str(ipaddress.IPv4Address(value))
+        return host
+
+    parts = host.split(".")
+    if 2 <= len(parts) <= 4 and all(part.isdigit() for part in parts):
+        has_leading_zero = any(
+            len(part) > 1 and part.startswith("0") for part in parts
+        )
+        if has_leading_zero or len(parts) != 4:
+            return host
+
+    return None
+
+
+def _normalize_host_for_ssrf(url: str) -> str | None:
+    """Return a canonical form when the URL uses an ambiguous numeric host."""
+    host = urlsplit(url).hostname
+    if not host:
+        return None
+    return _normalize_numeric_ip(host)
+
+
+def _is_numeric_ip_host(host: str) -> bool:
+    """True when the host uses an ambiguous numeric IP form."""
+    return _normalize_numeric_ip(host) is not None
+
+
+def _check_numeric_ip_safety(
+    url: str, settings: Settings
+) -> tuple[bool, str | None]:
+    """Reject ambiguous numeric hosts before DNS or a connection.
+
+    Canonical IP literals remain on the existing resolver-based SSRF path.
+    """
+    del settings
+    host = urlsplit(url).hostname
+    if not host:
+        return False, None
+
+    if _normalize_numeric_ip(host) is not None:
+        return True, "invalid_or_unsafe_url"
+
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False, None
+
+    if not address.is_global or address.is_multicast:
+        return True, "invalid_or_unsafe_url"
+
+    return False, None
+
+
 def get_user_agent(settings) -> str:
     """Build the honest, identifiable User-Agent: BintuBot/<version> (+<info url>; <contact>)."""
     version = (getattr(settings, "service_version", "") or "").strip() or "0"
@@ -330,6 +394,16 @@ def _host_header(
     return formatted_host if port == default_port else f"{formatted_host}:{port}"
 
 
+def _raise_if_unsafe_numeric_ip(url: str, settings: Settings) -> None:
+    """Reject ambiguous numeric host forms before DNS or a connection."""
+    del settings
+    if _normalize_host_for_ssrf(url) is not None:
+        raise TargetURLRejected(
+            "Ambiguous numeric host forms are not allowed; "
+            "use a canonical domain name or canonical IP literal"
+        )
+
+
 def fetch_html(url: str, settings: Settings) -> bytes:
     """Fetch HTML bytes, following redirects and re-validating every hop."""
     return fetch_html_document(url, settings).body
@@ -392,6 +466,7 @@ def fetch_html_document(
     is_redirect_hop = False
 
     for _ in range(settings.max_redirects + 1):
+        _raise_if_unsafe_numeric_ip(current_url, settings)
         parsed, host, port, path = _parse_target(
             current_url,
             settings,
@@ -521,6 +596,7 @@ async def fetch_rendered_html_document(
         TimeoutError as PlaywrightTimeoutError,
     )
 
+    _raise_if_unsafe_numeric_ip(url, settings)
     _, host, port, _ = _parse_target(url, settings)
     await asyncio.to_thread(
         resolve_public_addresses,
@@ -587,6 +663,7 @@ async def fetch_rendered_html_document(
                     return
 
                 try:
+                    _raise_if_unsafe_numeric_ip(request.url, settings)
                     (
                         _,
                         request_host,
