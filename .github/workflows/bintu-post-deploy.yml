@@ -1,4 +1,4 @@
-﻿name: bintu-post-deploy
+name: bintu-post-deploy
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  regression-suite:
-    name: Regression suite against production
+  post-deploy-smoke-check:
+    name: Post-deploy smoke check
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -24,11 +24,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-dev.txt
 
-      - name: Run regression suite
+      - name: Run post-deploy smoke check
         env:
-          BINTU_TOKEN: ${{ secrets.BINTU_TOKEN }}
-          BINTU_URL: https://bintu-api.onrender.com
+          BINTU_BASE_URL: ${{ secrets.BINTU_BASE_URL }}
+          BINTU_API_KEY: ${{ secrets.BINTU_API_KEY }}
+          BINTU_SMOKE_TARGET_URL: https://example.com/
         run: |
-          python -m pytest tests/regression/test_bintu_regressions.py -vv -rxXs
+          python -m scripts.smoke_check
