@@ -150,3 +150,13 @@ def test_redis_recovery_restores_redis_mode(over_limit):
     assert gauge_value() == 1
 
 
+
+def test_redis_url_without_package_warns_and_uses_local_fallback(caplog):
+    with patch("bintu_api.security.rate_limit.redis", None), caplog.at_level(
+        "WARNING", logger="bintu_api.rate_limit"
+    ):
+        limiter = create_rate_limiter(settings("redis://localhost:6379/0"))
+
+    assert isinstance(limiter, BurstRateLimiter)
+    assert gauge_value() == 0
+    assert "redis_url_configured_but_package_unavailable" in caplog.text

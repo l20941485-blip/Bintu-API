@@ -134,5 +134,7 @@ def create_rate_limiter(settings: Settings):
         limiter = RedisRateLimiter(settings.redis_url, settings)
         RATE_LIMITER_MODE.set(1)
         return limiter
+    if settings.redis_url:
+        logger.warning("redis_url_configured_but_package_unavailable")
     RATE_LIMITER_MODE.set(0)
     return BurstRateLimiter(settings)
