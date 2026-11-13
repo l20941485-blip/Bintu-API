@@ -15,7 +15,7 @@ from bintu_api.common.fetch import FetchedHTML
 
 async def read_memory_cache(cache, cache_key: str, skip_cache: bool, sections):
     """Read a document from memory cache when permitted."""
-    if skip_cache or sections is not None:
+    if skip_cache:
         return None
     return cache.get(cache_key)
 

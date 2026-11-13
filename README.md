@@ -530,9 +530,11 @@ Markdown heading.
 Sentence-like lines are not treated as labels: a line ending in `.`, `!`,
 or `?`, or containing `, `, is excluded.
 
-When `sections` is supplied, cache reads are bypassed so selection uses
-freshly extracted Markdown. A fresh result may still be written to the
-persistent cache when `persist=true`.
+Section selection reuses the canonical cached full-page extraction.
+Section selectors are not part of the cache key. A cache miss fetches and
+extracts once, then applies selection; a cache hit applies selection to the
+cached extraction. A fresh result may still be written to the persistent cache
+when `persist=true`.
 
 The response includes `selected_sections` only for scrape requests that
 supply selectors. Each selected section contains:
