@@ -229,18 +229,6 @@ async def _scrape_text(
             sections=sections,
         )
 
-        if request.app.state.supabase_client is not None and routes_common.has_valid_proxy_secret(request, settings):
-            rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
-            if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
-                queue_usage_event(
-                    request,
-                    UsageEvent(
-                        identity=rapidapi_user,
-                        legacy_rpc=True,
-                        source="rest",
-                    ),
-                )
-
         response = _build_response(
             url,
             result,
@@ -302,6 +290,28 @@ async def _scrape_text(
             truncated=response.truncated,
             limiting_factor=result.limiting_factor,
         )
+
+        if (
+            request.app.state.supabase_client is not None
+            and routes_common.has_valid_proxy_secret(request, settings)
+        ):
+            rapidapi_user = request.headers.get("X-RapidAPI-User", "").strip()
+
+            if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
+                mode = getattr(response, "mode", "scrape")
+
+                queue_usage_event(
+                    request,
+                    UsageEvent(
+                        identity=rapidapi_user,
+                        gateway="rapidapi",
+                        scrapes=1,
+                        tokens=response.tokens,
+                        mode=mode,
+                        legacy_rpc=True,
+                        source="rest",
+                    ),
+                )
 
         return response
 
