@@ -20,7 +20,6 @@ def should_read_persistent_cache(
         and persistent_cache_enabled
         and cacheable
         and not skip_cache
-        and sections is None
     )
 
 
@@ -44,7 +43,7 @@ def should_read_memory_cache(
     sections: list[str] | None,
 ) -> bool:
     """Return whether a memory-cache read may be attempted."""
-    return not skip_cache and sections is None
+    return not skip_cache
 
 
 def should_write_memory_cache(

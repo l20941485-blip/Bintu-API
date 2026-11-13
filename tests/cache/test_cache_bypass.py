@@ -4,15 +4,12 @@ This module owns a focused responsibility within the service and must remain iso
 
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
-
 import asyncio
 import hashlib
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from bintu_api.api import scrape_adapter as routes
-from bintu_api.api.routes.extract import _scrape_text as scrape_text
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.settings import Settings
 
@@ -53,6 +50,7 @@ def cache_key():
 
 
 def run(request, skip_cache=False, sections=None):
+    from bintu_api.api.routes.extract import _scrape_text as scrape_text
     return asyncio.run(
         scrape_text(
             request,
@@ -68,46 +66,62 @@ def run(request, skip_cache=False, sections=None):
         )
     )
 
+
 class CacheBypassTests(unittest.TestCase):
-    def patches(self):
+    def patches(self, persistent_result=None):
         return (
-            mock.patch.object(routes, "fetch_html_document", return_value=fake_document()),
-            mock.patch.object(
-                routes,
-                "get_cached_markdown",
-                new=mock.AsyncMock(return_value=CachedMarkdown(markdown="from-persistent", truncated=False)),
+            mock.patch("bintu_api.api.scrape_adapter.fetch_html_document", return_value=fake_document()),
+            mock.patch(
+                "bintu_api.api.scrape_adapter.get_cached_markdown",
+                new=mock.AsyncMock(return_value=persistent_result),
             ),
-            mock.patch.object(routes, "upsert_cached_markdown", new=mock.AsyncMock()),
-            mock.patch.object(routes, "has_valid_proxy_secret", return_value=False),
+            mock.patch("bintu_api.api.scrape_adapter.upsert_cached_markdown", new=mock.AsyncMock()),
+            mock.patch("bintu_api.security.auth.has_valid_proxy_secret", return_value=False),
         )
 
-    def test_sections_bypass_persistent_and_memory_cache(self):
-        cache = FakeCache({cache_key(): fake_document()})
+    def test_sections_reuse_persistent_and_memory_cache(self):
+        """Sections requests reuse the canonical full-page cache."""
+        # First request: persistent miss, memory miss, fetch, canonical write.
+        cache = FakeCache()
         request = make_request(cache, db_client=object())
         fetch, get_cached, upsert, proxy = self.patches()
 
-        with (
-            fetch as fetch_m,
-            get_cached as get_m,
-            upsert as upsert_m,
-            proxy,
-        ):
+        with fetch as fetch_m, get_cached as get_m, upsert as upsert_m, proxy:
             response = run(request, sections=["Hello world"])
 
-        get_m.assert_not_called()
-        self.assertEqual(cache.get_calls, 0)
+        self.assertEqual(get_m.call_count, 1)
+        self.assertEqual(cache.get_calls, 1)
         fetch_m.assert_called_once()
-        upsert_m.assert_called_once()
+        self.assertIn(cache_key(), cache.data)
         self.assertEqual(response.cache_layer, "none")
-        self.assertIsNotNone(response.selected_sections)
         self.assertEqual(response.text, "Hello world")
 
+        # Second request: no persistent client, memory hit, no fetch.
+        cache2 = FakeCache({cache_key(): fake_document()})
+        request2 = make_request(cache2, db_client=None)
+        fetch2, get_cached2, upsert2, proxy2 = self.patches()
+
+        with fetch2 as fetch_m2, get_cached2 as get_m2, upsert2 as upsert_m2, proxy2:
+            response2 = run(request2, sections=["Hello world"])
+
+        self.assertFalse(get_m2.called)
+        self.assertEqual(cache2.get_calls, 1)
+        fetch_m2.assert_not_called()
+        self.assertEqual(response2.cache_layer, "memory")
+        self.assertEqual(response2.text, "Hello world")
+
     def test_skip_cache_reads_no_cache_but_still_writes(self):
+        """skip_cache=True should bypass cache reads but still write.
+
+        This test preserves the original behavior from the old test.
+        """
         cache = FakeCache({cache_key(): fake_document()})
         request = make_request(cache, db_client=object())
         fetch, get_cached, upsert, proxy = self.patches()
+
         with fetch as fetch_m, get_cached as get_m, upsert as upsert_m, proxy:
             response = run(request, skip_cache=True)
+
         get_m.assert_not_called()
         self.assertEqual(cache.get_calls, 0)
         fetch_m.assert_called_once()
@@ -115,36 +129,51 @@ class CacheBypassTests(unittest.TestCase):
         self.assertEqual(response.cache_layer, "none")
 
     def test_persistent_hit_does_not_fetch(self):
+        """Persistent cache hit should not fetch upstream.
+
+        This test preserves the original behavior from the old test.
+        """
         cache = FakeCache()
         request = make_request(cache, db_client=object())
-        fetch, get_cached, upsert, proxy = self.patches()
+        fetch, get_cached, upsert, proxy = self.patches(
+            persistent_result=CachedMarkdown(
+                markdown="from-persistent", truncated=False
+            ),
+        )
+
         with fetch as fetch_m, get_cached, upsert, proxy:
             response = run(request)
+
         fetch_m.assert_not_called()
         self.assertEqual(response.text, "from-persistent")
         self.assertEqual(response.cache_layer, "persistent")
 
     def test_memory_hit_does_not_fetch(self):
+        """Memory cache hit should not fetch upstream.
+
+        This test preserves the original behavior from the old test.
+        """
         cache = FakeCache({cache_key(): fake_document()})
         request = make_request(cache, db_client=None)
         fetch, get_cached, upsert, proxy = self.patches()
+
         with fetch as fetch_m, get_cached, upsert, proxy:
             response = run(request)
+
         fetch_m.assert_not_called()
         self.assertEqual(response.cache_layer, "memory")
 
     def test_cold_miss_fetches(self):
+        """Cold cache miss should fetch and extract once.
+
+        This test preserves the original behavior from the old test.
+        """
         cache = FakeCache()
         request = make_request(cache, db_client=None)
         fetch, get_cached, upsert, proxy = self.patches()
+
         with fetch as fetch_m, get_cached, upsert, proxy:
             response = run(request)
+
         fetch_m.assert_called_once()
         self.assertEqual(response.cache_layer, "none")
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
-

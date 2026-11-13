@@ -22,8 +22,10 @@ def fake_document(body=b"<html>fresh</html>"):
 class FakeCache:
     def __init__(self, initial=None):
         self.data = dict(initial or {})
+        self.get_calls = 0
 
     def get(self, key):
+        self.get_calls += 1
         return self.data.get(key)
 
     def set(self, key, value):
@@ -209,7 +211,7 @@ async def test_skip_cache_bypasses_reads_but_allows_persistent_write():
 
 
 @pytest.mark.asyncio
-async def test_sections_bypass_both_cache_reads():
+async def test_sections_reads_both_caches_then_extracts():
     cache = FakeCache()
     request = make_request(cache, database_client=object())
     service = make_service(cache)
@@ -222,7 +224,8 @@ async def test_sections_bypass_both_cache_reads():
 
     assert layer == "none"
     assert result.markdown == "extracted"
-    service.persistent_cache_reader.assert_not_called()
+    service.persistent_cache_reader.assert_awaited_once()
+    assert cache.get_calls == 1
     service.persistent_cache_writer.assert_awaited_once()
 
 
