@@ -13,6 +13,10 @@ class SectionSelection:
 
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.MULTILINE)
+_LIST_LABEL_RE = re.compile(
+    r"^\s*[-*+]\s+\*\*(.*?)\*\*\s*$",
+    re.MULTILINE,
+)
 
 
 def _normalize(value: str) -> str:
@@ -41,6 +45,28 @@ def _parse_headings(text: str) -> list[dict[str, Any]]:
         )
 
     return headings
+
+
+def _parse_list_labels(text: str) -> list[dict[str, Any]]:
+    labels: list[dict[str, Any]] = []
+
+    for line_index, line in enumerate(text.split("\n")):
+        match = _LIST_LABEL_RE.match(line)
+        if not match:
+            continue
+
+        label = match.group(1).strip()
+
+        labels.append(
+            {
+                "ordinal": len(labels),
+                "line_index": line_index,
+                "label": label,
+                "normalized": _normalize(label),
+            }
+        )
+
+    return labels
 
 
 def normalize_selectors(sections: str | list[str]) -> list[str]:
@@ -88,6 +114,79 @@ def select_sections(
     matched.sort(key=lambda heading: heading["ordinal"])    
 
     if not matched:
+        list_labels = _parse_list_labels(text)
+        matched_labels: list[dict[str, Any]] = []
+        matched_label_ordinals: set[int] = set()
+
+        for selector in selectors:
+            for label in list_labels:
+                if label["ordinal"] in matched_label_ordinals:
+                    continue
+
+                if label["normalized"] == selector:
+                    matched_labels.append(label)
+                    matched_label_ordinals.add(label["ordinal"])
+                    break
+
+        if matched_labels:
+            lines = text.split("\n")
+            selected: list[dict[str, Any]] = []
+            selected_texts: list[str] = []
+
+            for label in matched_labels:
+                start = label["line_index"] + 1
+                end = len(lines)
+
+                for later_label in list_labels:
+                    if later_label["line_index"] <= start:
+                        continue
+
+                    end = later_label["line_index"]
+                    break
+
+                section_text = "\n".join(lines[start:end]).strip()
+                selected_texts.append(section_text)
+
+                selected.append(
+                    {
+                        "heading": label["label"],
+                        "level": 0,
+                        "index": label["ordinal"],
+                        "text": section_text,
+                    }
+                )
+
+            max_chars = max_tokens * 4
+            remaining = max_chars
+            clipped: list[str] = []
+            truncated = False
+
+            for section_text in selected_texts:
+                separator_cost = 2 if clipped else 0
+                available = remaining - separator_cost
+
+                if available <= 0:
+                    clipped.append("")
+                    truncated = True
+                    continue
+
+                if len(section_text) <= available:
+                    clipped.append(section_text)
+                    remaining -= separator_cost + len(section_text)
+                else:
+                    clipped.append(section_text[:available])
+                    remaining = 0
+                    truncated = True
+
+            for section, clipped_text in zip(selected, clipped, strict=False):
+                section["text"] = clipped_text
+
+            return SectionSelection(
+                sections=selected,
+                text="\n\n".join(clipped),
+                truncated=truncated,
+            )
+
         blocks = [
             block.strip()
             for block in re.split(r"\n\s*\n", text)
