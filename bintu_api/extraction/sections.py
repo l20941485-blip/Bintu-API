@@ -17,6 +17,9 @@ _LIST_LABEL_RE = re.compile(
     r"^\s*[-*+]\s+\*\*(.*?)\*\*\s*$",
     re.MULTILINE,
 )
+_PLAIN_LABEL_RE = re.compile(
+    r"^(.+?)(?:\s+\((?:https?://|www\.)[^\s)]+\))?$"
+)
 
 
 def _normalize(value: str) -> str:
@@ -69,6 +72,49 @@ def _parse_list_labels(text: str) -> list[dict[str, Any]]:
     return labels
 
 
+def _is_plain_label(line: str) -> bool:
+    stripped = line.strip()
+
+    if not stripped or len(stripped) > 200:
+        return False
+
+    if re.search(r"[.!?]\s*$", stripped):
+        return False
+
+    if ", " in stripped:
+        return False
+
+    return bool(_PLAIN_LABEL_RE.match(stripped))
+
+
+def _parse_plain_labels(text: str) -> list[dict[str, Any]]:
+    labels: list[dict[str, Any]] = []
+
+    for line_index, line in enumerate(text.split("\n")):
+        stripped = line.strip()
+
+        if not _is_plain_label(stripped):
+            continue
+
+        match = _PLAIN_LABEL_RE.match(stripped)
+        label = match.group(1).strip()
+        normalized = _normalize(label)
+
+        if not normalized:
+            continue
+
+        labels.append(
+            {
+                "ordinal": len(labels),
+                "line_index": line_index,
+                "label": label,
+                "normalized": normalized,
+            }
+        )
+
+    return labels
+
+
 def normalize_selectors(sections: str | list[str]) -> list[str]:
     if isinstance(sections, str):
         raw_values = sections.split("\n")
@@ -114,6 +160,79 @@ def select_sections(
     matched.sort(key=lambda heading: heading["ordinal"])    
 
     if not matched:
+        plain_labels = _parse_plain_labels(text)
+        matched_plain_labels: list[dict[str, Any]] = []
+        matched_plain_ordinals: set[int] = set()
+
+        for selector in selectors:
+            for label in plain_labels:
+                if label["ordinal"] in matched_plain_ordinals:
+                    continue
+
+                if label["normalized"] == selector:
+                    matched_plain_labels.append(label)
+                    matched_plain_ordinals.add(label["ordinal"])
+                    break
+
+        if matched_plain_labels:
+            lines = text.split("\n")
+            selected: list[dict[str, Any]] = []
+            selected_texts: list[str] = []
+
+            for label in matched_plain_labels:
+                start = label["line_index"]
+                end = len(lines)
+
+                for later_label in plain_labels:
+                    if later_label["line_index"] <= start:
+                        continue
+
+                    end = later_label["line_index"]
+                    break
+
+                section_text = "\n".join(lines[start:end]).strip()
+                selected_texts.append(section_text)
+
+                selected.append(
+                    {
+                        "heading": label["label"],
+                        "level": 0,
+                        "index": label["ordinal"],
+                        "text": section_text,
+                    }
+                )
+
+            max_chars = max_tokens * 4
+            remaining = max_chars
+            clipped: list[str] = []
+            truncated = False
+
+            for section_text in selected_texts:
+                separator_cost = 2 if clipped else 0
+                available = remaining - separator_cost
+
+                if available <= 0:
+                    clipped.append("")
+                    truncated = True
+                    continue
+
+                if len(section_text) <= available:
+                    clipped.append(section_text)
+                    remaining -= separator_cost + len(section_text)
+                else:
+                    clipped.append(section_text[:available])
+                    remaining = 0
+                    truncated = True
+
+            for section, clipped_text in zip(selected, clipped, strict=False):
+                section["text"] = clipped_text
+
+            return SectionSelection(
+                sections=selected,
+                text="\n\n".join(clipped),
+                truncated=truncated,
+            )
+
         list_labels = _parse_list_labels(text)
         matched_labels: list[dict[str, Any]] = []
         matched_label_ordinals: set[int] = set()
