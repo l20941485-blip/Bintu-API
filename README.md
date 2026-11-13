@@ -513,10 +513,22 @@ REST accepts repeated `sections` query parameters:
 GET /api/v1/scrape/text?url=https%3A%2F%2Fexample.com&sections=Alpha&sections=Beta
 ```
 
-Selectors are matched exactly against normalized Markdown heading text:
-whitespace is collapsed and matching is case-insensitive. Each selector
-must be 200 characters or fewer. Empty or whitespace-only selectors return
-`invalid_arguments`.
+Selectors are matched exactly against normalized Markdown heading text or
+plain standalone label lines. Whitespace is collapsed and matching is
+case-insensitive. A trailing parenthesized HTTP or HTTPS link is ignored
+when matching a plain label. Each selector must be 200 characters or fewer.
+Empty or whitespace-only selectors return `invalid_arguments`.
+
+A plain label such as:
+
+MIME types (https://example.com/mime-types)
+
+matches the selector `MIME types`. The selected text includes the label
+and its following description, through the next standalone label or
+Markdown heading.
+
+Sentence-like lines are not treated as labels: a line ending in `.`, `!`,
+or `?`, or containing `, `, is excluded.
 
 When `sections` is supplied, cache reads are bypassed so selection uses
 freshly extracted Markdown. A fresh result may still be written to the
