@@ -37,3 +37,29 @@ async def test_scrape_sections_matches_plain_label_with_link():
     assert result.tokens > 0
     assert "Content-Type header" in result.text
     assert "Compression in HTTP" not in result.text
+
+
+@pytest.mark.asyncio
+async def test_scrape_sections_does_not_match_sentence_containing_selector():
+    with patch(
+        "bintu_api.extraction.context.rate_limit_identity",
+        return_value="test-identity",
+    ):
+        result = await extract_context(
+            request=AsyncMock(),
+            url="https://example.com",
+            mode="scrape",
+            max_tokens=8000,
+            sections="MIME types",
+            raw_text=(
+                "MIME types are important for web development.\n\n"
+                "Compression in HTTP\n"
+                "Browsers and servers compress their messages.\n"
+            ),
+            cache=False,
+            persist=False,
+        )
+
+    assert result.selected_sections == []
+    assert result.text == ""
+    assert result.tokens == 0
