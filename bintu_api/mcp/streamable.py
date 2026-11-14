@@ -200,7 +200,7 @@ def _tool_error_for_http_exception(error: HTTPException) -> ToolError:
             "upstream_rate_limited",
             "upstream_timeout",
             "upstream_connection_error",
-        } or (code == "upstream_http_error" and error.status_code >= 500)
+        }
         retry_with = (
             "retry_after_delay"
             if code == "upstream_rate_limited"
@@ -279,13 +279,10 @@ def _tool_error_for_extraction_exception(error: Exception) -> ToolError:
                 f"The target returned HTTP {error.status_code} and denied access.",
                 "Try another public URL.",
             )
-        retryable = error.status_code >= 500
         return ToolError(
             "upstream_http_error",
             f"The target returned HTTP {error.status_code}.",
-            "Retry later or use another public URL.",
-            retryable=retryable,
-            retry_with="retry_later" if retryable else None,
+            "Try another public URL.",
         )
     if isinstance(error, mcp_adapter.UnsupportedMediaType):
         return ToolError(

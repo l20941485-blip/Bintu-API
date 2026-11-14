@@ -175,6 +175,30 @@ class McpStreamableErrorContractTests(unittest.TestCase):
                 error = self._assert_error(result, expected_code)
                 self.assertIn("hint", error)
 
+    def test_upstream_404_is_not_retryable(self) -> None:
+        with patch(
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
+            side_effect=UpstreamHTTPError(404, "Not Found"),
+        ):
+            result = self._call({"url": "https://example.com/page"})
+
+        error = self._assert_error(result, "upstream_http_error")
+        self.assertFalse(error["retryable"])
+        self.assertNotIn("retry_with", error)
+        self.assertNotIn("Retry later", error.get("hint", ""))
+
+    def test_upstream_503_is_not_retryable(self) -> None:
+        with patch(
+            "bintu_api.api.scrape_adapter._fetch_and_extract",
+            side_effect=UpstreamHTTPError(503, "Service Unavailable"),
+        ):
+            result = self._call({"url": "https://example.com/page"})
+
+        error = self._assert_error(result, "upstream_http_error")
+        self.assertFalse(error["retryable"])
+        self.assertNotIn("retry_with", error)
+        self.assertNotIn("Retry later", error.get("hint", ""))
+
     def test_http_exceptions_use_stable_codes(self) -> None:
         cases = (
             (
