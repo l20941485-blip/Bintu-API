@@ -309,3 +309,17 @@ def test_links_inline_preserves_urls():
 
 
 
+
+
+def test_links_footnotes_uses_real_newlines_in_link_list():
+    from bintu_api.extraction.chunker import apply_link_policy
+
+    result = apply_link_policy(
+        "See [Example](https://example.com).",
+        "footnotes",
+        "https://example.com",
+    )
+
+    assert "## Links" in result
+    assert "1. https://example.com" in result
+    assert "\\n" not in result
