@@ -92,7 +92,7 @@ def translate_upstream_error(
             status_code=400,
             detail={
                 "code": "invalid_or_unsafe_url",
-                "message": str(error),
+                "message": "The target URL is invalid or unsafe.",
                 "hint": "URL must start with http or https and be publicly accessible.",
             },
         )
@@ -106,7 +106,7 @@ def translate_upstream_error(
             status_code=415,
             detail={
                 "code": "unsupported_media_type",
-                "message": str(error),
+                "message": "The target returned an unsupported media type.",
                 "hint": "Only HTML and XHTML pages are supported.",
             },
         )
@@ -120,7 +120,7 @@ def translate_upstream_error(
             status_code=502,
             detail={
                 "code": "unsupported_content_encoding",
-                "message": str(error),
+                "message": "The target returned an unsupported or invalid compressed response.",
                 "hint": "The target returned an unsupported or invalid compressed response.",
             },
         )
@@ -184,7 +184,7 @@ def translate_upstream_error(
             status_code=502,
             detail={
                 "code": "too_many_redirects",
-                "message": str(error),
+                "message": "The target redirected too many times.",
                 "hint": "The page has too many redirects.",
             },
         )
@@ -198,7 +198,7 @@ def translate_upstream_error(
             status_code=502,
             detail={
                 "code": "upstream_render_error",
-                "message": str(error),
+                "message": "The target page could not be rendered.",
                 "hint": "The target page could not be rendered.",
             },
         )

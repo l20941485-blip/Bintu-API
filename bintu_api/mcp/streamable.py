@@ -523,7 +523,10 @@ async def _tools_call_result(
             error_type=type(error).__name__,
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
         )
-        logger.info("mcp_tool_error detail=%r", str(error))
+        logger.info(
+            "mcp_tool_error error_type=%s",
+            type(error).__name__,
+        )
         return _rpc_result(
             request_id,
             _tool_error_result(
@@ -545,7 +548,10 @@ async def _tools_call_result(
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
             status_code=error.status_code,
         )
-        logger.info("mcp_tool_error detail=%r", error.detail)
+        logger.info(
+            "mcp_tool_error error_type=%s",
+            type(error).__name__,
+        )
         return _rpc_result(
             request_id,
             _tool_error_result(tool_error),
@@ -620,7 +626,10 @@ async def _tools_call_result(
             duration_ms=(time.perf_counter() - extraction_started_at) * 1000,
             status_code=error.status_code,
         )
-        logger.info("mcp_tool_error detail=%r", error.detail)
+        logger.info(
+            "mcp_tool_error error_type=%s",
+            type(error).__name__,
+        )
         return _rpc_result(
             request_id,
             _tool_error_result(tool_error),
@@ -761,7 +770,11 @@ async def mcp_messages(request: Request):
         try:
             verify_mcp_execution_access(request, settings)
         except HTTPException as error:
-            detail = error.detail if isinstance(error.detail, dict) else {"message": str(error.detail)}
+            detail = (
+                error.detail
+                if isinstance(error.detail, dict)
+                else {"message": "Authentication required."}
+            )
             # 401 detail always carries the canonical upgrade_url so agents can
             # print a clickable subscribe link in-chat.
             upgrade_url = detail.get("upgrade_url") or mcp_upgrade_url(settings)

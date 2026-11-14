@@ -150,7 +150,7 @@ async def call_tool(
     except mcp_adapter.TargetURLRejected as error:
         return _mcp_error_response(
             "invalid_or_unsafe_url",
-            str(error),
+            "The target URL is invalid or unsafe.",
             "URL must start with http:// or https:// and be publicly accessible.",
         )
     except HTTPException as error:
