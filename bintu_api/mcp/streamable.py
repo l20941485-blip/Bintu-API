@@ -825,6 +825,12 @@ async def mcp_messages(request: Request):
             if isinstance(envelope, dict) and ("approx_tokens" in envelope or "tokens" in envelope):
                 response.headers["X-Token-Usage"] = str(max(0, int(approx)))
                 response.headers["X-Mode"] = str(envelope.get("mode", ""))
+                response.headers["X-Cache-Hit"] = (
+                    "true" if envelope.get("cache_hit") is True else "false"
+                )
+                response.headers["X-Cache-Hit"] = (
+                    "true" if envelope.get("cache_hit") is True else "false"
+                )
         except Exception:
             pass
         return response
