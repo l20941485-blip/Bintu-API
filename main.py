@@ -108,6 +108,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.reader_store = SnapshotStore()
     application.add_middleware(UsageMeteringMiddleware)
     application.add_middleware(RequestObservabilityMiddleware)
+
+    @application.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+        return response
     application.include_router(discovery_router)
     application.include_router(router)
     application.include_router(reader_router)
