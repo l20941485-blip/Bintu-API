@@ -51,7 +51,7 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
         if should_meter:
             settings: Settings = request.app.state.settings
             identity = resolve_metering_identity(request, settings)
-            supabase = request.app.state.supabase_client
+            supabase = getattr(request.app.state, "supabase_client", None)
 
             logger.info(
                 "usage_metering_decision path=%s status=%s identity=%s gateway=%s supabase_client_present=%s",
@@ -68,6 +68,16 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
                 try:
                     tokens = int(token_header)
                 except ValueError:
+                    tokens = 0
+
+                # Cache hits reuse a prior extraction, so do not bill token
+                # usage twice. The caller still receives one scrape event.
+                if response.headers.get("X-Cache-Hit", "").lower() == "true":
+                    tokens = 0
+
+                # Cache hits reuse a prior extraction, so do not bill token
+                # usage twice. The caller still receives one scrape event.
+                if response.headers.get("X-Cache-Hit", "").lower() == "true":
                     tokens = 0
 
                 await record_usage_event(

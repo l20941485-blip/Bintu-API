@@ -36,6 +36,16 @@ def resolve_metering_identity(
     if api_key and api_key == settings.mcp_api_key:
         return f"mcpize:{_hash(api_key)}", "mcpize"
 
+    # Bearer MCPize token support. Mirror MCP authentication, which accepts
+    # either the scoped MCP key or the master API key through Bearer auth.
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header:
+        scheme, separator, token = auth_header.partition(" ")
+        if separator and scheme.lower() == "bearer":
+            token = token.strip()
+            if token and token in {settings.mcp_api_key, settings.api_key}:
+                return f"mcpize:{_hash(token)}", "mcpize"
+
     user_id = request.headers.get("x-user-id", "").strip().lower()
     if user_id:
         return f"local:{user_id}", "local"
