@@ -77,7 +77,7 @@ def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
     transformed = _MARKDOWN_LINK.sub(replace, text)
 
     if links == "footnotes" and footnote_lines:
-        transformed = transformed.rstrip() + "\\n\\n## Links\\n\\n" + "\\n".join(footnote_lines)
+        transformed = transformed.rstrip() + "\n\n## Links\n\n" + "\n".join(footnote_lines)
 
     return transformed
 
