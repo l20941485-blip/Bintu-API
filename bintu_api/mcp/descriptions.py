@@ -31,7 +31,7 @@ TOOL_DESCRIPTION = (
     "operator enablement. Failures return isError=true with stable codes such as "
     "invalid_or_unsafe_url, upstream_access_denied, blocked_by_robots, "
     "payload_too_large, unsupported_media_type, upstream_rate_limited, and "
-    "upstream_http_error. Repeated story blocks are removed (deduplicated_count); "
+    "upstream_http_error. Repeated story blocks are excluded (deduplicated_count); "
     "code is returned in fenced blocks; tables are pipe-delimited."
 )
 
@@ -70,7 +70,7 @@ RENDER_JS_DESCRIPTION = (
 
 LINKS_DESCRIPTION = (
     "How to represent hyperlinks in extracted text. inline preserves readable link URLs; "
-    "footnotes uses numbered references and a link list; false removes URLs for the lowest-token output."
+    "footnotes uses numbered references and a link list; false omits URLs for the lowest-token output."
 )
 
 FOOTNOTE_URL_POLICY_DESCRIPTION = (
@@ -102,7 +102,7 @@ OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
     "deduplicated_count": {
         "type": "integer",
         "minimum": 0,
-        "description": "Repeated story blocks removed from the extracted text.",
+        "description": "Repeated story blocks excluded from the extracted text.",
     },
     "low_yield": {
         "type": "boolean",

@@ -61,7 +61,7 @@ Invoke-RestMethod `
 
 #### What `bintu_scrape_text` does
 
-Fetches one public HTTP or HTTPS URL and returns its readable text, sized for an LLM context window. Only HTML/XHTML pages up to 1 MiB are supported; PDF, JSON, images, and pages that require JavaScript are not. Article or main content is preferred; navigation, headers, footers, ads, and cookie banners are dropped; repeated story blocks are removed (`deduplicated_count`); links appear as `label (url)`; code is returned in fenced blocks with indentation kept; tables are pipe-delimited.
+Fetches one public HTTP or HTTPS URL and returns its readable text, sized for an LLM context window. Only HTML/XHTML pages up to 1 MiB are supported; PDF, JSON, images, and pages that require JavaScript are not. Article or main content is preferred; navigation, headers, footers, advertisements, and cookie banners are excluded from the extracted text; repeated story blocks are excluded (`deduplicated_count`); links appear as `label (url)`; code is returned in fenced blocks with indentation kept; tables are pipe-delimited.
 
 #### When to use it
 
@@ -78,7 +78,7 @@ Fetches one public HTTP or HTTPS URL and returns its readable text, sized for an
 | `mode` | string | `scrape` | `scrape` returns readable text trimmed to `max_tokens`; `chunk` splits the page into budgeted chunks; `summarize` returns leading text within `max_tokens`. `chunked` is accepted as an alias for `chunk`. |
 | `max_tokens` | integer | 6000 | Approximate token budget, enforced in every mode (range 100–50,000). Accepted alias: `chunk_token_budget`. |
 | `chunk_token_budget` | integer | — | Accepted alias for `max_tokens`; `max_tokens` wins on conflict. |
-| `links` | string | `inline` | `inline` preserves readable link URLs; `footnotes` uses numbered references and a link list; `false` removes URLs for the lowest-token output. |
+| `links` | string | `inline` | `inline` preserves readable link URLs; `footnotes` uses numbered references and a link list; `false` omits URLs for the lowest-token output. |
 | `footnote_url_policy` | string | `truncated` | For `links=footnotes` only: `full` preserves complete destinations; `truncated` replaces over-limit destinations with non-clickable text. |
 | `max_footnote_url_length` | integer | 100 | For `links=footnotes` only: maximum URL length for visible labels and truncated destinations. |
 | `render_js` | boolean | false | Render in a browser before extraction. Available only if the operator enables it; otherwise `render_js_disabled` is returned. |
@@ -100,13 +100,13 @@ Every successful call returns the same JSON envelope (in `structuredContent` and
 | `chunk_count` | integer | Number of chunks in `chunks`. |
 | `cache_hit` | boolean | True when served from memory or persistent cache. |
 | `cache_layer` | string | `none`, `memory`, or `persistent`. |
-| `source_url` | string | Requested URL with sensitive-looking query parameters removed. |
+| `source_url` | string | Requested URL with sensitive-looking query parameters excluded. |
 | `extracted_at` | string | UTC ISO 8601 timestamp of the extraction. |
 | `tokens_saved_estimate` | integer | Source-HTML estimate minus returned-text estimate, floored at 0. |
 | `truncated` | boolean | True when content exceeded a limit and text was shortened. |
 | `split` | boolean | True when content spans multiple chunks (chunk mode only). |
 | `chunks` | array | Each item: `{index, text, tokens, approx_tokens}`. |
-| `deduplicated_count` | integer | Repeated story blocks removed. |
+| `deduplicated_count` | integer | Repeated story blocks excluded. |
 | `low_yield` | boolean | True when a large page produced very little text. |
 | `yield_hint` | string | Present only when `low_yield` is true. |
 | Provenance fields* | — | `request_id`, `fetched_at`, `requested_url`, `final_url`, `content_type`, `bytes_fetched`, `content_sha256`, `cache`, `extractor_version` — present when available. |
@@ -478,7 +478,7 @@ One API, three doors. Behaviour is identical; only auth + billing differ per gat
 | Quota | 60 req / 60 s burst guard per IP | 60/60s per `X-RapidAPI-User` + plan quota | 60/60s global across MCPize subscribers (single upstream token) + plan quota |
 | Cache | 5-min in-memory + 24 h Supabase persistent | Same | Same upstream cache; cold fetch ~2–6 s, cache hit ~300 ms |
 
-**Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — nav/ads/footer stripped, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
+**Token Tax positioning (MCP):** `bintu_scrape_text` is a Token-Sanitized Context Gateway — navigation, advertisements, and footer content excluded from extracted text, deterministic `max_tokens` chunks (`chunked→chunk`, `chunk_token_budget→max_tokens` aliases), every mode returns the unified JSON envelope `core fields `mode`, `tokens`, `approx_tokens`, `html_tokens`, `token_method`, `limiting_factor`, `chunk_count`, `cache_hit`, `cache_layer`, `source_url`, `extracted_at`, `tokens_saved_estimate`, `truncated`, `split`, and `chunks`` in `content[0].text` plus `X-Token-Usage` header and 401 `-32001` `upgrade_url` (`https://mcpize.com`, override `BINTU_UPGRADE_URL`). No tier caps in code — dashboards own quota. New env: `BINTU_UPGRADE_URL` (default `https://mcpize.com`).
 
 ### Section selection
 
