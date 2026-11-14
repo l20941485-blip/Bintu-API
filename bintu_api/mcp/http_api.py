@@ -218,7 +218,7 @@ async def call_tool(
         "content": [
             {
                 "type": "text",
-                "text": json.dumps(envelope),
+                "text": json.dumps(envelope, ensure_ascii=False),
             }
         ],
         "structuredContent": envelope,

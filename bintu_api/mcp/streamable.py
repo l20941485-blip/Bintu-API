@@ -658,7 +658,7 @@ async def _tools_call_result(
     return _rpc_result(
         request_id,
         {
-            "content": [{"type": "text", "text": json.dumps(envelope)}],
+            "content": [{"type": "text", "text": json.dumps(envelope, ensure_ascii=False)}],
             # MCP clients validate this against TOOL_OUTPUT_SCHEMA when the
             # tool declares an outputSchema. Keep the human-readable JSON in
             # content[0].text while exposing the same envelope structurally.
