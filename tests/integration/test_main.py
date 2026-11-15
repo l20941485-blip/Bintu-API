@@ -1036,7 +1036,7 @@ class ScraperApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertEqual(
             response.json()["detail"]["code"],
-            "upstream_http_error",
+            "upstream_not_found",
         )
 
     def test_metrics_are_exposed_without_url_labels(self) -> None:
