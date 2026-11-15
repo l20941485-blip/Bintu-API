@@ -340,10 +340,13 @@ def _keep_lead_ins(chunks: list[str], max_tokens: int) -> list[str]:
 
     * a heading that ends a chunk moves to the start of the next chunk;
     * a line ending in ":" moves to the next chunk when that chunk starts with a
-      code fence ("For example:" stays with its example).
+      code fence ("For example:" stays with its example);
+    * a chunk that begins with a table retains the active section heading from
+      the preceding chunk, so a continuation table is understandable on its own.
     A move is skipped when the next chunk would exceed the budget.
     """
     chunks = list(chunks)
+
     for _ in range(4):  # headings and colon lines can chain
         changed = False
         for index in range(len(chunks) - 1):
@@ -360,6 +363,31 @@ def _keep_lead_ins(chunks: list[str], max_tokens: int) -> list[str]:
                     changed = True
         if not changed:
             break
+
+    # A table can begin a new chunk even when its heading was followed by prose.
+    # Retain the most recent heading so the continuation remains self-describing.
+    for index in range(1, len(chunks)):
+        chunk = chunks[index]
+        first_line = chunk.split("\n", 1)[0]
+        if not _is_table_block(first_line) and not first_line.lstrip().startswith("|"):
+            continue
+
+        previous_lines = chunks[index - 1].split("\n")
+        active_heading = next(
+            (
+                line
+                for line in reversed(previous_lines)
+                if _HEADING_LINE.match(line)
+            ),
+            "",
+        )
+        if not active_heading or active_heading in chunk:
+            continue
+
+        moved = f"{active_heading}\n{chunk}"
+        if count_tokens(moved) <= max_tokens:
+            chunks[index] = moved
+
     return chunks
 
 
