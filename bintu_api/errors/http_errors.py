@@ -46,6 +46,8 @@ def resolve_upstream_error(error: Exception) -> UpstreamErrorSpec | None:
     if isinstance(error, UpstreamHTTPError):
         if error.status_code == 429:
             return UpstreamErrorSpec(502, "upstream_rate_limited")
+        if error.status_code == 404:
+            return UpstreamErrorSpec(502, "upstream_not_found")
         if error.status_code in (401, 402, 403):
             return UpstreamErrorSpec(502, "upstream_access_denied")
         return UpstreamErrorSpec(502, "upstream_http_error")
@@ -152,6 +154,16 @@ def translate_upstream_error(
                     "code": "upstream_rate_limited",
                     "message": "The target returned HTTP 429.",
                     "hint": "The target is rate limiting requests. Wait before retrying.",
+                    "upstream_status": error.status_code,
+                },
+            )
+        if error.status_code == 404:
+            return HTTPException(
+                status_code=502,
+                detail={
+                    "code": "upstream_not_found",
+                    "message": "The target returned HTTP 404.",
+                    "hint": "The requested resource was not found. Verify the URL; do not retry the same URL.",
                     "upstream_status": error.status_code,
                 },
             )
