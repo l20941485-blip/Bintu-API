@@ -211,26 +211,33 @@ def _is_table_block(block: str) -> bool:
 def _retain_referenced_footnotes(selected_text: str, raw_text: str) -> str:
     """Retain footnote entries referenced by a selected section.
 
-    Section selection can retain ``[n]`` references while excluding the
-    document-level ``## Links`` or ``## References`` section. Retain only the
-    referenced entries so the selected text remains self-contained without
-    adding unrelated links.
+    Prefer the extractor-generated ``## Links`` section: its numbered entries
+    correspond to the ``[n]`` markers inserted during footnote extraction.
+    Fall back to ``## References`` only when no Links section exists.
     """
     referenced = set(re.findall(r"\[(\d+)\]", selected_text))
     if not referenced:
         return selected_text
 
-    section_match = re.search(
-        r"(?ms)^## (?P<title>Links|References)\s*$\n(?P<body>.*?)(?=^## |\Z)",
+    links_match = re.search(
+        r"(?ms)^## Links\s*$\n(?P<entries>.*?)(?=^## |\Z)",
         raw_text,
     )
-    if not section_match:
-        return selected_text
+    if links_match:
+        section_title = "Links"
+    else:
+        links_match = re.search(
+            r"(?ms)^## References\s*$\n(?P<entries>.*?)(?=^## |\Z)",
+            raw_text,
+        )
+        if not links_match:
+            return selected_text
+        section_title = "References"
 
     entries: dict[str, list[str]] = {}
     current_number: str | None = None
 
-    for line in section_match.group("body").splitlines():
+    for line in links_match.group("entries").splitlines():
         number_match = re.match(r"^\s*(\d+)\.", line)
         if number_match:
             current_number = number_match.group(1)
@@ -243,14 +250,11 @@ def _retain_referenced_footnotes(selected_text: str, raw_text: str) -> str:
         entry_lines = entries.get(number)
         if not entry_lines:
             continue
-
-        entry = "\n".join(line for line in entry_lines if line)
-        retained.append(entry)
+        retained.append("\n".join(line for line in entry_lines if line))
 
     if not retained:
         return selected_text
 
-    section_title = section_match.group("title")
     return (
         f"{selected_text.rstrip()}\n\n## {section_title}\n"
         + "\n\n".join(retained)
