@@ -66,6 +66,9 @@ def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
             url = urljoin(base_url, url)
 
         if links == "false":
+            if label.startswith(("http://", "https://", "mailto:")):
+                return ""
+
             return label
 
         if url not in footnote_numbers:
