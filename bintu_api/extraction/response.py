@@ -101,6 +101,14 @@ def build_mcp_envelope(
         "chunks": context.chunks,
         **provenance,
     }
+
+    # Chunk mode already returns the document in `chunks[].text`. Keeping the
+    # rejoined document in `text` would duplicate every chunk in the MCP
+    # envelope. `content[0].text` still contains the serialized envelope for
+    # MCP backward compatibility.
+    if context.mode == "chunk":
+        envelope["text"] = ""
+
     return envelope
 
 
