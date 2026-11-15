@@ -1,4 +1,6 @@
-﻿"""Test Links Option for Bintu.
+from bintu_api.extraction.chunker import apply_link_policy
+
+"""Test Links Option for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
 
@@ -323,3 +325,19 @@ def test_links_footnotes_uses_real_newlines_in_link_list():
     assert "## Links" in result
     assert "1. https://example.com" in result
     assert "\\n" not in result
+
+
+def test_links_false_removes_url_labeled_link():
+    text = (
+        "Retrieved from "
+        "[https://example.com/page](https://example.com/page)."
+    )
+
+    result = apply_link_policy(
+        text,
+        links="false",
+        base_url="https://example.com/",
+    )
+
+    assert result == "Retrieved from ."
+    assert "https://example.com/page" not in result
