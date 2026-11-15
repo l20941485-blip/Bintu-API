@@ -1,4 +1,5 @@
 from bintu_api.extraction.chunker import apply_link_policy
+
 """Test Links Option for Bintu.
 
 This module owns a focused responsibility within the service and must remain isolated from unrelated transport or persistence concerns.
@@ -313,7 +314,7 @@ def test_links_inline_preserves_urls():
 
 
 def test_links_footnotes_uses_real_newlines_in_link_list():
-    from bintu_api.extraction.chunker import apply_link_policy, apply_link_policy
+    from bintu_api.extraction.chunker import apply_link_policy
 
     result = apply_link_policy(
         "See [Example](https://example.com).",
