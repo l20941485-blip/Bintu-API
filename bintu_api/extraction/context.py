@@ -24,7 +24,7 @@ from typing import Any, Literal
 from fastapi import Request
 
 from bintu_api.common.fetch import FetchedHTML
-from bintu_api.extraction.chunker import split_into_chunks
+from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
 from bintu_api.extraction.models import CacheInfo
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.extraction.sections import select_sections
@@ -271,6 +271,7 @@ async def extract_context(
     cache: bool = True,
     persist: bool = True,
     render_js: bool = False,
+    links: str = "inline",
     include_nav: bool = False,
     include_header: bool = False,
     include_footer: bool = False,
@@ -401,7 +402,12 @@ async def extract_context(
                 limiting_factor = "token_budget"
 
     elif mode == "chunk":
-        chunk_strings = split_into_chunks(raw_text, max_tokens)
+        policy_text = apply_link_policy(
+            raw_text,
+            links=links,
+            base_url=url,
+        )
+        chunk_strings = split_into_chunks(policy_text, max_tokens)
         chunks = [
             {
                 "index": index,
