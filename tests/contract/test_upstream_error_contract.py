@@ -123,7 +123,7 @@ class UpstreamErrorContractTests(unittest.TestCase):
         self.assertIn("500", payload["detail"]["message"])
         self._assert_privacy(response)
 
-    def test_target_404_maps_to_upstream_http_error(self) -> None:
+    def test_target_404_maps_to_upstream_not_found(self) -> None:
         with (
             patch(
                 "bintu_api.api.scrape_adapter._enforce_robots",
@@ -140,7 +140,7 @@ class UpstreamErrorContractTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(
             payload["detail"]["code"],
-            "upstream_http_error",
+            "upstream_not_found",
         )
         self.assertIn("404", payload["detail"]["message"])
         self._assert_privacy(response)
