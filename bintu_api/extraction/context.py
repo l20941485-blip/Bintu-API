@@ -212,31 +212,49 @@ def _retain_referenced_footnotes(selected_text: str, raw_text: str) -> str:
     """Retain footnote entries referenced by a selected section.
 
     Section selection can retain ``[n]`` references while excluding the
-    document-level ``## Links`` section. Append only the referenced entries so
-    the selected text remains self-contained without adding unrelated links.
+    document-level ``## Links`` or ``## References`` section. Retain only the
+    referenced entries so the selected text remains self-contained without
+    adding unrelated links.
     """
-    if "## Links" not in raw_text:
-        return selected_text
-
     referenced = set(re.findall(r"\[(\d+)\]", selected_text))
     if not referenced:
         return selected_text
 
-    links_match = re.search(r"(?ms)^## Links\s*$\n(.*?)(?=^## |\Z)", raw_text)
-    if not links_match:
+    section_match = re.search(
+        r"(?ms)^## (?P<title>Links|References)\s*$\n(?P<body>.*?)(?=^## |\Z)",
+        raw_text,
+    )
+    if not section_match:
         return selected_text
 
+    entries: dict[str, list[str]] = {}
+    current_number: str | None = None
+
+    for line in section_match.group("body").splitlines():
+        number_match = re.match(r"^\s*(\d+)\.", line)
+        if number_match:
+            current_number = number_match.group(1)
+            entries[current_number] = [line.strip()]
+        elif current_number is not None:
+            entries[current_number].append(line.strip())
+
     retained: list[str] = []
-    for line in links_match.group(1).splitlines():
-        match = re.match(r"^\s*(\d+)\.", line)
-        if match and match.group(1) in referenced:
-            retained.append(line.strip())
+    for number in sorted(referenced, key=int):
+        entry_lines = entries.get(number)
+        if not entry_lines:
+            continue
+
+        entry = "\n".join(line for line in entry_lines if line)
+        retained.append(entry)
 
     if not retained:
         return selected_text
 
-    return f"{selected_text.rstrip()}\n\n## Links\n" + "\n".join(retained)
-
+    section_title = section_match.group("title")
+    return (
+        f"{selected_text.rstrip()}\n\n## {section_title}\n"
+        + "\n\n".join(retained)
+    )
 
 
 async def extract_context(
