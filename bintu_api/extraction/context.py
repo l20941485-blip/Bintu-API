@@ -208,6 +208,37 @@ def _is_table_block(block: str) -> bool:
     return len(lines) >= 2 and all("|" in line for line in lines)
 
 
+def _retain_referenced_footnotes(selected_text: str, raw_text: str) -> str:
+    """Retain footnote entries referenced by a selected section.
+
+    Section selection can retain ``[n]`` references while excluding the
+    document-level ``## Links`` section. Append only the referenced entries so
+    the selected text remains self-contained without adding unrelated links.
+    """
+    if "## Links" not in raw_text:
+        return selected_text
+
+    referenced = set(re.findall(r"\[(\d+)\]", selected_text))
+    if not referenced:
+        return selected_text
+
+    links_match = re.search(r"(?ms)^## Links\s*$\n(.*?)(?=^## |\Z)", raw_text)
+    if not links_match:
+        return selected_text
+
+    retained: list[str] = []
+    for line in links_match.group(1).splitlines():
+        match = re.match(r"^\s*(\d+)\.", line)
+        if match and match.group(1) in referenced:
+            retained.append(line.strip())
+
+    if not retained:
+        return selected_text
+
+    return f"{selected_text.rstrip()}\n\n## Links\n" + "\n".join(retained)
+
+
+
 async def extract_context(
     request: Request,
     url: str,
@@ -314,7 +345,10 @@ async def extract_context(
     if mode == "scrape":
         if sections:
             selection = select_sections(raw_text, sections, max_tokens)
-            final_text = selection.text
+            final_text = _retain_referenced_footnotes(
+                selection.text,
+                raw_text,
+            )
             chunks = []
             selected_sections = selection.sections
             token_truncated = selection.truncated
