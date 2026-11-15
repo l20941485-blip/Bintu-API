@@ -178,6 +178,7 @@ async def call_tool(
         sections=sections,
         cache=arguments.cache,
         render_js=arguments.render_js,
+        links=arguments.links,
         include_nav=False,
         include_header=False,
         include_footer=False,
