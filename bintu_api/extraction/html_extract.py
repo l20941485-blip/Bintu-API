@@ -322,6 +322,34 @@ def _truncate_extracted_text(
     )
 
 
+def _truncate_extracted_text_with_footnotes(
+    text: str,
+    footnote_block: str,
+    max_characters: int,
+) -> ExtractedText:
+    """Truncate body text while preserving the complete footnote block.
+
+    Footnotes are appended after the main content. Without reserving space for
+    them, a long document can lose its entire ``## Links`` section before
+    section selection can retain entries referenced by the selected text.
+    """
+    if not footnote_block:
+        return _truncate_extracted_text(text, max_characters)
+
+    reserved = min(len(footnote_block), max_characters)
+    body_budget = max(0, max_characters - reserved)
+    body = _truncate_extracted_text(text, body_budget)
+    combined = body.text + footnote_block
+
+    if len(combined) > max_characters:
+        return _truncate_extracted_text(combined, max_characters)
+
+    return ExtractedText(
+        text=combined,
+        truncated=body.truncated,
+    )
+
+
 def _trafilatura_fallback(
     html_bytes: bytes,
     max_characters: int,
@@ -690,6 +718,7 @@ def extract_text_result(
     if normalized_title:
         lines.insert(0, f"# {normalized_title}")
 
+    footnote_block = ""
     if links == "footnotes" and footnotes:
         footnote_lines = []
         for index, destination in enumerate(footnotes, start=1):
@@ -713,8 +742,7 @@ def extract_text_result(
                 footnote_lines.append(
                     f"{index}. [{escaped_label}](<{destination}>)"
                 )
-        lines.extend(["", "## Links"])
-        lines.extend(footnote_lines)
+        footnote_block = "\n\n## Links\n" + "\n".join(footnote_lines)
 
     text = "\n".join(lines)
     text = restore_pre_placeholders(text)
@@ -740,8 +768,9 @@ def extract_text_result(
             max_characters,
         )
 
-    return _truncate_extracted_text(
+    return _truncate_extracted_text_with_footnotes(
         text,
+        footnote_block,
         max_characters,
     )
 
