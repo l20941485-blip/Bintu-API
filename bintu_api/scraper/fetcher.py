@@ -21,6 +21,7 @@ from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
 
 from bintu_api.common.fetch import FetchedHTML
+from bintu_api.extraction.html_extract import extract_html_metadata
 from bintu_api.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,8 @@ def _is_numeric_ip_host(host: str) -> bool:
 
 
 def _check_numeric_ip_safety(
-    url: str, settings: Settings
+    url: str,
+    settings: Settings,
 ) -> tuple[bool, str | None]:
     """Reject ambiguous numeric hosts before DNS or a connection.
 
@@ -569,6 +571,11 @@ def fetch_html_document(
                 settings.max_html_bytes,
             )
 
+            canonical_url, language = extract_html_metadata(
+                body,
+                from_encoding=_content_charset(content_type),
+            )
+
             return FetchedHTML(
                 body=body,
                 charset=_content_charset(content_type),
@@ -576,6 +583,8 @@ def fetch_html_document(
                 status=status,
                 redirect_count=redirect_count,
                 content_type=content_type,
+                canonical_url=canonical_url,
+                language=language,
             )
         finally:
             connection.close()
@@ -736,6 +745,8 @@ async def fetch_rendered_html_document(
                 redirect_count += 1
                 redirected_request = redirected_request.redirected_from
 
+            metadata = extract_html_metadata(body, from_encoding="utf-8")
+
             return FetchedHTML(
                 body=body,
                 charset="utf-8",
@@ -743,6 +754,8 @@ async def fetch_rendered_html_document(
                 status=response.status,
                 redirect_count=redirect_count,
                 content_type=content_type,
+                canonical_url=metadata.canonical_url,
+                language=metadata.language,
             )
         finally:
             if browser is not None:

@@ -5,7 +5,13 @@ from __future__ import annotations
 import unittest
 import unittest.mock
 
-from bintu_api.extraction.html_extract import extract_text_result
+from bs4 import BeautifulSoup
+
+from bintu_api.extraction.html_extract import (
+    extract_canonical_url,
+    extract_language,
+    extract_text_result,
+)
 
 
 class ExtractorStructureTests(unittest.TestCase):
@@ -122,5 +128,48 @@ class ExtractorStructureTests(unittest.TestCase):
         self.assertIn("Article body.", result.text)
 
 
+class CanonicalAndLanguageTests(unittest.TestCase):
+    def parse(self, html: str) -> BeautifulSoup:
+        return BeautifulSoup(html, "html.parser")
 
+    def test_canonical_url_from_link_rel_canonical(self):
+        soup = self.parse(
+            "<html><head>"
+            '<link rel="canonical" href="https://example.com/canonical">'
+            "</head><body><main><p>Body</p></main></body></html>",
+        )
 
+        self.assertEqual(
+            extract_canonical_url(soup),
+            "https://example.com/canonical",
+        )
+
+    def test_canonical_url_is_none_when_link_absent(self):
+        soup = self.parse(
+            "<html><head></head><body><main><p>Body</p></main></body></html>",
+        )
+
+        self.assertIsNone(extract_canonical_url(soup))
+
+    def test_language_from_html_lang(self):
+        soup = self.parse(
+            '<html lang="fr"><body><main><p>Body</p></main></body></html>',
+        )
+
+        self.assertEqual(extract_language(soup), "fr")
+
+    def test_language_falls_back_to_meta_content_language(self):
+        soup = self.parse(
+            "<html><head>"
+            '<meta http-equiv="content-language" content="de">'
+            "</head><body><main><p>Body</p></main></body></html>",
+        )
+
+        self.assertEqual(extract_language(soup), "de")
+
+    def test_language_is_none_when_neither_present(self):
+        soup = self.parse(
+            "<html><head></head><body><main><p>Body</p></main></body></html>",
+        )
+
+        self.assertIsNone(extract_language(soup))
