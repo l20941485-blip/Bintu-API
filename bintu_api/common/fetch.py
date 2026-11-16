@@ -14,6 +14,8 @@ class FetchedHTML:
     status: int | None = None
     redirect_count: int | None = None
     content_type: str | None = None
+    canonical_url: str | None = None
+    language: str | None = None
 
 
 def compute_approx_tokens(text: str) -> int:
