@@ -48,6 +48,8 @@ def resolve_upstream_error(error: Exception) -> UpstreamErrorSpec | None:
             return UpstreamErrorSpec(502, "upstream_rate_limited")
         if error.status_code == 404:
             return UpstreamErrorSpec(502, "upstream_not_found")
+        if error.status_code == 503:
+            return UpstreamErrorSpec(502, "upstream_service_unavailable")
         if error.status_code in (401, 402, 403):
             return UpstreamErrorSpec(502, "upstream_access_denied")
         return UpstreamErrorSpec(502, "upstream_http_error")
@@ -164,6 +166,16 @@ def translate_upstream_error(
                     "code": "upstream_not_found",
                     "message": "The target returned HTTP 404.",
                     "hint": "The requested resource was not found. Verify the URL; do not retry the same URL.",
+                    "upstream_status": error.status_code,
+                },
+            )
+        if error.status_code == 503:
+            return HTTPException(
+                status_code=502,
+                detail={
+                    "code": "upstream_service_unavailable",
+                    "message": "The target returned HTTP 503.",
+                    "hint": "The target service is temporarily unavailable. Retry later.",
                     "upstream_status": error.status_code,
                 },
             )

@@ -273,6 +273,14 @@ def _tool_error_for_extraction_exception(error: Exception) -> ToolError:
                 retryable=True,
                 retry_with="retry_after_delay",
             )
+        if error.status_code == 503:
+            return ToolError(
+                "upstream_service_unavailable",
+                f"The target returned HTTP {error.status_code} and is temporarily unavailable.",
+                "Retry after a short delay or use another public URL.",
+                retryable=True,
+                retry_with="retry_after_delay",
+            )
         if error.status_code in UPSTREAM_ACCESS_DENIED_STATUSES:
             return ToolError(
                 "upstream_access_denied",
