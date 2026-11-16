@@ -6,6 +6,7 @@ import FastAPI, cache, database, robots, or network implementation details.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 
 from bintu_api.common.fetch import (
@@ -41,5 +42,6 @@ def build_cached_markdown(
         tokens_saved_estimate=tokens_saved_estimate,
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at or datetime.now(UTC).isoformat(),
+        content_hash=hashlib.sha256(extracted.text.encode("utf-8")).hexdigest(),
     )
 
