@@ -133,6 +133,8 @@ class ContextResult:
     requested_url: str | None = None
     final_url: str | None = None
     content_type: str | None = None
+    status: int | None = None
+    redirect_count: int | None = None
     bytes_fetched: int | None = None
     content_sha256: str | None = None
     cache: CacheInfo | None = None
@@ -490,6 +492,8 @@ async def extract_context(
         requested_url=None,
         final_url=None,
         content_type=None,
+        status=document.status if not cache_hit and isinstance(document, FetchedHTML) else None,
+        redirect_count=document.redirect_count if not cache_hit and isinstance(document, FetchedHTML) else None,
         bytes_fetched=None,
         content_sha256=None,
         cache=None,
