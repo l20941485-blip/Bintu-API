@@ -41,6 +41,7 @@ ERROR_CODES = frozenset(
         "upstream_connection_error",
         "upstream_http_error",
         "upstream_rate_limited",
+        "upstream_service_unavailable",
         "upstream_render_error",
         "upstream_timeout",
     }

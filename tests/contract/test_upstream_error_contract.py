@@ -123,6 +123,28 @@ class UpstreamErrorContractTests(unittest.TestCase):
         self.assertIn("500", payload["detail"]["message"])
         self._assert_privacy(response)
 
+    def test_target_503_maps_to_upstream_service_unavailable(self) -> None:
+        with (
+            patch(
+                "bintu_api.api.scrape_adapter._enforce_robots",
+                new=AsyncMock(),
+            ),
+            patch(
+                "bintu_api.api.scrape_adapter.fetch_html_document",
+                side_effect=UpstreamHTTPError(503, "Service Unavailable"),
+            ),
+        ):
+            response = self._scrape()
+
+        self.assertEqual(response.status_code, 502)
+        payload = response.json()
+        self.assertEqual(
+            payload["detail"]["code"],
+            "upstream_service_unavailable",
+        )
+        self.assertEqual(payload["detail"]["upstream_status"], 503)
+        self._assert_privacy(response)
+
     def test_target_404_maps_to_upstream_not_found(self) -> None:
         with (
             patch(
