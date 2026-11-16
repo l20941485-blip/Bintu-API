@@ -83,3 +83,51 @@ def test_multi_section_clipping_preserves_combined_text():
         section["text"] for section in result.sections
     )
 
+
+
+def test_selector_matches_heading_artifact():
+    result = select_sections(
+        "# Web scraping\n## History[edit]\nHistory body",
+        ["history"],
+        100,
+    )
+
+    assert len(result.sections) == 1
+    assert result.sections[0]["heading"] == "History[edit]"
+    assert result.sections[0]["text"] == "History body"
+
+
+def test_selector_matches_heading_prefix():
+    result = select_sections(
+        "# Web scraping\n## History and development\nHistory body",
+        ["history"],
+        100,
+    )
+
+    assert len(result.sections) == 1
+    assert result.sections[0]["heading"] == "History and development"
+    assert result.sections[0]["text"] == "History body"
+
+
+def test_selector_matches_heading_substring():
+    result = select_sections(
+        "# Web scraping\n## History and development\nHistory body",
+        ["development"],
+        100,
+    )
+
+    assert len(result.sections) == 1
+    assert result.sections[0]["heading"] == "History and development"
+    assert result.sections[0]["text"] == "History body"
+
+
+def test_exact_heading_match_takes_priority():
+    result = select_sections(
+        "# Web scraping\n## History\nHistory body\n\n## History and development\nDevelopment body",
+        ["history"],
+        100,
+    )
+
+    assert len(result.sections) == 1
+    assert result.sections[0]["heading"] == "History"
+    assert result.sections[0]["text"] == "History body"
