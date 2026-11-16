@@ -11,6 +11,9 @@ class FetchedHTML:
     body: bytes
     charset: str | None
     final_url: str | None = None
+    status: int | None = None
+    redirect_count: int | None = None
+    content_type: str | None = None
 
 
 def compute_approx_tokens(text: str) -> int:

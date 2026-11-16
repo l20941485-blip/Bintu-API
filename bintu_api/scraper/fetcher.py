@@ -17,10 +17,10 @@ import re
 import socket
 import ssl
 import zlib
-from dataclasses import dataclass
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
 
+from bintu_api.common.fetch import FetchedHTML
 from bintu_api.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -104,13 +104,6 @@ def get_user_agent(settings) -> str:
         details.append(contact)
     suffix = f" ({'; '.join(details)})" if details else ""
     return f"BintuBot/{version}{suffix}"
-
-
-@dataclass(frozen=True)
-class FetchedHTML:
-    body: bytes
-    charset: str | None
-    final_url: str | None = None
 
 
 def _compute_approx_tokens(text: str) -> int:
@@ -464,6 +457,7 @@ def fetch_html_document(
     current_url = url
     current_scheme = urlsplit(url).scheme
     is_redirect_hop = False
+    redirect_count = 0
 
     for _ in range(settings.max_redirects + 1):
         _raise_if_unsafe_numeric_ip(current_url, settings)
@@ -557,6 +551,7 @@ def fetch_html_document(
                     location,
                 )
                 is_redirect_hop = True
+                redirect_count += 1
                 continue
 
             if not 200 <= status < 300:
@@ -578,6 +573,9 @@ def fetch_html_document(
                 body=body,
                 charset=_content_charset(content_type),
                 final_url=current_url,
+                status=status,
+                redirect_count=redirect_count,
+                content_type=content_type,
             )
         finally:
             connection.close()
@@ -732,10 +730,19 @@ async def fetch_rendered_html_document(
             if len(body) > settings.max_html_bytes:
                 raise PayloadTooLarge("Rendered HTML may not exceed 1 MiB")
 
+            redirect_count = 0
+            redirected_request = response.request.redirected_from
+            while redirected_request is not None:
+                redirect_count += 1
+                redirected_request = redirected_request.redirected_from
+
             return FetchedHTML(
                 body=body,
                 charset="utf-8",
                 final_url=page.url,
+                status=response.status,
+                redirect_count=redirect_count,
+                content_type=content_type,
             )
         finally:
             if browser is not None:
