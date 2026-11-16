@@ -1,4 +1,4 @@
-﻿"""Extraction response shaping for REST and MCP surfaces.
+"""Extraction response shaping for REST and MCP surfaces.
 
 This module centralizes the final envelope construction used after extraction,
 without changing the underlying behavior or cache semantics. It preserves the
