@@ -46,8 +46,8 @@ _ABBREVIATIONS = {
 # --------------------------------------------------------------------------
 
 
-_MARKDOWN_LINK = re.compile(r"(?<!\!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
-_FENCED_BLOCK = re.compile(r"```.*?(?:```|\\Z)", re.DOTALL)
+_MARKDOWN_LINK = re.compile(r"(?<!\!)\[([^\]\n]+)\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
+_FENCED_BLOCK = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
 
 
 def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
