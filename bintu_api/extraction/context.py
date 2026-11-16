@@ -140,6 +140,8 @@ class ContextResult:
     cache: CacheInfo | None = None
     extractor_version: str | None = None
     selected_sections: list[dict[str, Any]] | None = None
+    canonical_url: str | None = None
+    language: str | None = None
 
 @dataclass(frozen=True)
 class CacheEconomics:
@@ -499,6 +501,8 @@ async def extract_context(
         cache=None,
         extractor_version=None,
         selected_sections=selected_sections,
+        canonical_url=document.canonical_url if not cache_hit and isinstance(document, FetchedHTML) else None,
+        language=document.language if not cache_hit and isinstance(document, FetchedHTML) else None,
     )
 
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:

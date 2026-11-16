@@ -44,6 +44,10 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
         }
     if context.extractor_version is not None:
         provenance["extractor_version"] = context.extractor_version
+    if context.canonical_url is not None:
+        provenance["canonical_url"] = context.canonical_url
+    if context.language is not None:
+        provenance["language"] = context.language
     return provenance
 
 
