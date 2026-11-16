@@ -806,3 +806,16 @@ def extract_language(soup) -> str | None:
             return content.strip() or None
 
     return None
+
+
+def extract_html_metadata(
+    html_bytes: bytes,
+    from_encoding: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Return best-effort ``(canonical_url, language)`` metadata for HTML."""
+    soup = BeautifulSoup(
+        html_bytes,
+        "html.parser",
+        from_encoding=from_encoding,
+    )
+    return extract_canonical_url(soup), extract_language(soup)
