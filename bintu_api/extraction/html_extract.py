@@ -776,3 +776,33 @@ def extract_text_result(
 
 
 
+
+
+def extract_canonical_url(soup) -> str | None:
+    """Return the href of the first ``link rel=canonical``, if present."""
+    link = soup.find("link", rel="canonical")
+    if link is None:
+        return None
+    href = link.get("href")
+    if not href:
+        return None
+    return href.strip() or None
+
+
+def extract_language(soup) -> str | None:
+    """Return the page language, preferring ``html lang`` over ``meta`` fallback."""
+    html_tag = soup.find("html")
+    if html_tag is not None:
+        lang = html_tag.get("lang")
+        if lang:
+            return lang.strip() or None
+
+    for meta in soup.find_all("meta"):
+        http_equiv = str(meta.get("http-equiv") or "").strip().lower()
+        if http_equiv != "content-language":
+            continue
+        content = meta.get("content")
+        if content:
+            return content.strip() or None
+
+    return None
