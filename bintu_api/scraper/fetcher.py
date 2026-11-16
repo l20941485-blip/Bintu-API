@@ -571,7 +571,7 @@ def fetch_html_document(
                 settings.max_html_bytes,
             )
 
-            metadata = extract_html_metadata(
+            canonical_url, language = extract_html_metadata(
                 body,
                 from_encoding=_content_charset(content_type),
             )
@@ -583,8 +583,8 @@ def fetch_html_document(
                 status=status,
                 redirect_count=redirect_count,
                 content_type=content_type,
-                canonical_url=metadata.canonical_url,
-                language=metadata.language,
+                canonical_url=canonical_url,
+                language=language,
             )
         finally:
             connection.close()
