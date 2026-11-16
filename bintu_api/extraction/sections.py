@@ -26,6 +26,11 @@ def _normalize(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).casefold()
 
 
+def _normalize_heading(value: str) -> str:
+    normalized = _normalize(value)
+    return re.sub(r"\s*\[edit\]\s*$", "", normalized).strip()
+
+
 def _parse_headings(text: str) -> list[dict[str, Any]]:
     headings: list[dict[str, Any]] = []
 
@@ -152,7 +157,19 @@ def select_sections(
             if heading["ordinal"] in matched_ordinals:
                 continue
 
-            if heading["normalized"] == selector:
+            heading_normalized = _normalize_heading(heading["heading"])
+
+            if heading_normalized == selector:
+                matched.append(heading)
+                matched_ordinals.add(heading["ordinal"])
+                break
+
+            if heading_normalized.startswith(selector):
+                matched.append(heading)
+                matched_ordinals.add(heading["ordinal"])
+                break
+
+            if selector in heading_normalized:
                 matched.append(heading)
                 matched_ordinals.add(heading["ordinal"])
                 break
