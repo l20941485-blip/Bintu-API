@@ -47,7 +47,7 @@ _ABBREVIATIONS = {
 
 
 _MARKDOWN_LINK = re.compile(r"(?<!\!)\[([^\]\n]+)\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
-_FENCED_BLOCK = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
+_FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)
 
 
 def _apply_link_policy(text: str, links: str, base_url: str | None) -> str:
@@ -417,4 +417,3 @@ def split_into_chunks(text: str, max_tokens: int, *, keep_lead_ins: bool = True)
 
     chunks = _pack_chunk_pieces(pieces, max_tokens, "\n")
     return _keep_lead_ins(chunks, max_tokens) if keep_lead_ins else chunks
-
