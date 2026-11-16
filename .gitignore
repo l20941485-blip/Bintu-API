@@ -31,3 +31,4 @@ run_tests.py
 
 p45-mcp-chunk-*.json
 mcp-test.json
+.aider*

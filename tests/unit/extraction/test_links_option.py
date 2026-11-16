@@ -341,3 +341,35 @@ def test_links_false_removes_url_labeled_link():
 
     assert result == "Retrieved from ."
     assert "https://example.com/page" not in result
+
+
+def test_links_false_removes_production_style_url_labeled_link() -> None:
+    result = apply_link_policy(
+        'Retrieved from " [https://example.com/page](https://example.com/page) "',
+        links="false",
+    )
+
+    assert result == 'Retrieved from "  "'
+    assert "https://example.com/page" not in result
+
+
+def test_links_false_removes_wikipedia_revision_url_labeled_link() -> None:
+    url = "https://en.wikipedia.org/w/index.php?title=Model_Context_Protocol&oldid=1385692827"
+    result = apply_link_policy(
+        f'Retrieved from " [{url}]({url}) "\nCategories:',
+        links="false",
+    )
+
+    assert url not in result
+    assert "Retrieved from" in result
+    assert "Categories:" in result
+
+
+def test_links_false_applies_after_unclosed_code_fence() -> None:
+    result = apply_link_policy(
+        "```python\nprint('unclosed fence')\n\nRetrieved from \" [https://example.com/page](https://example.com/page) \"",
+        links="false",
+    )
+
+    assert "https://example.com/page" not in result
+    assert "Retrieved from" in result

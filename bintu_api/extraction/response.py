@@ -1,4 +1,4 @@
-﻿"""Extraction response shaping for REST and MCP surfaces.
+"""Extraction response shaping for REST and MCP surfaces.
 
 This module centralizes the final envelope construction used after extraction,
 without changing the underlying behavior or cache semantics. It preserves the
@@ -28,6 +28,10 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
         provenance["final_url"] = context.final_url
     if context.content_type is not None:
         provenance["content_type"] = context.content_type
+    if context.status is not None:
+        provenance["status"] = context.status
+    if context.redirect_count is not None:
+        provenance["redirect_count"] = context.redirect_count
     if context.bytes_fetched is not None:
         provenance["bytes_fetched"] = context.bytes_fetched
     if context.content_sha256 is not None:
@@ -140,5 +144,3 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
 def build_mcp_text_payload(envelope: dict[str, Any]) -> str:
     """Serialize the MCP envelope exactly as the existing endpoint does."""
     return json.dumps(envelope)
-
-

@@ -54,6 +54,9 @@ def build_provenance(
             age_seconds=None,
         ),
         extractor_version=getattr(settings, "service_version", "unknown"),
+        status=getattr(document, "status", None) if fetched else None,
+        redirect_count=getattr(document, "redirect_count", None) if fetched else None,
+        content_type=getattr(document, "content_type", None) if fetched else None,
     )
 
 
