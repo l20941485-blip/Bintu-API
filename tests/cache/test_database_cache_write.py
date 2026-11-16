@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -49,6 +50,27 @@ class CacheWriteTests(unittest.IsolatedAsyncioTestCase):
                 "Example",
                 False,
             )
+
+    async def test_upsert_persists_content_hash(self) -> None:
+        client, table = self._client([{"url": "https://example.com"}])
+        markdown = "Example"
+
+        await upsert_cached_markdown(
+            client,
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+            markdown,
+            False,
+        )
+
+        payload = table.upsert.call_args.args[0]
+        self.assertEqual(
+            payload["content_hash"],
+            hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+        )
 
     async def test_empty_markdown_is_not_cached(self) -> None:
         client, table = self._client([{"url": "https://example.com"}])

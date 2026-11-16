@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -37,6 +38,7 @@ class CachedMarkdown:
     tokens_saved_estimate: int = 0
     limiting_factor: str = "none"
     extracted_at: str = ""
+    content_hash: str = ""
 
 
 async def get_cached_markdown(
@@ -59,7 +61,7 @@ async def get_cached_markdown(
     # at most one row per cache key.
     response = await (
         client.table("scrape_cache")
-        .select("markdown,truncated,html_tokens,tokens_saved_estimate,limiting_factor,extracted_at")
+        .select("markdown,truncated,html_tokens,tokens_saved_estimate,limiting_factor,extracted_at,content_hash")
         .eq("url", url)
         .eq("render_js", render_js)
         .eq("include_nav", include_nav)
@@ -86,6 +88,7 @@ async def get_cached_markdown(
     tokens_saved_estimate = _safe_int(row.get("tokens_saved_estimate"), default=0)
     limiting_factor = row.get("limiting_factor")
     extracted_at = row.get("extracted_at")
+    content_hash = row.get("content_hash")
 
     return CachedMarkdown(
         markdown=markdown,
@@ -94,6 +97,7 @@ async def get_cached_markdown(
         tokens_saved_estimate=tokens_saved_estimate,
         limiting_factor=(limiting_factor if isinstance(limiting_factor, str) and limiting_factor else "none"),
         extracted_at=(extracted_at if isinstance(extracted_at, str) and extracted_at else ""),
+        content_hash=(content_hash if isinstance(content_hash, str) and content_hash else ""),
     )
 
 
@@ -144,6 +148,7 @@ async def upsert_cached_markdown(
                 "tokens_saved_estimate": max(0, int(tokens_saved_estimate)),
                 "limiting_factor": limiting_factor,
                 "extracted_at": extracted_at,
+                "content_hash": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
                 "created_at": datetime.now(UTC).isoformat(),
             },
             on_conflict="url,render_js,include_nav,include_header,include_footer",

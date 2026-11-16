@@ -1,5 +1,6 @@
 """Persistent extraction-cache version contract."""
 
+import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -42,6 +43,85 @@ class CacheVersioningTests(unittest.IsolatedAsyncioTestCase):
             builder.upsert.call_args.kwargs["on_conflict"],
             "url,render_js,include_nav,include_header,include_footer",
         )
+
+
+    async def test_reads_content_hash(self):
+        content_hash = hashlib.sha256(b"Cached body").hexdigest()
+        client, _ = self.make_client(
+            [
+                {
+                    "markdown": "Cached body",
+                    "truncated": False,
+                    "html_tokens": 0,
+                    "tokens_saved_estimate": 0,
+                    "limiting_factor": "none",
+                    "extracted_at": "2026-10-25T00:00:00+00:00",
+                    "content_hash": content_hash,
+                }
+            ]
+        )
+
+        result = await get_cached_markdown(
+            client,
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+        )
+
+        self.assertEqual(result.content_hash, content_hash)
+
+    async def test_missing_content_hash_returns_empty_string(self):
+        client, _ = self.make_client(
+            [
+                {
+                    "markdown": "Cached body",
+                    "truncated": False,
+                    "html_tokens": 0,
+                    "tokens_saved_estimate": 0,
+                    "limiting_factor": "none",
+                    "extracted_at": "2026-10-25T00:00:00+00:00",
+                }
+            ]
+        )
+
+        result = await get_cached_markdown(
+            client,
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+        )
+
+        self.assertEqual(result.content_hash, "")
+
+    async def test_invalid_content_hash_returns_empty_string(self):
+        client, _ = self.make_client(
+            [
+                {
+                    "markdown": "Cached body",
+                    "truncated": False,
+                    "html_tokens": 0,
+                    "tokens_saved_estimate": 0,
+                    "limiting_factor": "none",
+                    "extracted_at": "2026-10-25T00:00:00+00:00",
+                    "content_hash": 123,
+                }
+            ]
+        )
+
+        result = await get_cached_markdown(
+            client,
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+        )
+
+        self.assertEqual(result.content_hash, "")
 
 
 if __name__ == "__main__":
