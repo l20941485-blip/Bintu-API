@@ -43,6 +43,8 @@ class ToolArguments(BaseModel):
         ge=100,
         le=50000,
     )
+    chunk_strategy: Literal["sequential", "semantic"] = "sequential"
+    overlap_tokens: int = Field(default=0, ge=0)
     cache: bool = True
     persist: bool = True
     sections: str | list[str] | None = None
@@ -77,6 +79,14 @@ class ToolArguments(BaseModel):
             raise ValueError("max_tokens must be an integer")
 
         return normalized
+
+    @model_validator(mode="after")
+    def _validate_chunk_arguments(self) -> "ToolArguments":
+        if self.overlap_tokens >= self.max_tokens:
+            raise ValueError(
+                "overlap_tokens must be less than max_tokens."
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_sections(self) -> "ToolArguments":
