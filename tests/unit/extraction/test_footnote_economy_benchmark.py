@@ -1,11 +1,8 @@
-import math
-
 from bintu_api.common.fetch import (
     compute_approx_tokens,
     compute_tokens_saved_estimate,
 )
 from bintu_api.extraction.html_extract import extract_text_result
-
 
 LONG_URL = "https://example.com/very/long/documentation/path/with/many/segments"
 
@@ -22,7 +19,7 @@ This page includes enough ordinary prose to make the extraction meaningful.
 </main>
 </body>
 </html>
-""".encode("utf-8")
+""".encode()
 
 
 def extract(links: str, policy: str = "truncated", limit: int = 20):
@@ -65,10 +62,7 @@ def test_footnote_economy_benchmark():
         "false": no_links,
     }
 
-    measured = {
-        name: measure(result)
-        for name, result in results.items()
-    }
+    measured = {name: measure(result) for name, result in results.items()}
 
     # The same source HTML produces one stable HTML token baseline.
     html_tokens = compute_approx_tokens(HTML.decode("utf-8"))
@@ -91,10 +85,7 @@ def test_footnote_economy_benchmark():
     assert "the documentation [1]" in footnotes_truncated.text
     assert LONG_URL not in footnotes_truncated.text
     assert "[URL truncated]" in footnotes_truncated.text
-    assert (
-        measured["footnotes_truncated"]["approx_tokens"]
-        < measured["footnotes_full"]["approx_tokens"]
-    )
+    assert measured["footnotes_truncated"]["approx_tokens"] < measured["footnotes_full"]["approx_tokens"]
 
     # No-links mode removes the URL while preserving the label.
     assert "the documentation" in no_links.text
