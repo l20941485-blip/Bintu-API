@@ -141,10 +141,18 @@ def normalize_selectors(sections: str | list[str]) -> list[str]:
 def select_sections(
     text: str,
     sections: str | list[str],
-    max_tokens: int,
+    max_tokens: int | None,
 ) -> SectionSelection:
     selectors = normalize_selectors(sections)
     headings = _parse_headings(text)
+
+    # `None` means "select the complete matching sections." The caller is
+    # responsible for applying its own mode-specific budget afterward:
+    # chunk mode budgets individual chunks, while summarize mode budgets
+    # its summary. This prevents section selection from discarding content
+    # before chunking or summarizing.
+    if max_tokens is None:
+        max_tokens = max(1, -(-len(text) // 4))
 
     if not selectors:
         return SectionSelection(sections=[], text="", truncated=False)

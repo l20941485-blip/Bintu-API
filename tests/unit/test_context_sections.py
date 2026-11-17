@@ -60,7 +60,7 @@ async def test_scrape_mode_no_match_returns_empty_sections():
 
 
 @pytest.mark.asyncio
-async def test_chunk_mode_ignores_sections():
+async def test_chunk_mode_applies_sections():
     with patch(
         "bintu_api.extraction.context.rate_limit_identity",
         return_value="test-identity",
@@ -71,12 +71,19 @@ async def test_chunk_mode_ignores_sections():
             mode="chunk",
             max_tokens=100,
             sections="Alpha",
-            raw_text="# Alpha\nAlpha body",
+            raw_text="# Alpha\nAlpha body\n\n# Beta\nBeta body",
             cache=False,
             persist=False,
         )
 
-        assert result.selected_sections is None
-
-
-
+        assert result.selected_sections is not None
+        assert [section["heading"] for section in result.selected_sections] == [
+            "Alpha"
+        ]
+        assert result.chunks
+        assert "Alpha body" in "\n".join(
+            chunk["text"] for chunk in result.chunks
+        )
+        assert "Beta body" not in "\n".join(
+            chunk["text"] for chunk in result.chunks
+        )

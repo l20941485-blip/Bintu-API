@@ -369,21 +369,32 @@ async def extract_context(
     transformation_truncated = False
     selected_sections = None
 
+    section_selection = None
+    if sections:
+        # Scrape clips the combined selection to max_tokens. Chunk and
+        # summarize must receive the complete selected sections so that
+        # chunking and summarizing can apply their own budgets afterward.
+        selection_budget = max_tokens if mode == "scrape" else None
+        section_selection = select_sections(
+            raw_text,
+            sections,
+            selection_budget,
+        )
+        selected_sections = section_selection.sections
+
     if mode == "scrape":
-        if sections:
-            selection = select_sections(raw_text, sections, max_tokens)
+        if section_selection is not None:
             final_text = _retain_referenced_footnotes(
-                selection.text,
+                section_selection.text,
                 raw_text,
             )
             chunks = []
-            selected_sections = selection.sections
-            token_truncated = selection.truncated
+            token_truncated = section_selection.truncated
             scrape_baseline_tokens = count_tokens(raw_text)
             approx_tokens = count_tokens(final_text)
-            transformation_truncated = content_truncated or selection.truncated
+            transformation_truncated = content_truncated or section_selection.truncated
 
-            if selection.truncated:
+            if section_selection.truncated:
                 limiting_factor = "token_budget"
         else:
             final_text, token_truncated = truncate_to_token_budget(
@@ -406,8 +417,13 @@ async def extract_context(
                 limiting_factor = "token_budget"
 
     elif mode == "chunk":
+        source_text = (
+            section_selection.text
+            if section_selection is not None
+            else raw_text
+        )
         policy_text = apply_link_policy(
-            raw_text,
+            source_text,
             links=links,
             base_url=url,
         )
@@ -427,15 +443,25 @@ async def extract_context(
         transformation_truncated = content_truncated
 
     elif mode == "summarize":
-        final_text, was_truncated = summarize_text(raw_text, max_tokens)
-        chunks = [
-            {
-                "index": 0,
-                "text": final_text,
-                "approx_tokens": count_tokens(final_text),
-                "tokens": count_tokens(final_text),
-            }
-        ]
+        if section_selection is not None and not section_selection.sections:
+            final_text = ""
+            was_truncated = False
+            chunks = []
+        else:
+            source_text = (
+                section_selection.text
+                if section_selection is not None
+                else raw_text
+            )
+            final_text, was_truncated = summarize_text(source_text, max_tokens)
+            chunks = [
+                {
+                    "index": 0,
+                    "text": final_text,
+                    "approx_tokens": count_tokens(final_text),
+                    "tokens": count_tokens(final_text),
+                }
+            ]
         approx_tokens = count_tokens(final_text)
         transformation_truncated = content_truncated or was_truncated
         if was_truncated:
