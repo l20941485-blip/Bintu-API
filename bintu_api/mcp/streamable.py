@@ -521,6 +521,7 @@ async def _tools_call_result(
             footnote_url_policy=arguments.footnote_url_policy,
             max_footnote_url_length=arguments.max_footnote_url_length,
             sections=sections,
+            main_content_only=arguments.main_content_only,
         )
     except mcp_adapter.TargetURLRejected as error:
         log_extraction_failed(

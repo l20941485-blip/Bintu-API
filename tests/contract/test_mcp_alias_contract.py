@@ -154,3 +154,22 @@ def test_input_schema_advertises_chunked_alias():
 
 
 
+
+
+def test_main_content_only_is_forwarded_to_fetch_boundary(client: TestClient):
+    with patch_fetch() as fetch_mock:
+        result = call_tool(
+            client,
+            {
+                "url": "https://example.com",
+                "main_content_only": True,
+                "links": "false",
+                "cache": False,
+                "persist": False,
+            },
+        )
+
+    assert result.get("isError") is not True, result
+
+    assert fetch_mock.call_args.kwargs["main_content_only"] is True
+    assert fetch_mock.call_args.kwargs["links"] == "false"
