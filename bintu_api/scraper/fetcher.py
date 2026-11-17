@@ -45,9 +45,7 @@ def _normalize_numeric_ip(host: str) -> str | None:
 
     parts = host.split(".")
     if 2 <= len(parts) <= 4 and all(part.isdigit() for part in parts):
-        has_leading_zero = any(
-            len(part) > 1 and part.startswith("0") for part in parts
-        )
+        has_leading_zero = any(len(part) > 1 and part.startswith("0") for part in parts)
         if has_leading_zero or len(parts) != 4:
             return host
 
@@ -125,6 +123,7 @@ def _compute_tokens_saved_estimate(
         0,
         _compute_approx_tokens(html_text) - _compute_approx_tokens(extracted_text),
     )
+
 
 def compute_approx_tokens(text: str) -> int:
     """Public alias for the established approximate token counter."""
@@ -303,6 +302,22 @@ def _is_ambiguous_numeric_host(host: str) -> bool:
     return False
 
 
+def _validate_punycode_host(host: str) -> None:
+    """Reject malformed Punycode labels before DNS or a connection."""
+    for label in host.split("."):
+        if not label.lower().startswith("xn--"):
+            continue
+
+        try:
+            decoded = label.encode("ascii").decode("idna")
+            reencoded = decoded.encode("idna").decode("ascii")
+        except (UnicodeError, ValueError) as error:
+            raise TargetURLRejected("The URL contains malformed Punycode") from error
+
+        if reencoded.lower() != label.lower():
+            raise TargetURLRejected("The URL contains malformed Punycode")
+
+
 def _parse_target(
     url: str,
     settings: Settings | None = None,
@@ -318,6 +333,7 @@ def _parse_target(
             raise TargetURLRejected("URLs containing credentials are not allowed")
 
         host = parsed.hostname.encode("idna").decode("ascii")
+        _validate_punycode_host(host)
 
         if _is_ambiguous_numeric_host(host):
             raise TargetURLRejected(
@@ -394,8 +410,7 @@ def _raise_if_unsafe_numeric_ip(url: str, settings: Settings) -> None:
     del settings
     if _normalize_host_for_ssrf(url) is not None:
         raise TargetURLRejected(
-            "Ambiguous numeric host forms are not allowed; "
-            "use a canonical domain name or canonical IP literal"
+            "Ambiguous numeric host forms are not allowed; use a canonical domain name or canonical IP literal"
         )
 
 
