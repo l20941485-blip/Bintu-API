@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -26,6 +26,7 @@ from fastapi import Request
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
 from bintu_api.extraction.models import CacheInfo
+from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.summarizer import summarize_text
@@ -297,6 +298,8 @@ async def extract_context(
     cache_economics: CacheEconomics | None = None,
     extracted_at: str | None = None,
     content_cleaning: dict[str, Any] | None = None,
+    chunk_strategy: Literal["sequential", "semantic"] = "sequential",
+    overlap_tokens: int = 0,
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
 
@@ -447,16 +450,34 @@ async def extract_context(
             links=links,
             base_url=url,
         )
-        chunk_strings = split_into_chunks(policy_text, max_tokens)
-        chunks = [
-            {
-                "index": index,
-                "text": chunk,
-                "approx_tokens": count_tokens(chunk),
-                "tokens": count_tokens(chunk),
-            }
-            for index, chunk in enumerate(chunk_strings)
-        ]
+        if chunk_strategy == "semantic":
+            from hashlib import sha256
+
+            from bintu_api.security.url_safety import sanitize_url
+
+            semantic_chunks = split_semantic_chunks(
+                policy_text,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+                source_url=sanitize_url(url),
+                content_sha256=sha256(
+                    policy_text.encode("utf-8")
+                ).hexdigest(),
+                extracted_at=resolved_extracted_at,
+            )
+            chunks = [asdict(chunk) for chunk in semantic_chunks]
+            chunk_strings = [chunk.text for chunk in semantic_chunks]
+        else:
+            chunk_strings = split_into_chunks(policy_text, max_tokens)
+            chunks = [
+                {
+                    "index": index,
+                    "text": chunk,
+                    "approx_tokens": count_tokens(chunk),
+                    "tokens": count_tokens(chunk),
+                }
+                for index, chunk in enumerate(chunk_strings)
+            ]
         final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
         approx_tokens = sum(chunk["tokens"] for chunk in chunks)
         split = len(chunk_strings) > 1

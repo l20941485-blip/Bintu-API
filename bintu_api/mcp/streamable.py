@@ -607,6 +607,8 @@ async def _tools_call_result(
             arguments.url,
             mode=arguments.mode,
             max_tokens=arguments.max_tokens,
+            chunk_strategy=arguments.chunk_strategy,
+            overlap_tokens=arguments.overlap_tokens,
             sections=sections,
             cache=arguments.cache,
             render_js=arguments.render_js,
