@@ -61,3 +61,13 @@ def test_semantic_chunks_carry_core_provenance():
     assert len(enriched) > 0
     for chunk in enriched:
         _assert_chunk_provenance(chunk)
+
+
+def test_chunk_provenance_includes_content_fingerprint():
+    from bintu_api.extraction.fingerprint import compute_content_fingerprint
+
+    markdown = "# Heading\n\nFirst paragraph.\n\n## Subheading\n\nSecond paragraph."
+    fingerprint = compute_content_fingerprint(markdown)
+
+    assert fingerprint.startswith("sha256:")
+    assert fingerprint != "sha256:" + "0" * 64
