@@ -246,6 +246,12 @@ async def _scrape_text(
             )
 
             response.selected_sections = selection.sections
+            response.requested_sections = list(selection.requested_sections)
+            response.unmatched_sections = list(selection.unmatched_sections)
+            response.available_sections = list(selection.available_sections)
+            response.filtered = selection.filtered
+            response.section_match_status = selection.match_status
+            response.warnings = list(selection.warnings)
             response.text = selection.text
             response.truncated = selection.truncated
             response.limiting_factor = (

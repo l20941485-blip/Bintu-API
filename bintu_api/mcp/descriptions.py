@@ -41,9 +41,11 @@ URL_DESCRIPTION = (
 )
 
 MODE_DESCRIPTION = (
-    "scrape: the page text trimmed to max_tokens. chunk: the whole page split into chunks that each fit "
-    "max_tokens. summarize: the leading lines and whole sentences that fit max_tokens. "
-    "'chunked' is accepted as an alias for chunk."
+    "scrape: selected page text trimmed to max_tokens. chunk: selected page text "
+    "split into chunks that each fit max_tokens. summarize: leading lines and whole "
+    "sentences from selected page text within max_tokens. When sections is provided, "
+    "it filters the page before mode processing; if no section matches, no page "
+    "content is returned. 'chunked' is accepted as an alias for chunk."
 )
 
 MAX_TOKENS_DESCRIPTION = (
@@ -88,14 +90,17 @@ CHUNK_TOKEN_BUDGET_DESCRIPTION = (
 )
 
 SECTIONS_DESCRIPTION = (
-    "Optional heading selectors for scrape mode. Accepts either a "
-    "newline-separated string (for example \"Alpha\\nBeta\") or an array "
-    "of strings (for example [\"Alpha\", \"Beta\"]). Whitespace and case "
-    "are normalized for exact heading matching. Empty or whitespace-only "
-    "selectors return invalid_arguments. Each selector must be 200 "
-    "characters or fewer. When provided, the persistent and memory caches "
-    "are bypassed for reads; a fresh extraction may still be written when "
-    "persist is true."
+    "Optional heading selectors that filter the page before mode processing. "
+    "Accepts either a newline-separated string (for example \"Alpha\\nBeta\") or "
+    "an array of strings (for example [\"Alpha\", \"Beta\"]). Whitespace and case "
+    "are normalized for heading matching. When provided, scrape returns only "
+    "matching sections, chunk/chunked splits only matching sections, and "
+    "summarize summarizes only matching sections. If no requested section "
+    "matches, the response contains no page content and reports no_match. "
+    "Empty or whitespace-only selectors return invalid_arguments. Each selector "
+    "must be 200 characters or fewer. When provided, persistent and memory "
+    "caches are bypassed for reads; a fresh extraction may still be written "
+    "when persist is true."
 )
 
 OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
@@ -111,5 +116,34 @@ OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
     "yield_hint": {
         "type": "string",
         "description": "Present only when low_yield is true: a short suggestion for what to try next.",
+    },
+    "requested_sections": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Section selectors requested by the caller.",
+    },
+    "unmatched_sections": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Requested section selectors that did not match a heading or label.",
+    },
+    "available_sections": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Headings and labels available in the extracted document.",
+    },
+    "filtered": {
+        "type": "boolean",
+        "description": "True when a sections filter was applied before mode processing.",
+    },
+    "section_match_status": {
+        "type": "string",
+        "enum": ["not_filtered", "matched", "partial_match", "no_match"],
+        "description": "Outcome of section selection.",
+    },
+    "warnings": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Non-fatal section-selection warnings.",
     },
 }

@@ -142,6 +142,12 @@ class ContextResult:
     selected_sections: list[dict[str, Any]] | None = None
     canonical_url: str | None = None
     language: str | None = None
+    requested_sections: list[str] | None = None
+    unmatched_sections: list[str] | None = None
+    available_sections: list[str] | None = None
+    filtered: bool = False
+    section_match_status: str = "not_filtered"
+    warnings: list[str] | None = None
 
 @dataclass(frozen=True)
 class CacheEconomics:
@@ -368,6 +374,12 @@ async def extract_context(
 
     transformation_truncated = False
     selected_sections = None
+    requested_sections = None
+    unmatched_sections = None
+    available_sections = None
+    filtered = False
+    section_match_status = "not_filtered"
+    section_warnings = None
 
     section_selection = None
     if sections:
@@ -381,6 +393,12 @@ async def extract_context(
             selection_budget,
         )
         selected_sections = section_selection.sections
+        requested_sections = list(section_selection.requested_sections)
+        unmatched_sections = list(section_selection.unmatched_sections)
+        available_sections = list(section_selection.available_sections)
+        filtered = section_selection.filtered
+        section_match_status = section_selection.match_status
+        section_warnings = list(section_selection.warnings)
 
     if mode == "scrape":
         if section_selection is not None:
@@ -529,6 +547,12 @@ async def extract_context(
         selected_sections=selected_sections,
         canonical_url=document.canonical_url if not cache_hit and isinstance(document, FetchedHTML) else None,
         language=document.language if not cache_hit and isinstance(document, FetchedHTML) else None,
+        requested_sections=requested_sections,
+        unmatched_sections=unmatched_sections,
+        available_sections=available_sections,
+        filtered=filtered,
+        section_match_status=section_match_status,
+        warnings=section_warnings,
     )
 
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:

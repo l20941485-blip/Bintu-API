@@ -10,6 +10,18 @@ class SectionSelection:
     sections: list[dict[str, Any]]
     text: str
     truncated: bool
+    requested_sections: tuple[str, ...] = ()
+    unmatched_sections: tuple[str, ...] = ()
+    available_sections: tuple[str, ...] = ()
+    filtered: bool = False
+    match_status: str = "not_filtered"
+    warnings: tuple[str, ...] = ()
+    requested_sections: tuple[str, ...] = ()
+    unmatched_sections: tuple[str, ...] = ()
+    available_sections: tuple[str, ...] = ()
+    filtered: bool = False
+    match_status: str = "not_filtered"
+    warnings: tuple[str, ...] = ()
 
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.MULTILINE)
@@ -138,7 +150,7 @@ def normalize_selectors(sections: str | list[str]) -> list[str]:
     return result
 
 
-def select_sections(
+def _select_sections_core(
     text: str,
     sections: str | list[str],
     max_tokens: int | None,
@@ -412,4 +424,74 @@ def select_sections(
         sections=selected,
         text="\n\n".join(clipped),
         truncated=truncated,
+    )
+
+
+def select_sections(
+    text: str,
+    sections: str | list[str],
+    max_tokens: int | None,
+) -> SectionSelection:
+    """Select sections and return selection diagnostics.
+
+    This wrapper preserves the established selection algorithm while adding
+    metadata about requested, matched, unmatched, and available sections.
+    """
+    selectors = normalize_selectors(sections)
+    selection = _select_sections_core(text, selectors, max_tokens)
+
+    if not selectors:
+        return selection
+
+    headings = _parse_headings(text)
+    list_labels = _parse_list_labels(text)
+    plain_labels = _parse_plain_labels(text)
+
+    available_sections = (
+        [heading["heading"] for heading in headings]
+        + [label["label"] for label in list_labels]
+        + [label["label"] for label in plain_labels]
+    )
+
+    def matches(selector: str, candidate: str) -> bool:
+        normalized = _normalize_heading(candidate)
+        return (
+            normalized == selector
+            or normalized.startswith(selector)
+            or selector in normalized
+        )
+
+    matched_selectors = [
+        selector
+        for selector in selectors
+        if any(
+            matches(selector, section["heading"])
+            for section in selection.sections
+        )
+    ]
+    unmatched_sections = [
+        selector for selector in selectors if selector not in matched_selectors
+    ]
+
+    if not matched_selectors:
+        match_status = "no_match"
+    elif unmatched_sections:
+        match_status = "partial_match"
+    else:
+        match_status = "matched"
+
+    warnings = tuple(
+        f"No section matched: {selector}." for selector in unmatched_sections
+    )
+
+    return SectionSelection(
+        sections=selection.sections,
+        text=selection.text,
+        truncated=selection.truncated,
+        requested_sections=tuple(selectors),
+        unmatched_sections=tuple(unmatched_sections),
+        available_sections=tuple(available_sections),
+        filtered=True,
+        match_status=match_status,
+        warnings=warnings,
     )
