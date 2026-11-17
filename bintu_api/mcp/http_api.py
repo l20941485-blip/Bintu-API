@@ -192,6 +192,8 @@ async def call_tool(
         settings=settings,
         cache_economics=cache_economics,
         extracted_at=cached.extracted_at,
+        content_cleaning=getattr(cached, "content_cleaning", None)
+        or {"applied": False, "strategy": "standard"},
     )
 
     log_extraction_completed(

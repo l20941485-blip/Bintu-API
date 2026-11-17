@@ -48,6 +48,8 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
         provenance["canonical_url"] = context.canonical_url
     if context.language is not None:
         provenance["language"] = context.language
+    if context.content_cleaning is not None:
+        provenance["content_cleaning"] = context.content_cleaning
     return provenance
 
 

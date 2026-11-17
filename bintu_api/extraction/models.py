@@ -145,6 +145,10 @@ class ScrapeTextResponse(BaseModel):
         default=False,
         description="Reserved: true when content spans multiple chunks (not truncation).",
     )
+    content_cleaning: dict[str, Any] | None = Field(
+        default=None,
+        description="Reports whether stronger main-content extraction was applied.",
+    )
     provenance: Provenance | None = Field(
         default=None,
         description="Request provenance. May be absent while this feature is rolled out.",

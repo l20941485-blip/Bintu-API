@@ -44,6 +44,7 @@ async def run_extraction(
     settings: Settings | None = None,
     cache_economics: Any | None = None,
     extracted_at: str | None = None,
+    content_cleaning: dict[str, Any] | None = None,
 ) -> ContextResult:
     """Run the existing extraction pipeline and return the canonical context result."""
     return await extract_context(
@@ -68,6 +69,7 @@ async def run_extraction(
         settings=settings,
         cache_economics=cache_economics,
         extracted_at=extracted_at,
+        content_cleaning=content_cleaning,
     )
 
 

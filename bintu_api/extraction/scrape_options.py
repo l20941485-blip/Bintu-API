@@ -22,3 +22,4 @@ class ScrapeOptions:
     footnote_url_policy: Literal["full", "truncated"] = "truncated"
     max_footnote_url_length: int = 100
     sections: list[str] | None = None
+    main_content_only: bool = False

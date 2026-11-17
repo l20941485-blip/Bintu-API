@@ -148,6 +148,7 @@ class ContextResult:
     filtered: bool = False
     section_match_status: str = "not_filtered"
     warnings: list[str] | None = None
+    content_cleaning: dict[str, Any] | None = None
 
 @dataclass(frozen=True)
 class CacheEconomics:
@@ -295,6 +296,7 @@ async def extract_context(
     settings: Settings | None = None,
     cache_economics: CacheEconomics | None = None,
     extracted_at: str | None = None,
+    content_cleaning: dict[str, Any] | None = None,
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
 
@@ -553,6 +555,7 @@ async def extract_context(
         filtered=filtered,
         section_match_status=section_match_status,
         warnings=section_warnings,
+        content_cleaning=content_cleaning,
     )
 
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:

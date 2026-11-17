@@ -89,6 +89,21 @@ CHUNK_TOKEN_BUDGET_DESCRIPTION = (
     "Accepted alias for max_tokens; max_tokens wins on conflict. Range 100 to 50000."
 )
 
+MAIN_CONTENT_ONLY_DESCRIPTION = (
+    "Apply stronger main-content extraction before sections filtering and "
+    "mode processing. When true, Bintu prefers the primary article or "
+    "documentation container and reduces navigation, sidebars, footers, and "
+    "non-article boilerplate before scrape, chunk, summarize, and sections "
+    "processing. Default false preserves current extraction behavior. "
+    "Cleaned requests use memory caching only."
+)
+
+CONTENT_CLEANING_DESCRIPTION = (
+    "Reports whether stronger main-content extraction was applied to the "
+    "source page. strategy is main_content when cleaning succeeded and "
+    "standard when Bintu used its regular extraction path."
+)
+
 SECTIONS_DESCRIPTION = (
     "Optional heading selectors that filter the page before mode processing. "
     "Accepts either a newline-separated string (for example \"Alpha\\nBeta\") or "

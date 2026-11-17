@@ -24,7 +24,11 @@ def resolve_extraction_cap(settings: Settings) -> int:
     return min(settings.max_text_characters, MAX_EXTRACTION_CHARACTERS)
 
 
-def is_persistent_cache_enabled(settings: Settings, links: str) -> bool:
+def is_persistent_cache_enabled(
+    settings: Settings,
+    links: str,
+    main_content_only: bool = False,
+) -> bool:
     """Return whether a response is eligible for persistent-cache reuse.
 
 
@@ -34,7 +38,7 @@ def is_persistent_cache_enabled(settings: Settings, links: str) -> bool:
     persistent-cache policy until its schema is extended to store the link mode.
     """
     persistent_cache_enabled = settings.max_text_characters == DEFAULT_MAX_TEXT_CHARACTERS
-    return persistent_cache_enabled and links == "inline"
+    return persistent_cache_enabled and links == "inline" and not main_content_only
 
 
 def is_cacheable(url: str) -> bool:
@@ -42,6 +46,20 @@ def is_cacheable(url: str) -> bool:
     return not has_credential_params(url)
 
 
-def compute_cache_key(render_js: bool, links: str, url: str) -> str:
+def compute_cache_key(
+    render_js: bool,
+    links: str,
+    url: str,
+    *,
+    include_nav: bool = False,
+    include_header: bool = False,
+    include_footer: bool = False,
+    main_content_only: bool = False,
+) -> str:
     """Compute the canonical memory-cache key for an extraction request."""
-    return hashlib.sha256(f"{int(render_js)}:{links}:{url}".encode()).hexdigest()
+    payload = (
+        f"{int(render_js)}:{links}:{url}:"
+        f"{int(include_nav)}:{int(include_header)}:{int(include_footer)}:"
+        f"{int(main_content_only)}"
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()

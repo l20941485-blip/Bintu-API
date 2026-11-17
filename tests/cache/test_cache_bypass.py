@@ -10,6 +10,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from bintu_api.extraction.cache_policy import compute_cache_key
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.settings import Settings
 
@@ -46,7 +47,15 @@ def make_request(cache, db_client=None):
 
 
 def cache_key():
-    return hashlib.sha256(f"0:inline:{URL}".encode()).hexdigest()
+    return compute_cache_key(
+        render_js=False,
+        links="inline",
+        url=URL,
+        include_nav=False,
+        include_header=False,
+        include_footer=False,
+        main_content_only=False,
+    )
 
 
 def run(request, skip_cache=False, sections=None):

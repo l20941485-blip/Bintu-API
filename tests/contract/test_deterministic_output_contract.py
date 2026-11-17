@@ -82,6 +82,7 @@ class McpToolMetadataContractTests(unittest.TestCase):
             "mode",
             "chunk_token_budget",
             "max_tokens",
+            "main_content_only",
             "cache",
             "persist",
             "sections",

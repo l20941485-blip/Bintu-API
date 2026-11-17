@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime
+from typing import Any
 
 from bintu_api.common.fetch import (
     FetchedHTML,
@@ -25,6 +26,7 @@ def build_cached_markdown(
     *,
     extracted_at: str | None = None,
     decode_source_text_fn=None,
+    content_cleaning: dict[str, Any] | None = None,
 ) -> CachedMarkdown:
     """Build the canonical extraction result for a freshly extracted page."""
     decode_source = decode_source_text_fn or decode_source_text
@@ -43,5 +45,6 @@ def build_cached_markdown(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at or datetime.now(UTC).isoformat(),
         content_hash=hashlib.sha256(extracted.text.encode("utf-8")).hexdigest(),
+        content_cleaning=content_cleaning,
     )
 
