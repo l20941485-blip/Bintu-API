@@ -623,6 +623,8 @@ async def _tools_call_result(
             settings=settings,
             cache_economics=cache_economics,
             extracted_at=cached.extracted_at,
+            content_cleaning=getattr(cached, "content_cleaning", None)
+            or {"applied": False, "strategy": "standard"},
         )
     except HTTPException as error:
         tool_error = _tool_error_for_http_exception(error)

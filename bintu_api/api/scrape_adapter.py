@@ -109,6 +109,7 @@ async def _fetch_and_extract(
     footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
     sections: list[str] | None = None,
+    main_content_only: bool = False,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Compatibility boundary preserving the established scrape patch seams."""
     context = build_scrape_request_context(request)
@@ -126,6 +127,7 @@ async def _fetch_and_extract(
         footnote_url_policy=footnote_url_policy,
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
+        main_content_only=main_content_only,
     )
     return await service.fetch_and_extract(
         context,
@@ -149,6 +151,7 @@ async def fetch_and_extract(
     footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
     sections: list[str] | None = None,
+    main_content_only: bool = False,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Public shared fetch -> robots -> cache -> extract boundary."""
     return await _fetch_and_extract(
@@ -166,4 +169,5 @@ async def fetch_and_extract(
         footnote_url_policy=footnote_url_policy,
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
+        main_content_only=main_content_only,
     )

@@ -46,6 +46,7 @@ class ToolArguments(BaseModel):
     cache: bool = True
     persist: bool = True
     sections: str | list[str] | None = None
+    main_content_only: bool = False
 
     @model_validator(mode="before")
     @classmethod

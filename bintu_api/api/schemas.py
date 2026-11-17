@@ -75,6 +75,7 @@ class MobileScrapeTextRequest(BaseModel):
     include_nav: bool = False
     include_header: bool = False
     include_footer: bool = False
+    main_content_only: bool = False
     render_js: bool = False
 
 

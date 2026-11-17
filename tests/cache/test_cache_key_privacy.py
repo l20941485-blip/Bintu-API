@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bintu_api.api.scrape_adapter import _fetch_and_extract
+from bintu_api.extraction.cache_policy import compute_cache_key
 from bintu_api.scraper.fetcher import FetchedHTML
 from bintu_api.settings import Settings
 
@@ -111,8 +111,24 @@ class CacheKeyPrivacyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(keys), 2)
         self.assertNotEqual(keys[0], keys[1])
 
-        expected_plain = hashlib.sha256(f"0:inline:{url}".encode()).hexdigest()
-        expected_rendered = hashlib.sha256(f"1:inline:{url}".encode()).hexdigest()
+        expected_plain = compute_cache_key(
+            render_js=False,
+            links="inline",
+            url=url,
+            include_nav=False,
+            include_header=False,
+            include_footer=False,
+            main_content_only=False,
+        )
+        expected_rendered = compute_cache_key(
+            render_js=True,
+            links="inline",
+            url=url,
+            include_nav=False,
+            include_header=False,
+            include_footer=False,
+            main_content_only=False,
+        )
         self.assertEqual(keys[0], expected_plain)
         self.assertEqual(keys[1], expected_rendered)
 

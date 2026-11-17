@@ -90,6 +90,8 @@ def build_scrape_response(
         tokens_saved_estimate=saved,
         low_yield=assessment.low_yield,
         yield_hint=assessment.hint,
+        content_cleaning=result.content_cleaning
+        or {"applied": False, "strategy": "standard"},
         provenance=build_provenance(
             url,
             result.markdown,

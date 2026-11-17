@@ -39,6 +39,7 @@ class CachedMarkdown:
     limiting_factor: str = "none"
     extracted_at: str = ""
     content_hash: str = ""
+    content_cleaning: dict[str, Any] | None = None
 
 
 async def get_cached_markdown(

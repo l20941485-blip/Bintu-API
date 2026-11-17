@@ -23,6 +23,7 @@ from bintu_api.extraction.cacheaccess import (
     should_read_persistent_cache,
     should_write_persistent_cache,
 )
+from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
     read_memory_cache,
     write_memory_cache,
@@ -103,12 +104,17 @@ class ScrapeService:
         footnote_url_policy = options.footnote_url_policy
         max_footnote_url_length = options.max_footnote_url_length
         sections = options.sections
+        main_content_only = options.main_content_only
 
         validate_link_mode(links)
 
         settings = context.settings
         extraction_cap = resolve_extraction_cap(settings)
-        persistent_cache_enabled = is_persistent_cache_enabled(settings, links)
+        persistent_cache_enabled = is_persistent_cache_enabled(
+            settings,
+            links,
+            main_content_only,
+        )
         cacheable = is_cacheable(url)
         database_client = context.database_client
         result = None
@@ -134,7 +140,15 @@ class ScrapeService:
                 request_id=request_id,
             )
 
-        cache_key = compute_cache_key(render_js=options.render_js, links=options.links, url=url)
+        cache_key = compute_cache_key(
+            render_js=options.render_js,
+            links=options.links,
+            url=url,
+            include_nav=include_nav,
+            include_header=include_header,
+            include_footer=include_footer,
+            main_content_only=main_content_only,
+        )
 
         if result is not None:
             cache_layer = "persistent"
@@ -176,18 +190,34 @@ class ScrapeService:
                 render_js,
             )
 
-        extracted = self.text_extractor(
-            document.body,
-            extraction_cap,
-            include_nav=options.include_nav,
-            include_header=options.include_header,
-            include_footer=options.include_footer,
-            from_encoding=document.charset,
-            base_url=document.final_url or url,
-            links=options.links,
-            footnote_url_policy=options.footnote_url_policy,
-            max_footnote_url_length=options.max_footnote_url_length,
-        )
+        cleaned_text = ""
+        cleaning_applied = False
+        if main_content_only and links == "inline":
+            cleaned_text, cleaning_applied = extract_main_content(
+                document.body,
+                extraction_cap,
+                document.charset,
+                document.final_url or url,
+            )
+
+        if cleaning_applied:
+            extracted = ExtractedText(
+                text=cleaned_text,
+                truncated=False,
+            )
+        else:
+            extracted = self.text_extractor(
+                document.body,
+                extraction_cap,
+                include_nav=options.include_nav,
+                include_header=options.include_header,
+                include_footer=options.include_footer,
+                from_encoding=document.charset,
+                base_url=document.final_url or url,
+                links=options.links,
+                footnote_url_policy=options.footnote_url_policy,
+                max_footnote_url_length=options.max_footnote_url_length,
+            )
 
         write_memory_cache(
             self.cache,
@@ -197,11 +227,17 @@ class ScrapeService:
             extracted.text,
         )
 
+        content_cleaning = {
+            "applied": cleaning_applied,
+            "strategy": "main_content" if cleaning_applied else "standard",
+        }
+
         result = build_cached_markdown(
             document,
             extracted,
             url,
             decode_source_text_fn=self.source_decoder,
+            content_cleaning=content_cleaning,
         )
 
         if should_write_persistent_cache(

@@ -8,8 +8,10 @@ Important boundaries, invariants, and compatibility notes are documented here so
 from bintu_api.mcp.descriptions import (
     CACHE_DESCRIPTION,
     CHUNK_TOKEN_BUDGET_DESCRIPTION,
+    CONTENT_CLEANING_DESCRIPTION,
     FOOTNOTE_URL_POLICY_DESCRIPTION,
     LINKS_DESCRIPTION,
+    MAIN_CONTENT_ONLY_DESCRIPTION,
     MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION,
     MAX_TOKENS_DESCRIPTION,
     MODE_DESCRIPTION,
@@ -234,6 +236,11 @@ TOOL_INPUT_SCHEMA = {
                 "mode, may exceed the budget."
             ),
         },
+        "main_content_only": {
+            "type": "boolean",
+            "default": False,
+            "description": MAIN_CONTENT_ONLY_DESCRIPTION,
+        },
         "cache": {
             "type": "boolean",
             "default": True,
@@ -260,6 +267,21 @@ TOOL_INPUT_SCHEMA["properties"]["url"]["description"] = URL_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["mode"]["description"] = MODE_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["max_tokens"]["description"] = MAX_TOKENS_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["chunk_token_budget"]["description"] = CHUNK_TOKEN_BUDGET_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["main_content_only"]["description"] = MAIN_CONTENT_ONLY_DESCRIPTION
+TOOL_OUTPUT_SCHEMA["properties"]["content_cleaning"] = {
+    "type": "object",
+    "properties": {
+        "applied": {
+            "type": "boolean",
+            "description": "Whether stronger main-content extraction was applied.",
+        },
+        "strategy": {
+            "type": "string",
+            "enum": ["main_content", "standard"],
+            "description": CONTENT_CLEANING_DESCRIPTION,
+        },
+    },
+}
 TOOL_INPUT_SCHEMA["properties"]["cache"]["description"] = CACHE_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["persist"]["description"] = PERSIST_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["render_js"]["description"] = RENDER_JS_DESCRIPTION

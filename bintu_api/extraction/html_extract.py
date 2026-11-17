@@ -392,6 +392,51 @@ def _trafilatura_fallback(
     return "\n".join(lines)
 
 
+def extract_main_content(
+    html_bytes: bytes,
+    max_characters: int,
+    from_encoding: str | None,
+    base_url: str | None,
+) -> tuple[str, bool]:
+    """Extract the primary article or documentation container as Markdown.
+
+    Returns ``(cleaned_text, True)`` only when Trafilatura identifies usable
+    main content. Returns ``("", False)`` when extraction fails or produces an
+    unusably short result; callers must then use the established full-page
+    extraction path and report a fallback.
+    """
+    import trafilatura
+
+    try:
+        html = html_bytes.decode(
+            from_encoding or "utf-8",
+            errors="replace",
+        )
+        cleaned = trafilatura.extract(
+            html,
+            url=base_url,
+            output_format="markdown",
+            include_links=True,
+            include_tables=True,
+        )
+    except Exception as error:
+        logger.warning(
+            "main_content_extraction_failed error=%s",
+            error,
+        )
+        return "", False
+
+    if not cleaned:
+        return "", False
+
+    cleaned = re.sub(r"[\u200b\u2060\ufeff]", " ", cleaned).strip()
+
+    if len(cleaned) < 200:
+        return "", False
+
+    return cleaned[:max_characters], True
+
+
 def _ensure_space_before(node) -> None:
     """Ensure a word boundary exists immediately before this node."""
     previous = node.previous_sibling

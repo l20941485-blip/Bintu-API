@@ -71,6 +71,7 @@ async def scrape_text(
     persist: bool = True,
     max_tokens: int = 6000,
     sections: Annotated[list[str] | None, Query()] = None,
+    main_content_only: bool = False,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     routes_common.verify_api_access(request, settings)
@@ -128,6 +129,7 @@ async def scrape_text(
         include_header,
         include_footer,
         routes_common.rate_limit_identity(request, settings),
+        main_content_only,
         render_js,
         links,
         skip_cache,
@@ -181,6 +183,7 @@ async def mobile_scrape_text(
         payload.include_header,
         payload.include_footer,
         f"supabase:{user_id}",
+        payload.main_content_only,
         payload.render_js,
         links,
         skip_cache,
@@ -195,6 +198,7 @@ async def _scrape_text(
     include_header: bool,
     include_footer: bool,
     identity: str,
+    main_content_only: bool = False,
     render_js: bool = False,
     links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
@@ -219,6 +223,7 @@ async def _scrape_text(
             include_nav=include_nav,
             include_header=include_header,
             include_footer=include_footer,
+            main_content_only=main_content_only,
             render_js=render_js,
             links=links,
             skip_cache=skip_cache,
@@ -246,6 +251,12 @@ async def _scrape_text(
             )
 
             response.selected_sections = selection.sections
+            response.requested_sections = list(selection.requested_sections)
+            response.unmatched_sections = list(selection.unmatched_sections)
+            response.available_sections = list(selection.available_sections)
+            response.filtered = selection.filtered
+            response.section_match_status = selection.match_status
+            response.warnings = list(selection.warnings)
             response.text = selection.text
             response.truncated = selection.truncated
             response.limiting_factor = (

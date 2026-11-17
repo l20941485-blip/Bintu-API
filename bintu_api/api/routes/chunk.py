@@ -88,6 +88,7 @@ async def scrape_chunks(
         skip_cache,
         persist,
         max_tokens,
+        payload.main_content_only,
     )
 
     chunk_strings = split_into_chunks(result.markdown, max_tokens)
@@ -139,6 +140,7 @@ async def _scrape_chunks(
     skip_cache: bool = False,
     persist: bool = True,
     max_tokens: int = 6000,
+    main_content_only: bool = False,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -161,6 +163,7 @@ async def _scrape_chunks(
             persist=persist,
             mode="chunk",
             max_tokens=max_tokens,
+            main_content_only=main_content_only,
         )
 
         log_extraction_completed(

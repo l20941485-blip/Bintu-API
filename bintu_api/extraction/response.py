@@ -48,6 +48,8 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
         provenance["canonical_url"] = context.canonical_url
     if context.language is not None:
         provenance["language"] = context.language
+    if context.content_cleaning is not None:
+        provenance["content_cleaning"] = context.content_cleaning
     return provenance
 
 
@@ -101,7 +103,15 @@ def build_mcp_envelope(
         ),
         "truncated": context.truncated,
         **(
-            {"selected_sections": context.selected_sections}
+            {
+                "selected_sections": context.selected_sections,
+                "requested_sections": context.requested_sections,
+                "unmatched_sections": context.unmatched_sections,
+                "available_sections": context.available_sections,
+                "filtered": context.filtered,
+                "section_match_status": context.section_match_status,
+                "warnings": context.warnings,
+            }
             if context.selected_sections is not None
             else {}
         ),
@@ -137,7 +147,15 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
         "low_yield": context.low_yield,
         **({"yield_hint": context.yield_hint} if context.low_yield else {}),
         **(
-            {"selected_sections": context.selected_sections}
+            {
+                "selected_sections": context.selected_sections,
+                "requested_sections": context.requested_sections,
+                "unmatched_sections": context.unmatched_sections,
+                "available_sections": context.available_sections,
+                "filtered": context.filtered,
+                "section_match_status": context.section_match_status,
+                "warnings": context.warnings,
+            }
             if context.selected_sections is not None
             else {}
         ),

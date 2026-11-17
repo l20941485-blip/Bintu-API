@@ -90,6 +90,30 @@ class ScrapeTextResponse(BaseModel):
             "section selectors. Each item includes heading, level, index, and text."
         ),
     )
+    requested_sections: list[str] | None = Field(
+        default=None,
+        description="Section selectors requested by the caller.",
+    )
+    unmatched_sections: list[str] | None = Field(
+        default=None,
+        description="Requested section selectors that did not match a heading or label.",
+    )
+    available_sections: list[str] | None = Field(
+        default=None,
+        description="Headings and labels available in the extracted document.",
+    )
+    filtered: bool = Field(
+        default=False,
+        description="True when a sections filter was applied before mode processing.",
+    )
+    section_match_status: str = Field(
+        default="not_filtered",
+        description="Outcome of section selection: not_filtered, matched, partial_match, or no_match.",
+    )
+    warnings: list[str] | None = Field(
+        default=None,
+        description="Non-fatal section-selection warnings.",
+    )
     cache_layer: Literal["none", "memory", "persistent"] = Field(
         default="none",
         description="Which cache served the response: 'none' (fresh fetch), 'memory' or 'persistent'.",
@@ -120,6 +144,10 @@ class ScrapeTextResponse(BaseModel):
     truncated_split: bool = Field(
         default=False,
         description="Reserved: true when content spans multiple chunks (not truncation).",
+    )
+    content_cleaning: dict[str, Any] | None = Field(
+        default=None,
+        description="Reports whether stronger main-content extraction was applied.",
     )
     provenance: Provenance | None = Field(
         default=None,
