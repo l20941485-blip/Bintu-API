@@ -249,3 +249,12 @@ def test_url_fragments_do_not_cross_chunk_boundaries():
         assert not chunk.text.startswith("example.org/")
         assert not chunk.text.endswith("https:")
         assert not chunk.text.endswith("example.org/")
+
+
+def test_single_oversized_sentence_falls_back_to_whitespace():
+    text = " ".join(["ordinary"] * 120) + "."
+
+    chunks = split_semantic_chunks(text, max_tokens=100)
+
+    assert len(chunks) > 1
+    assert all(chunk.approx_tokens <= 100 for chunk in chunks)

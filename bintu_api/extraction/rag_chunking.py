@@ -278,6 +278,14 @@ def _split_by_sentences(text: str, max_tokens: int) -> list[str]:
     current: list[str] = []
 
     for sentence in sentences:
+        if count_tokens(sentence) > max_tokens:
+            if current:
+                pieces.append(" ".join(current))
+                current = []
+
+            pieces.extend(_split_by_whitespace(sentence, max_tokens))
+            continue
+
         candidate = " ".join([*current, sentence])
         if current and count_tokens(candidate) > max_tokens:
             pieces.append(" ".join(current))
@@ -289,6 +297,7 @@ def _split_by_sentences(text: str, max_tokens: int) -> list[str]:
         pieces.append(" ".join(current))
 
     return pieces
+
 
 
 def _split_prose(prose: str, max_tokens: int) -> list[str]:
