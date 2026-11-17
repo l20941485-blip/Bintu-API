@@ -26,8 +26,8 @@ from fastapi import Request
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
 from bintu_api.extraction.models import CacheInfo
-from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.extraction.quality import assess_yield
+from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.summarizer import summarize_text
 from bintu_api.observability import (
