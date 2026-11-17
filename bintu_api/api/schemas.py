@@ -1,4 +1,4 @@
-﻿"""Shared data schemas for Bintu responses and requests.
+"""Shared data schemas for Bintu responses and requests.
 
 This module defines the public contract used by API and MCP surfaces while avoiding direct business logic.
 
@@ -48,6 +48,18 @@ class RestChunk(BaseModel):
     text: str
     approx_tokens: int
     tokens: int
+    chunk_strategy: Literal["sequential", "semantic"] = "sequential"
+    chunk_id: str | None = None
+    heading_path: list[str] = Field(default_factory=list)
+    section_index: int | None = None
+    contains_code: bool | None = None
+    contains_table: bool | None = None
+    contains_links: bool | None = None
+    link_count: int | None = None
+    source_url: str | None = None
+    final_url: str | None = None
+    content_sha256: str | None = None
+    extracted_at: str | None = None
 
 
 class ScrapeChunksResponse(BaseModel):
@@ -77,6 +89,8 @@ class MobileScrapeTextRequest(BaseModel):
     include_footer: bool = False
     main_content_only: bool = False
     render_js: bool = False
+    chunk_strategy: Literal["sequential", "semantic"] = "sequential"
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
 
 
 class VersionResponse(BaseModel):
