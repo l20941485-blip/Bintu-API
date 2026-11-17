@@ -89,3 +89,72 @@ async def test_no_sections_reports_not_filtered():
     assert result.filtered is False
     assert result.section_match_status == "not_filtered"
     assert result.warnings is None
+
+
+@pytest.mark.asyncio
+async def test_available_sections_contains_only_real_headings():
+    noisy_markdown = """# Real Heading
+
+Real content.
+
+- **List Label**
+>>> import json
+JSON | Python
+object | dict
+Note
+Plain Label
+"""
+
+    with patch(
+        "bintu_api.extraction.context.rate_limit_identity",
+        return_value="test-identity",
+    ):
+        result = await extract_context(
+            request=AsyncMock(),
+            url="https://example.com",
+            mode="scrape",
+            max_tokens=100,
+            sections="Real Heading",
+            raw_text=noisy_markdown,
+            cache=False,
+            persist=False,
+        )
+
+    assert result.available_sections == ["Real Heading"]
+    assert "List Label" not in result.available_sections
+    assert ">>> import json" not in result.available_sections
+    assert "JSON | Python" not in result.available_sections
+    assert "object | dict" not in result.available_sections
+    assert "Note" not in result.available_sections
+    assert "Plain Label" not in result.available_sections
+
+
+@pytest.mark.asyncio
+async def test_available_sections_does_not_duplicate_heading_forms():
+    markdown = """# Example Domains
+
+Content.
+
+## Further Reading
+
+More content.
+"""
+
+    with patch(
+        "bintu_api.extraction.context.rate_limit_identity",
+        return_value="test-identity",
+    ):
+        result = await extract_context(
+            request=AsyncMock(),
+            url="https://example.com",
+            mode="scrape",
+            max_tokens=100,
+            sections="Example Domains",
+            raw_text=markdown,
+            cache=False,
+            persist=False,
+        )
+
+    assert result.available_sections == ["Example Domains", "Further Reading"]
+    assert "# Example Domains" not in result.available_sections
+    assert "## Further Reading" not in result.available_sections
