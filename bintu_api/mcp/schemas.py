@@ -241,6 +241,25 @@ TOOL_INPUT_SCHEMA = {
             "default": False,
             "description": MAIN_CONTENT_ONLY_DESCRIPTION,
         },
+        "chunk_strategy": {
+            "type": "string",
+            "enum": ["sequential", "semantic"],
+            "default": "sequential",
+            "description": (
+                "Chunking strategy. sequential preserves the legacy token-budget "
+                "behaviour. semantic uses heading-aware sections and returns "
+                "retrieval metadata."
+            ),
+        },
+        "overlap_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": (
+                "Approximate token overlap between chunks. Must be non-negative "
+                "and less than max_tokens."
+            ),
+        },
         "cache": {
             "type": "boolean",
             "default": True,
