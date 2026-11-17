@@ -112,12 +112,13 @@ async def test_main_content_only_skips_persistent_cache():
     with patch(
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
-    ):
+    ) as extract_main_content:
         _, result, layer = await call_service(
             service,
             request,
             main_content_only=True,
         )
+
 
     cleaned_key = compute_cache_key(
         render_js=False,
@@ -196,3 +197,34 @@ async def test_standard_extraction_writes_persistent_cache():
     }
     service.persistent_cache_reader.assert_awaited_once()
     service.persistent_cache_writer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_main_content_only_applies_with_links_false():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+
+    with patch(
+        "bintu_api.extraction.scrape_service.extract_main_content",
+        return_value=("Cleaned article content. " * 1000, True),
+    ) as extract_main_content:
+        _, result, _ = await call_service(
+            service,
+            request,
+            main_content_only=True,
+            links="false",
+        )
+
+    extract_main_content.assert_called_once_with(
+        fake_document().body,
+        200000,
+        "utf-8",
+        "https://example.com/final",
+        links="false",
+    )
+    assert result.markdown == "Cleaned article content. " * 1000
+    assert result.content_cleaning == {
+        "applied": True,
+        "strategy": "main_content",
+    }
