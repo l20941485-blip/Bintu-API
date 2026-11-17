@@ -63,7 +63,12 @@ def make_service(cache, **overrides):
     return ScrapeService(**dependencies)
 
 
-async def call_service(service, request, **overrides):
+async def call_service(
+    service,
+    request,
+    url="https://example.com/page",
+    **overrides,
+):
     arguments = {
         "include_nav": False,
         "include_header": False,
@@ -79,7 +84,7 @@ async def call_service(service, request, **overrides):
     options = ScrapeOptions(**arguments)
     return await service.fetch_and_extract(
         context,
-        "https://example.com/page",
+        url,
         options,
     )
 
