@@ -9,7 +9,6 @@ Verifies that:
 - No filtered/selected response is stored under a selector-specific cache key.
 """
 import asyncio
-import hashlib
 import unittest
 from types import SimpleNamespace
 from unittest import mock

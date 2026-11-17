@@ -5,7 +5,6 @@ This module owns a focused responsibility within the service and must remain iso
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 import asyncio
-import hashlib
 import unittest
 from types import SimpleNamespace
 from unittest import mock

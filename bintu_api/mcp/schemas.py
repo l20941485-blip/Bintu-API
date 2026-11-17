@@ -8,8 +8,10 @@ Important boundaries, invariants, and compatibility notes are documented here so
 from bintu_api.mcp.descriptions import (
     CACHE_DESCRIPTION,
     CHUNK_TOKEN_BUDGET_DESCRIPTION,
+    CONTENT_CLEANING_DESCRIPTION,
     FOOTNOTE_URL_POLICY_DESCRIPTION,
     LINKS_DESCRIPTION,
+    MAIN_CONTENT_ONLY_DESCRIPTION,
     MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION,
     MAX_TOKENS_DESCRIPTION,
     MODE_DESCRIPTION,
@@ -18,8 +20,6 @@ from bintu_api.mcp.descriptions import (
     RENDER_JS_DESCRIPTION,
     SECTIONS_DESCRIPTION,
     URL_DESCRIPTION,
-    MAIN_CONTENT_ONLY_DESCRIPTION,
-    CONTENT_CLEANING_DESCRIPTION,
 )
 from bintu_api.mcp.descriptions import TOOL_DESCRIPTION as TOOL_DESCRIPTION
 

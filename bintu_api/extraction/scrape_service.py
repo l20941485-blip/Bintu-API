@@ -12,7 +12,6 @@ import logging
 
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.builder import build_cached_markdown
-from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.cache_policy import (
     compute_cache_key,
     is_cacheable,
@@ -24,6 +23,7 @@ from bintu_api.extraction.cacheaccess import (
     should_read_persistent_cache,
     should_write_persistent_cache,
 )
+from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
     read_memory_cache,
     write_memory_cache,

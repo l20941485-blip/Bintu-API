@@ -6,7 +6,6 @@ import pytest
 
 from bintu_api.extraction.context import extract_context
 
-
 MARKDOWN = """# Background
 
 Background body.
