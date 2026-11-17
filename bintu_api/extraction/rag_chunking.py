@@ -269,6 +269,28 @@ def _apply_overlap(
     return result
 
 
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def _split_by_sentences(text: str, max_tokens: int) -> list[str]:
+    sentences = [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
+    pieces: list[str] = []
+    current: list[str] = []
+
+    for sentence in sentences:
+        candidate = " ".join([*current, sentence])
+        if current and count_tokens(candidate) > max_tokens:
+            pieces.append(" ".join(current))
+            current = [sentence]
+        else:
+            current.append(sentence)
+
+    if current:
+        pieces.append(" ".join(current))
+
+    return pieces
+
+
 def _split_prose(prose: str, max_tokens: int) -> list[str]:
     paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", prose) if paragraph.strip()]
 
@@ -285,7 +307,7 @@ def _split_prose(prose: str, max_tokens: int) -> list[str]:
         if count_tokens(paragraph) <= max_tokens:
             pieces.append(paragraph)
         else:
-            pieces.extend(_split_by_whitespace(paragraph, max_tokens))
+            pieces.extend(_split_by_sentences(paragraph, max_tokens))
 
     return pieces
 

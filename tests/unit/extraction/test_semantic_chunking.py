@@ -142,7 +142,9 @@ def test_oversized_url_is_not_split():
 
     chunks = split_semantic_chunks(markdown, max_tokens=8)
 
-    assert url in [chunk.text for chunk in chunks]
+    matching = [chunk for chunk in chunks if url in chunk.text]
+    assert len(matching) == 1
+    assert matching[0].text.count(url) == 1
 
 
 def test_fitting_code_fence_remains_atomic():
@@ -206,3 +208,44 @@ Use an API key.
     assert chunks[0].approx_tokens == chunks[0].tokens
     assert chunks[0].chunk_id.startswith("sha256:")
     assert CHUNKER_VERSION
+
+
+def test_long_paragraph_prefers_sentence_boundaries():
+    text = (
+        "# Guide\n\n"
+        + ("First sentence. " * 30)
+        + ("Second sentence. " * 30)
+    )
+
+    chunks = split_semantic_chunks(text, max_tokens=100)
+
+    assert len(chunks) > 1
+
+    prose_chunks = [
+        chunk
+        for chunk in chunks[:-1]
+        if not all(line.lstrip().startswith("#") for line in chunk.text.splitlines() if line.strip())
+    ]
+
+    assert prose_chunks
+
+    for chunk in prose_chunks:
+        stripped = chunk.text.rstrip()
+        assert stripped.endswith((".", "!", "?")), stripped[-40:]
+
+    for chunk in chunks:
+        assert chunk.text.strip()
+        assert not chunk.text.startswith("entence")
+        assert not chunk.text.endswith("First sent")
+
+def test_url_fragments_do_not_cross_chunk_boundaries():
+    url = "https://example.org/" + ("a" * 120)
+    markdown = f"Before {url} after"
+
+    chunks = split_semantic_chunks(markdown, max_tokens=8)
+
+    for chunk in chunks:
+        assert not chunk.text.startswith("://")
+        assert not chunk.text.startswith("example.org/")
+        assert not chunk.text.endswith("https:")
+        assert not chunk.text.endswith("example.org/")
