@@ -15,6 +15,7 @@ agents and callers can budget LLM context precisely.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from dataclasses import asdict, dataclass
@@ -35,6 +36,7 @@ from bintu_api.observability import (
     record_cache_tokens_saved,
 )
 from bintu_api.security.auth import rate_limit_identity
+from bintu_api.security.url_safety import sanitize_url
 from bintu_api.settings import Settings
 
 logger = logging.getLogger("bintu_api.context")
@@ -451,16 +453,12 @@ async def extract_context(
             base_url=url,
         )
         if chunk_strategy == "semantic":
-            from hashlib import sha256
-
-            from bintu_api.security.url_safety import sanitize_url
-
             semantic_chunks = split_semantic_chunks(
                 policy_text,
                 max_tokens=max_tokens,
                 overlap_tokens=overlap_tokens,
                 source_url=sanitize_url(url),
-                content_sha256=sha256(
+                content_sha256=hashlib.sha256(
                     policy_text.encode("utf-8")
                 ).hexdigest(),
                 extracted_at=resolved_extracted_at,
@@ -509,6 +507,26 @@ async def extract_context(
             limiting_factor = "token_budget"
     else:
         raise ValueError(f"Unknown context mode: {mode}")
+
+    if mode == "chunk" and chunks:
+        chunk_provenance = {
+            "source_url": sanitize_url(url),
+            "final_url": (
+                document.final_url
+                if document is not None
+                and isinstance(document, FetchedHTML)
+                and document.final_url
+                else sanitize_url(url)
+            ),
+            "content_sha256": hashlib.sha256(
+                policy_text.encode("utf-8")
+            ).hexdigest(),
+            "extracted_at": resolved_extracted_at,
+        }
+        chunks = attach_chunk_provenance(
+            chunks,
+            **chunk_provenance,
+        )
 
     tokens_saved_estimate = delivered_savings(
         html_tokens,
@@ -578,6 +596,24 @@ async def extract_context(
         warnings=section_warnings,
         content_cleaning=content_cleaning,
     )
+
+def attach_chunk_provenance(
+    chunks: list[dict[str, Any]],
+    *,
+    source_url: str,
+    final_url: str | None,
+    content_sha256: str | None,
+    extracted_at: str,
+) -> list[dict[str, Any]]:
+    """Attach core source provenance to successful chunk dictionaries."""
+    provenance = {
+        "source_url": sanitize_url(source_url),
+        "final_url": final_url,
+        "content_sha256": content_sha256,
+        "extracted_at": extracted_at,
+    }
+    return [{**chunk, **provenance} for chunk in chunks]
+
 
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:
     """Return the non-negative token savings estimate for a delivered response."""
