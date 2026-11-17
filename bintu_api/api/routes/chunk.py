@@ -27,6 +27,7 @@ from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import split_into_chunks
 from bintu_api.extraction.output import TOKEN_METHOD
+from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
 from bintu_api.security.auth import api_key_scheme
@@ -53,6 +54,8 @@ async def scrape_chunks(
     links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
+    chunk_strategy: Literal["sequential", "semantic"] = "sequential",
+    overlap_tokens: int = 0,
 ) -> ScrapeChunksResponse:
     settings = request.app.state.settings
     routes_common.verify_api_access(request, settings)
@@ -63,6 +66,15 @@ async def scrape_chunks(
             detail={
                 "code": "invalid_token_budget",
                 "message": "max_tokens must be between 100 and 50000.",
+            },
+        )
+
+    if overlap_tokens < 0 or overlap_tokens >= max_tokens:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_overlap_budget",
+                "message": "overlap_tokens must be non-negative and less than max_tokens.",
             },
         )
 
@@ -91,16 +103,49 @@ async def scrape_chunks(
         payload.main_content_only,
     )
 
-    chunk_strings = split_into_chunks(result.markdown, max_tokens)
-    chunks = [
-        RestChunk(
-            index=index,
-            text=chunk,
-            approx_tokens=_compute_approx_tokens(chunk),
-            tokens=_compute_approx_tokens(chunk),
+    if chunk_strategy == "semantic":
+        semantic_chunks = split_semantic_chunks(
+            result.markdown,
+            max_tokens=max_tokens,
+            overlap_tokens=overlap_tokens,
+            source_url=document.final_url if document else payload.url,
+            final_url=document.final_url if document else payload.url,
+            content_sha256=getattr(result, "content_sha256", None),
+            extracted_at=result.extracted_at,
         )
-        for index, chunk in enumerate(chunk_strings)
-    ]
+        chunks = [
+            RestChunk(
+                index=chunk.index,
+                text=chunk.text,
+                approx_tokens=chunk.approx_tokens,
+                tokens=chunk.tokens,
+                chunk_strategy=chunk.chunk_strategy,
+                chunk_id=chunk.chunk_id,
+                heading_path=chunk.heading_path,
+                section_index=chunk.section_index,
+                contains_code=chunk.contains_code,
+                contains_table=chunk.contains_table,
+                contains_links=chunk.contains_links,
+                link_count=chunk.link_count,
+                source_url=chunk.source_url,
+                final_url=chunk.final_url,
+                content_sha256=chunk.content_sha256,
+                extracted_at=chunk.extracted_at,
+            )
+            for chunk in semantic_chunks
+        ]
+    else:
+        chunk_strings = split_into_chunks(result.markdown, max_tokens)
+        chunks = [
+            RestChunk(
+                index=index,
+                text=chunk,
+                approx_tokens=_compute_approx_tokens(chunk),
+                tokens=_compute_approx_tokens(chunk),
+                chunk_strategy="sequential",
+            )
+            for index, chunk in enumerate(chunk_strings)
+        ]
 
     approx_tokens = sum(chunk.approx_tokens for chunk in chunks)
 
@@ -189,6 +234,3 @@ async def _scrape_chunks(
             url=url,
             request_id=request_id,
         ) from error
-
-
-
