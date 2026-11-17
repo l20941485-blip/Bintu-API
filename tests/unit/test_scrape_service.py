@@ -63,7 +63,12 @@ def make_service(cache, **overrides):
     return ScrapeService(**dependencies)
 
 
-async def call_service(service, request, **overrides):
+async def call_service(
+    service,
+    request,
+    url="https://example.com/page",
+    **overrides,
+):
     arguments = {
         "include_nav": False,
         "include_header": False,
@@ -79,7 +84,7 @@ async def call_service(service, request, **overrides):
     options = ScrapeOptions(**arguments)
     return await service.fetch_and_extract(
         context,
-        "https://example.com/page",
+        url,
         options,
     )
 
@@ -154,9 +159,10 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
 
 @pytest.mark.asyncio
 async def test_concurrent_cache_misses_may_fetch_independently():
-    """Concurrent misses may each fetch and write the same cache key."""
+    """Concurrent misses for distinct URLs may each fetch and cache independently."""
     cache = FakeCache()
-    request = make_request(cache)
+    first_request = make_request(cache)
+    second_request = make_request(cache)
     document = fake_document()
 
     fetch_calls = 0
@@ -172,8 +178,8 @@ async def test_concurrent_cache_misses_may_fetch_independently():
     )
 
     first, second = await asyncio.gather(
-        call_service(service, request),
-        call_service(service, request),
+        call_service(service, first_request, url="https://example.com/first"),
+        call_service(service, second_request, url="https://example.com/second"),
     )
 
     assert len(first) == 3
@@ -181,7 +187,7 @@ async def test_concurrent_cache_misses_may_fetch_independently():
     assert first[2] == "none"
     assert second[2] == "none"
     assert fetch_calls == 2
-    assert len(cache.data) == 1
+    assert len(cache.data) == 2
 
 
 
@@ -245,6 +251,3 @@ async def test_persist_false_reads_but_does_not_write():
     assert result.markdown == "extracted"
     service.persistent_cache_reader.assert_awaited_once()
     service.persistent_cache_writer.assert_not_awaited()
-
-
-

@@ -16,12 +16,6 @@ class SectionSelection:
     filtered: bool = False
     match_status: str = "not_filtered"
     warnings: tuple[str, ...] = ()
-    requested_sections: tuple[str, ...] = ()
-    unmatched_sections: tuple[str, ...] = ()
-    available_sections: tuple[str, ...] = ()
-    filtered: bool = False
-    match_status: str = "not_filtered"
-    warnings: tuple[str, ...] = ()
 
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.MULTILINE)
@@ -194,7 +188,8 @@ def _select_sections_core(
                 matched_ordinals.add(heading["ordinal"])
                 break
 
-    matched.sort(key=lambda heading: heading["ordinal"])    
+    matched.sort(key=lambda heading: heading["ordinal"])
+
 
     if not matched:
         plain_labels = _parse_plain_labels(text)
@@ -444,14 +439,7 @@ def select_sections(
         return selection
 
     headings = _parse_headings(text)
-    list_labels = _parse_list_labels(text)
-    plain_labels = _parse_plain_labels(text)
-
-    available_sections = (
-        [heading["heading"] for heading in headings]
-        + [label["label"] for label in list_labels]
-        + [label["label"] for label in plain_labels]
-    )
+    available_sections = [heading["heading"] for heading in headings]
 
     def matches(selector: str, candidate: str) -> bool:
         normalized = _normalize_heading(candidate)

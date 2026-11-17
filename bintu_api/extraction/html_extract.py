@@ -397,6 +397,7 @@ def extract_main_content(
     max_characters: int,
     from_encoding: str | None,
     base_url: str | None,
+    links: str = "inline",
 ) -> tuple[str, bool]:
     """Extract the primary article or documentation container as Markdown.
 
@@ -416,7 +417,7 @@ def extract_main_content(
             html,
             url=base_url,
             output_format="markdown",
-            include_links=True,
+            include_links=links == "inline",
             include_tables=True,
         )
     except Exception as error:

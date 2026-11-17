@@ -192,12 +192,13 @@ class ScrapeService:
 
         cleaned_text = ""
         cleaning_applied = False
-        if main_content_only and links == "inline":
+        if main_content_only:
             cleaned_text, cleaning_applied = extract_main_content(
                 document.body,
                 extraction_cap,
                 document.charset,
                 document.final_url or url,
+                links=links,
             )
 
         if cleaning_applied:
