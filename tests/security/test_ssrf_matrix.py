@@ -323,7 +323,6 @@ class SSRFMatrixTests(unittest.TestCase):
             with self.subTest(host=host), self.assertRaises(TargetURLRejected):
                 resolve_public_addresses(host, 80)
 
-
     def test_non_gaierror_resolver_failure_maps_to_connection_error(self):
         """A resolver/network failure other than gaierror must not be treated as an invalid URL."""
         with (
@@ -531,8 +530,3 @@ class SSRFMatrixTests(unittest.TestCase):
         response = FakeResponse(headers={"Content-Type": "text/html", "Content-Encoding": "br"}, body=b"x")
         with self.assertRaises(UnsupportedContentEncoding):
             _read_html_response(response, 1024)
-
-
-
-
-

@@ -16,12 +16,12 @@ import math
 import re
 import socket
 import ssl
+import time
 import zlib
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
 
 import idna
-import time
 
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.html_extract import extract_html_metadata
@@ -262,9 +262,7 @@ def resolve_public_addresses(
                 port,
                 last_error,
             )
-            raise OSError(
-                "The target hostname could not be resolved temporarily"
-            ) from last_error
+            raise OSError("The target hostname could not be resolved temporarily") from last_error
 
     addresses = tuple(dict.fromkeys(result[4][0] for result in results))
     if not addresses:
