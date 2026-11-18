@@ -74,7 +74,8 @@ information, and optional provenance. `approx_tokens` is estimated as
 ### `POST /api/v1/scrape/chunks`
 
 Uses the same fetch, authentication, robots, cache, and extraction pipeline,
-then returns ordered text chunks. The JSON body accepts `url`,
+then returns retrieval-ready Markdown chunks with semantic section boundaries,
+stable chunk metadata, and source provenance for RAG pipelines. The JSON body accepts `url`,
 `include_nav`, `include_header`, `include_footer`, and `render_js`.
 The `max_tokens` query parameter defaults to 6000 and accepts 100–50,000;
 it budgets each chunk. The decoded upstream HTML limit is 1 MiB, and the

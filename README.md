@@ -1,5 +1,7 @@
 ﻿# Bintu Data Extraction API
 
+Bintu turns public web pages into retrieval-ready context: clean Markdown, semantic section boundaries, stable chunk metadata, and source provenance for RAG pipelines.
+
 ## Quickstart
 
 ### 1. Authenticate
