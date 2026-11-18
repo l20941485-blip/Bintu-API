@@ -39,6 +39,8 @@ class CachedMarkdown:
     limiting_factor: str = "none"
     extracted_at: str = ""
     content_hash: str = ""
+    page_title: str | None = None
+    content_fingerprint: str | None = None
     content_cleaning: dict[str, Any] | None = None
 
 

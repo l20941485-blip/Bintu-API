@@ -60,6 +60,8 @@ class RestChunk(BaseModel):
     final_url: str | None = None
     content_sha256: str | None = None
     extracted_at: str | None = None
+    page_title: str | None = None
+    content_fingerprint: str | None = None
 
 
 class ScrapeChunksResponse(BaseModel):

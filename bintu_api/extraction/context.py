@@ -26,6 +26,7 @@ from fastapi import Request
 
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
+from bintu_api.extraction.fingerprint import compute_content_fingerprint
 from bintu_api.extraction.models import CacheInfo
 from bintu_api.extraction.quality import assess_yield
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
@@ -145,6 +146,8 @@ class ContextResult:
     selected_sections: list[dict[str, Any]] | None = None
     canonical_url: str | None = None
     language: str | None = None
+    page_title: str | None = None
+    content_fingerprint: str | None = None
     requested_sections: list[str] | None = None
     unmatched_sections: list[str] | None = None
     available_sections: list[str] | None = None
@@ -510,6 +513,13 @@ async def extract_context(
 
     if mode == "chunk" and chunks:
         chunk_provenance = {
+            "page_title": (
+                document.page_title
+                if document is not None
+                and isinstance(document, FetchedHTML)
+                else None
+            ),
+            "content_fingerprint": compute_content_fingerprint(policy_text),
             "source_url": sanitize_url(url),
             "final_url": (
                 document.final_url
@@ -588,6 +598,8 @@ async def extract_context(
         selected_sections=selected_sections,
         canonical_url=document.canonical_url if not cache_hit and isinstance(document, FetchedHTML) else None,
         language=document.language if not cache_hit and isinstance(document, FetchedHTML) else None,
+        page_title=document.page_title if not cache_hit and isinstance(document, FetchedHTML) else None,
+        content_fingerprint=compute_content_fingerprint(policy_text) if mode == "chunk" else None,
         requested_sections=requested_sections,
         unmatched_sections=unmatched_sections,
         available_sections=available_sections,
@@ -604,13 +616,17 @@ def attach_chunk_provenance(
     final_url: str | None,
     content_sha256: str | None,
     extracted_at: str,
+    page_title: str | None = None,
+    content_fingerprint: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Attach core source provenance to successful chunk dictionaries."""
+    """Attach source provenance to successful chunk dictionaries."""
     provenance = {
         "source_url": sanitize_url(source_url),
         "final_url": final_url,
         "content_sha256": content_sha256,
         "extracted_at": extracted_at,
+        "page_title": page_title,
+        "content_fingerprint": content_fingerprint,
     }
     return [{**chunk, **provenance} for chunk in chunks]
 
