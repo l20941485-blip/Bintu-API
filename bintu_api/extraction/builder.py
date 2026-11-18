@@ -17,6 +17,7 @@ from bintu_api.common.fetch import (
 )
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import decode_source_text
+from bintu_api.extraction.fingerprint import compute_content_fingerprint
 
 
 def build_cached_markdown(
@@ -45,6 +46,8 @@ def build_cached_markdown(
         limiting_factor="char_cap" if extracted.truncated else "none",
         extracted_at=extracted_at or datetime.now(UTC).isoformat(),
         content_hash=hashlib.sha256(extracted.text.encode("utf-8")).hexdigest(),
+        page_title=getattr(document, "page_title", None),
+        content_fingerprint=compute_content_fingerprint(extracted.text),
         content_cleaning=content_cleaning,
     )
 
