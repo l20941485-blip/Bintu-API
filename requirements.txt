@@ -9,3 +9,4 @@ httpx==0.28.1
 trafilatura==2.3.1
 starlette==1.10.0
 python-dotenv
+idna==3.20
