@@ -313,13 +313,6 @@ def _validate_punycode_host(host: str) -> None:
         try:
             idna.decode(label)
         except idna.IDNAError as error:
-            logger.warning(
-                "punycode_validation_debug label=%r idna_version=%r python=%r error=%r",
-                label,
-                getattr(idna, "__version__", "unknown"),
-                __import__("sys").version.split()[0],
-                error,
-            )
             raise TargetURLRejected("The URL contains malformed Punycode") from error
 
 
@@ -344,13 +337,6 @@ def _parse_target(
             try:
                 host = idna.encode(host, uts46=True).decode("ascii")
             except idna.IDNAError as error:
-                logger.warning(
-                    "idn_validation_debug host=%r idna_version=%r python=%r error=%r",
-                    host,
-                    getattr(idna, "__version__", "unknown"),
-                    __import__("sys").version.split()[0],
-                    error,
-                )
                 raise TargetURLRejected("The target URL is malformed") from error
 
             _validate_punycode_host(host)
