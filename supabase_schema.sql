@@ -140,3 +140,7 @@ alter table public.scrape_cache
 alter table public.scrape_cache
     add column if not exists page_title text,
     add column if not exists content_fingerprint text;
+
+-- Preserve the source content hash across persistent-cache hits.
+alter table public.scrape_cache
+    add column if not exists content_hash text;
