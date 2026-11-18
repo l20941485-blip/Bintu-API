@@ -64,7 +64,11 @@ async def get_cached_markdown(
     # at most one row per cache key.
     response = await (
         client.table("scrape_cache")
-        .select("markdown,truncated,html_tokens,tokens_saved_estimate,limiting_factor,extracted_at,content_hash")
+        .select(
+            "markdown,truncated,html_tokens,tokens_saved_estimate,"
+            "limiting_factor,extracted_at,content_hash,"
+            "page_title,content_fingerprint"
+        )
         .eq("url", url)
         .eq("render_js", render_js)
         .eq("include_nav", include_nav)
@@ -92,6 +96,8 @@ async def get_cached_markdown(
     limiting_factor = row.get("limiting_factor")
     extracted_at = row.get("extracted_at")
     content_hash = row.get("content_hash")
+    page_title = row.get("page_title")
+    content_fingerprint = row.get("content_fingerprint")
 
     return CachedMarkdown(
         markdown=markdown,
@@ -101,6 +107,12 @@ async def get_cached_markdown(
         limiting_factor=(limiting_factor if isinstance(limiting_factor, str) and limiting_factor else "none"),
         extracted_at=(extracted_at if isinstance(extracted_at, str) and extracted_at else ""),
         content_hash=(content_hash if isinstance(content_hash, str) and content_hash else ""),
+        page_title=page_title if isinstance(page_title, str) else None,
+        content_fingerprint=(
+            content_fingerprint
+            if isinstance(content_fingerprint, str)
+            else None
+        ),
     )
 
 
@@ -117,6 +129,8 @@ async def upsert_cached_markdown(
     tokens_saved_estimate: int = 0,
     limiting_factor: str = "none",
     extracted_at: str | None = None,
+    page_title: str | None = None,
+    content_fingerprint: str | None = None,
 ) -> None:
     """Store extracted text plus the economics needed to rehydrate cache hits.
 
@@ -152,6 +166,8 @@ async def upsert_cached_markdown(
                 "limiting_factor": limiting_factor,
                 "extracted_at": extracted_at,
                 "content_hash": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+                "page_title": page_title,
+                "content_fingerprint": content_fingerprint,
                 "created_at": datetime.now(UTC).isoformat(),
             },
             on_conflict="url,render_js,include_nav,include_header,include_footer",
