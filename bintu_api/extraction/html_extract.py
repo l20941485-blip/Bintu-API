@@ -824,6 +824,16 @@ def extract_text_result(
 
 
 
+def extract_page_title(soup) -> str | None:
+    """Return the normalized page title, if present."""
+    title = soup.title
+    if title is None:
+        return None
+
+    page_title = title.get_text(" ", strip=True)
+    return page_title or None
+
+
 def extract_canonical_url(soup) -> str | None:
     """Return the href of the first ``link rel=canonical``, if present."""
     link = soup.find("link", rel="canonical")
@@ -857,11 +867,15 @@ def extract_language(soup) -> str | None:
 def extract_html_metadata(
     html_bytes: bytes,
     from_encoding: str | None = None,
-) -> tuple[str | None, str | None]:
-    """Return best-effort ``(canonical_url, language)`` metadata for HTML."""
+) -> tuple[str | None, str | None, str | None]:
+    """Return best-effort ``(canonical_url, language, page_title)`` metadata."""
     soup = BeautifulSoup(
         html_bytes,
         "html.parser",
         from_encoding=from_encoding,
     )
-    return extract_canonical_url(soup), extract_language(soup)
+    return (
+        extract_canonical_url(soup),
+        extract_language(soup),
+        extract_page_title(soup),
+    )
