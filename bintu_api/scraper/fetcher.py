@@ -20,6 +20,8 @@ import zlib
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
 
+import idna
+
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.html_extract import extract_html_metadata
 from bintu_api.settings import Settings
@@ -309,13 +311,9 @@ def _validate_punycode_host(host: str) -> None:
             continue
 
         try:
-            decoded = label.encode("ascii").decode("idna")
-            reencoded = decoded.encode("idna").decode("ascii")
-        except (UnicodeError, ValueError) as error:
+            idna.decode(label)
+        except idna.IDNAError as error:
             raise TargetURLRejected("The URL contains malformed Punycode") from error
-
-        if reencoded.lower() != label.lower():
-            raise TargetURLRejected("The URL contains malformed Punycode")
 
 
 def _parse_target(
@@ -332,8 +330,16 @@ def _parse_target(
         if parsed.username is not None or parsed.password is not None:
             raise TargetURLRejected("URLs containing credentials are not allowed")
 
-        host = parsed.hostname.encode("idna").decode("ascii")
-        _validate_punycode_host(host)
+        host = parsed.hostname
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            try:
+                host = idna.encode(host, uts46=True).decode("ascii")
+            except idna.IDNAError as error:
+                raise TargetURLRejected("The target URL is malformed") from error
+
+            _validate_punycode_host(host)
 
         if _is_ambiguous_numeric_host(host):
             raise TargetURLRejected(
