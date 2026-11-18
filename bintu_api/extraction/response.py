@@ -50,6 +50,8 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
         provenance["language"] = context.language
     if context.content_cleaning is not None:
         provenance["content_cleaning"] = context.content_cleaning
+    if context.page_title is not None:
+        provenance["page_title"] = context.page_title
     return provenance
 
 
