@@ -22,7 +22,7 @@ TITLE = "Example Page Title"
 TIMESTAMP = "2026-01-01T00:00:00+00:00"
 
 
-def make_context(title):
+def make_context(title, title_source="html_title"):
     return ContextResult(
         mode="scrape",
         text="Readable example content.",
@@ -37,6 +37,7 @@ def make_context(title):
         source_url=URL,
         extracted_at=TIMESTAMP,
         page_title=title,
+        page_title_source=title_source if title else "none",
     )
 
 
@@ -45,6 +46,7 @@ class PageTitleResponseContractTests(unittest.TestCase):
         envelope = build_mcp_envelope(make_context(TITLE), URL)
 
         self.assertEqual(envelope["page_title"], TITLE)
+        self.assertEqual(envelope["page_title_source"], "html_title")
 
     def test_mcp_envelope_omits_missing_title(self):
         envelope = build_mcp_envelope(make_context(None), URL)
@@ -55,6 +57,10 @@ class PageTitleResponseContractTests(unittest.TestCase):
         response = build_rest_response(make_context(TITLE), URL)
 
         self.assertEqual(response["provenance"]["page_title"], TITLE)
+        self.assertEqual(
+            response["provenance"]["page_title_source"],
+            "html_title",
+        )
 
     def test_rest_response_omits_missing_title(self):
         response = build_rest_response(make_context(None), URL)
@@ -66,6 +72,11 @@ class PageTitleResponseContractTests(unittest.TestCase):
 
         self.assertIn("page_title", properties)
         self.assertNotIn("page_title", TOOL_OUTPUT_SCHEMA["required"])
+        self.assertIn("page_title_source", properties)
+        self.assertNotIn(
+            "page_title_source",
+            TOOL_OUTPUT_SCHEMA["required"],
+        )
 
 
 class PageTitleSurfaceTests(unittest.TestCase):
@@ -89,7 +100,7 @@ class PageTitleSurfaceTests(unittest.TestCase):
             "MCP-Protocol-Version": "2025-11-25",
         }
 
-    def make_fetch(self, title):
+    def make_fetch(self, title, title_source="html_title"):
         document = FetchedHTML(
             body=(
                 b"<html><body><main><p>"
@@ -99,6 +110,7 @@ class PageTitleSurfaceTests(unittest.TestCase):
             charset="utf-8",
             final_url=URL,
             page_title=title,
+            page_title_source=title_source if title else "none",
         )
 
         cached = SimpleNamespace(
@@ -109,12 +121,13 @@ class PageTitleSurfaceTests(unittest.TestCase):
             tokens_saved_estimate=90,
             limiting_factor="none",
             page_title=title,
+            page_title_source=title_source if title else "none",
         )
 
         return AsyncMock(return_value=(document, cached, "none"))
 
-    def call(self, surface, title):
-        fetch = self.make_fetch(title)
+    def call(self, surface, title, title_source="html_title"):
+        fetch = self.make_fetch(title, title_source)
 
         with patch(
             "bintu_api.api.scrape_adapter._fetch_and_extract",
@@ -159,6 +172,10 @@ class PageTitleSurfaceTests(unittest.TestCase):
 
                 structured = result["structuredContent"]
                 self.assertEqual(structured["page_title"], TITLE)
+                self.assertEqual(
+                    structured["page_title_source"],
+                    "html_title",
+                )
 
     def test_both_surfaces_omit_missing_title(self):
         for surface in ("legacy", "streamable"):
@@ -167,6 +184,16 @@ class PageTitleSurfaceTests(unittest.TestCase):
 
                 structured = result["structuredContent"]
                 self.assertNotIn("page_title", structured)
+
+
+    def test_both_surfaces_omit_title_source_without_title(self):
+        for surface in ("legacy", "streamable"):
+            with self.subTest(surface=surface):
+                result, _ = self.call(surface, None)
+
+                structured = result["structuredContent"]
+                self.assertNotIn("page_title", structured)
+                self.assertNotIn("page_title_source", structured)
 
 
 if __name__ == "__main__":
