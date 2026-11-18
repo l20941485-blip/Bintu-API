@@ -135,3 +135,8 @@ alter table public.scrape_cache
     add column if not exists limiting_factor text not null default 'none',
     add column if not exists extracted_at timestamptz,
     add column if not exists extractor_version text not null default 'legacy';
+
+-- Preserve page provenance across persistent-cache hits.
+alter table public.scrape_cache
+    add column if not exists page_title text,
+    add column if not exists content_fingerprint text;
