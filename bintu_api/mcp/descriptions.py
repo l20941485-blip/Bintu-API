@@ -119,6 +119,12 @@ SECTIONS_DESCRIPTION = (
 )
 
 OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
+    "page_title": {
+        "type": "string",
+        "description": (
+            "Human-readable title of the source document, when available."
+        ),
+    },
     "deduplicated_count": {
         "type": "integer",
         "minimum": 0,
