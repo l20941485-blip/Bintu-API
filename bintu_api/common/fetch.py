@@ -17,6 +17,7 @@ class FetchedHTML:
     canonical_url: str | None = None
     language: str | None = None
     page_title: str | None = None
+    page_title_source: str = "none"
 
 
 def compute_approx_tokens(text: str) -> int:

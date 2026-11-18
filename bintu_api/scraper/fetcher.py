@@ -586,7 +586,7 @@ def fetch_html_document(
                 settings.max_html_bytes,
             )
 
-            canonical_url, language, page_title = extract_html_metadata(
+            canonical_url, language, page_title, page_title_source = extract_html_metadata(
                 body,
                 from_encoding=_content_charset(content_type),
             )
@@ -601,6 +601,7 @@ def fetch_html_document(
                 canonical_url=canonical_url,
                 language=language,
                 page_title=page_title,
+                page_title_source=page_title_source,
             )
         finally:
             connection.close()
@@ -773,6 +774,7 @@ async def fetch_rendered_html_document(
                 canonical_url=metadata[0],
                 language=metadata[1],
                 page_title=metadata[2],
+                page_title_source=metadata[3],
             )
         finally:
             if browser is not None:

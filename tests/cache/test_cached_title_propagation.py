@@ -12,13 +12,14 @@ TIMESTAMP = "2026-11-18T12:25:31.036811+00:00"
 
 
 class CachedTitlePropagationTests(unittest.IsolatedAsyncioTestCase):
-    def make_economics(self, title):
+    def make_economics(self, title, title_source="html_title"):
         cached = CachedMarkdown(
             markdown="# Heading\n\nA useful paragraph.",
             truncated=False,
             html_tokens=100,
             extracted_at=TIMESTAMP,
             page_title=title,
+            page_title_source=title_source if title else "none",
         )
         return build_cache_economics(None, cached, "persistent")
 
@@ -26,6 +27,7 @@ class CachedTitlePropagationTests(unittest.IsolatedAsyncioTestCase):
         economics = self.make_economics(TITLE)
         self.assertIsNotNone(economics)
         self.assertEqual(economics.page_title, TITLE)
+        self.assertEqual(economics.page_title_source, "html_title")
 
     async def test_persistent_hit_preserves_result_and_chunk_titles(self):
         for strategy in ("sequential", "semantic"):
@@ -48,8 +50,13 @@ class CachedTitlePropagationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.page_title, TITLE)
                 self.assertEqual(result.extracted_at, TIMESTAMP)
                 self.assertTrue(result.chunks)
+                self.assertEqual(result.page_title_source, "html_title")
                 for chunk in result.chunks:
                     self.assertEqual(chunk["page_title"], TITLE)
+                    self.assertEqual(
+                        chunk["page_title_source"],
+                        "html_title",
+                    )
 
     async def test_legacy_cached_title_can_remain_null(self):
         result = await extract_context(
@@ -67,6 +74,8 @@ class CachedTitlePropagationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsNone(result.page_title)
+        self.assertEqual(result.page_title_source, "none")
         self.assertTrue(result.chunks)
         for chunk in result.chunks:
             self.assertIsNone(chunk["page_title"])
+            self.assertEqual(chunk["page_title_source"], "none")

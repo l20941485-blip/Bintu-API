@@ -824,14 +824,17 @@ def extract_text_result(
 
 
 
-def extract_page_title(soup) -> str | None:
-    """Return the normalized page title, if present."""
+def extract_page_title(soup) -> tuple[str | None, str]:
+    """Return the normalized page title and its source, if present."""
     title = soup.title
     if title is None:
-        return None
+        return None, "none"
 
     page_title = title.get_text(" ", strip=True)
-    return page_title or None
+    if not page_title:
+        return None, "none"
+
+    return page_title, "html_title"
 
 
 def extract_canonical_url(soup) -> str | None:
@@ -867,15 +870,17 @@ def extract_language(soup) -> str | None:
 def extract_html_metadata(
     html_bytes: bytes,
     from_encoding: str | None = None,
-) -> tuple[str | None, str | None, str | None]:
-    """Return best-effort ``(canonical_url, language, page_title)`` metadata."""
+) -> tuple[str | None, str | None, str | None, str]:
+    """Return best-effort ``(canonical_url, language, page_title, page_title_source)`` metadata."""
     soup = BeautifulSoup(
         html_bytes,
         "html.parser",
         from_encoding=from_encoding,
     )
+    page_title, page_title_source = extract_page_title(soup)
     return (
         extract_canonical_url(soup),
         extract_language(soup),
-        extract_page_title(soup),
+        page_title,
+        page_title_source,
     )

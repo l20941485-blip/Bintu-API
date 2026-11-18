@@ -47,6 +47,7 @@ def build_cached_markdown(
         extracted_at=extracted_at or datetime.now(UTC).isoformat(),
         content_hash=hashlib.sha256(extracted.text.encode("utf-8")).hexdigest(),
         page_title=getattr(document, "page_title", None),
+        page_title_source=getattr(document, "page_title_source", "none"),
         content_fingerprint=compute_content_fingerprint(extracted.text),
         content_cleaning=content_cleaning,
     )

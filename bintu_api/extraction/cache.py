@@ -30,6 +30,7 @@ def build_cache_economics(document: FetchedHTML | None, cached: CachedMarkdown, 
         truncated=cached.truncated,
         extracted_at=cached.extracted_at,
         page_title=getattr(cached, "page_title", None),
+        page_title_source=getattr(cached, "page_title_source", "none"),
     )
 
 

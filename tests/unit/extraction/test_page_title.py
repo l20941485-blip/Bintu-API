@@ -8,7 +8,7 @@ from bintu_api.extraction.html_extract import (
 )
 
 
-def test_extracts_normalized_page_title():
+def test_extracts_normalized_page_title_and_source():
     soup = BeautifulSoup(
         b"""
         <html>
@@ -20,16 +20,22 @@ def test_extracts_normalized_page_title():
         from_encoding="utf-8",
     )
 
-    assert extract_page_title(soup) == "Example Page"
+    page_title, page_title_source = extract_page_title(soup)
+
+    assert page_title == "Example Page"
+    assert page_title_source == "html_title"
 
 
-def test_returns_none_when_title_is_absent():
+def test_returns_none_and_none_source_when_title_is_absent():
     soup = BeautifulSoup(
         b"<html><body><p>Content</p></body></html>",
         "html.parser",
     )
 
-    assert extract_page_title(soup) is None
+    page_title, page_title_source = extract_page_title(soup)
+
+    assert page_title is None
+    assert page_title_source == "none"
 
 
 def test_html_metadata_returns_page_title():
@@ -43,7 +49,7 @@ def test_html_metadata_returns_page_title():
     </html>
     """
 
-    canonical_url, language, page_title = extract_html_metadata(
+    canonical_url, language, page_title, page_title_source = extract_html_metadata(
         html,
         from_encoding="utf-8",
     )
@@ -51,3 +57,4 @@ def test_html_metadata_returns_page_title():
     assert canonical_url == "https://example.com/canonical"
     assert language == "en"
     assert page_title == "Example Page"
+    assert page_title_source == "html_title"
