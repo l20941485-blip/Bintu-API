@@ -40,6 +40,7 @@ class CachedMarkdown:
     extracted_at: str = ""
     content_hash: str = ""
     page_title: str | None = None
+    page_title_source: str = "none"
     content_fingerprint: str | None = None
     content_cleaning: dict[str, Any] | None = None
 
@@ -67,7 +68,7 @@ async def get_cached_markdown(
         .select(
             "markdown,truncated,html_tokens,tokens_saved_estimate,"
             "limiting_factor,extracted_at,content_hash,"
-            "page_title,content_fingerprint"
+            "page_title,page_title_source,content_fingerprint"
         )
         .eq("url", url)
         .eq("render_js", render_js)
@@ -97,6 +98,7 @@ async def get_cached_markdown(
     extracted_at = row.get("extracted_at")
     content_hash = row.get("content_hash")
     page_title = row.get("page_title")
+    page_title_source = row.get("page_title_source")
     content_fingerprint = row.get("content_fingerprint")
 
     return CachedMarkdown(
@@ -108,6 +110,11 @@ async def get_cached_markdown(
         extracted_at=(extracted_at if isinstance(extracted_at, str) and extracted_at else ""),
         content_hash=(content_hash if isinstance(content_hash, str) and content_hash else ""),
         page_title=page_title if isinstance(page_title, str) else None,
+        page_title_source=(
+            page_title_source
+            if isinstance(page_title_source, str) and page_title_source
+            else "none"
+        ),
         content_fingerprint=(
             content_fingerprint
             if isinstance(content_fingerprint, str)
@@ -130,6 +137,7 @@ async def upsert_cached_markdown(
     limiting_factor: str = "none",
     extracted_at: str | None = None,
     page_title: str | None = None,
+    page_title_source: str = "none",
     content_fingerprint: str | None = None,
 ) -> None:
     """Store extracted text plus the economics needed to rehydrate cache hits.
@@ -167,6 +175,7 @@ async def upsert_cached_markdown(
                 "extracted_at": extracted_at,
                 "content_hash": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
                 "page_title": page_title,
+                "page_title_source": page_title_source,
                 "content_fingerprint": content_fingerprint,
                 "created_at": datetime.now(UTC).isoformat(),
             },

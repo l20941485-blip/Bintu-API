@@ -631,6 +631,7 @@ def attach_chunk_provenance(
     content_sha256: str | None,
     extracted_at: str,
     page_title: str | None = None,
+    page_title_source: str = "none",
     content_fingerprint: str | None = None,
 ) -> list[dict[str, Any]]:
     """Attach source provenance to successful chunk dictionaries."""
@@ -640,6 +641,7 @@ def attach_chunk_provenance(
         "content_sha256": content_sha256,
         "extracted_at": extracted_at,
         "page_title": page_title,
+        "page_title_source": page_title_source,
         "content_fingerprint": content_fingerprint,
     }
     return [{**chunk, **provenance} for chunk in chunks]
