@@ -147,6 +147,7 @@ class ContextResult:
     canonical_url: str | None = None
     language: str | None = None
     page_title: str | None = None
+    page_title_source: str = "none"
     content_fingerprint: str | None = None
     requested_sections: list[str] | None = None
     unmatched_sections: list[str] | None = None
@@ -166,6 +167,7 @@ class CacheEconomics:
     truncated: bool
     extracted_at: str
     page_title: str | None = None
+    page_title_source: str = "none"
 
 
 def _decode_source_text(document: FetchedHTML) -> str:
@@ -334,8 +336,14 @@ async def extract_context(
         if isinstance(document, FetchedHTML)
         else None
     )
+    resolved_page_title_source = (
+        document.page_title_source
+        if isinstance(document, FetchedHTML)
+        else "none"
+    )
     if resolved_page_title is None and cache_economics is not None:
         resolved_page_title = cache_economics.page_title
+        resolved_page_title_source = cache_economics.page_title_source
 
     # Preserve the original extraction economics when serving from a
     # persistent cache. Without this, a cache hit would incorrectly report
@@ -523,6 +531,7 @@ async def extract_context(
     if mode == "chunk" and chunks:
         chunk_provenance = {
             "page_title": resolved_page_title,
+            "page_title_source": resolved_page_title_source,
             "content_fingerprint": compute_content_fingerprint(policy_text),
             "source_url": sanitize_url(url),
             "final_url": (
@@ -603,6 +612,7 @@ async def extract_context(
         canonical_url=document.canonical_url if not cache_hit and isinstance(document, FetchedHTML) else None,
         language=document.language if not cache_hit and isinstance(document, FetchedHTML) else None,
         page_title=resolved_page_title,
+        page_title_source=resolved_page_title_source,
         content_fingerprint=compute_content_fingerprint(policy_text) if mode == "chunk" else None,
         requested_sections=requested_sections,
         unmatched_sections=unmatched_sections,

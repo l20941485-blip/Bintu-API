@@ -125,6 +125,14 @@ OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
             "Human-readable title of the source document, when available."
         ),
     },
+    "page_title_source": {
+        "type": "string",
+        "enum": ["html_title", "heading", "url_fallback", "none"],
+        "description": (
+            "Origin of page_title: html_title, heading, url_fallback, "
+            "or none."
+        ),
+    },
     "deduplicated_count": {
         "type": "integer",
         "minimum": 0,
