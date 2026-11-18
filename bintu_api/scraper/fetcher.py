@@ -16,6 +16,7 @@ import math
 import re
 import socket
 import ssl
+import time
 import zlib
 from email.message import Message
 from urllib.parse import quote, urljoin, urlsplit
@@ -241,7 +242,27 @@ def resolve_public_addresses(
             type=socket.SOCK_STREAM,
         )
     except socket.gaierror as error:
-        raise TargetURLRejected("The target hostname could not be resolved") from error
+        last_error: socket.gaierror | None = None
+        for attempt in range(2):
+            try:
+                results = socket.getaddrinfo(
+                    host,
+                    port,
+                    type=socket.SOCK_STREAM,
+                )
+                break
+            except socket.gaierror as error:
+                last_error = error
+                if attempt < 2:
+                    time.sleep(0.2 * (attempt + 1))
+        else:
+            logger.warning(
+                "dns_resolution_failed host=%r port=%r attempts=3 error=%r",
+                host,
+                port,
+                last_error,
+            )
+            raise OSError("The target hostname could not be resolved temporarily") from last_error
 
     addresses = tuple(dict.fromkeys(result[4][0] for result in results))
     if not addresses:

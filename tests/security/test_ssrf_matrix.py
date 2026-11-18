@@ -323,7 +323,6 @@ class SSRFMatrixTests(unittest.TestCase):
             with self.subTest(host=host), self.assertRaises(TargetURLRejected):
                 resolve_public_addresses(host, 80)
 
-
     def test_non_gaierror_resolver_failure_maps_to_connection_error(self):
         """A resolver/network failure other than gaierror must not be treated as an invalid URL."""
         with (
@@ -335,16 +334,18 @@ class SSRFMatrixTests(unittest.TestCase):
         ):
             resolve_public_addresses("resolver-outage.example", 80)
 
-    def test_unresolvable_hostname_is_rejected(self):
-        """A hostname that does not resolve is refused, not retried blindly."""
+    def test_unresolvable_hostname_is_retried_and_reported_as_upstream_error(self):
+        """A resolver failure is retried, then reported as a temporary upstream error."""
         with (
             patch(
                 "bintu_api.scraper.fetcher.socket.getaddrinfo",
                 side_effect=socket.gaierror("name does not resolve"),
-            ),
-            self.assertRaises(TargetURLRejected),
+            ) as getaddrinfo,
+            self.assertRaises(OSError),
         ):
             resolve_public_addresses("nonexistent.invalid", 80)
+
+        self.assertEqual(getaddrinfo.call_count, 3)
 
     # ------------------------------------------------------------------
     # S8: port allow-list
@@ -529,8 +530,3 @@ class SSRFMatrixTests(unittest.TestCase):
         response = FakeResponse(headers={"Content-Type": "text/html", "Content-Encoding": "br"}, body=b"x")
         with self.assertRaises(UnsupportedContentEncoding):
             _read_html_response(response, 1024)
-
-
-
-
-
