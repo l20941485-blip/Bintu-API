@@ -266,7 +266,7 @@ def resolve_public_addresses(
 
     addresses = tuple(dict.fromkeys(result[4][0] for result in results))
     if not addresses:
-        raise TargetURLRejected("The target hostname could not be resolved")
+        raise OSError("The target hostname could not be resolved")
 
     for address in addresses:
         try:
