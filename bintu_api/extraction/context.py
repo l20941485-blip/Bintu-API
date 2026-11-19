@@ -355,19 +355,32 @@ async def extract_context(
     else:
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
-        resolved_extracted_at = extracted_at or datetime.now(UTC).isoformat()
+        resolved_extracted_at = (
+            extracted_at
+            or (
+                datetime.now(UTC).isoformat()
+                if cache_layer == "none"
+                else ""
+            )
+        )
 
     # Cache lookup observability (Phase 4): measure hit/miss distribution and
     # persistent-cache freshness without logging the raw target URL.
-    cache_age_seconds: float | None = None
+    cache_age_seconds: int | None = None
     if cache_hit and resolved_extracted_at:
         try:
-            extracted_time = datetime.fromisoformat(resolved_extracted_at.replace("Z", "+00:00"))
-            cache_age_seconds = max(
-                0.0,
-                (datetime.now(UTC) - extracted_time).total_seconds(),
+            extracted_time = datetime.fromisoformat(
+                resolved_extracted_at.replace("Z", "+00:00")
             )
+            # Naive timestamps (no timezone) yield null
+            if extracted_time.tzinfo is None:
+                cache_age_seconds = None
+            else:
+                age = (datetime.now(UTC) - extracted_time).total_seconds()
+                # Future timestamps yield 0; otherwise truncate to integer seconds
+                cache_age_seconds = 0 if age < 0 else int(age)
         except (ValueError, TypeError):
+            # Missing, empty, or malformed timestamps yield null
             cache_age_seconds = None
 
     log_cache_lookup_completed(

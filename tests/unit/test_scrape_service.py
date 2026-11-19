@@ -10,6 +10,7 @@ import pytest
 
 from bintu_api.extraction.cache_policy import DEFAULT_MAX_TEXT_CHARACTERS, compute_cache_key
 from bintu_api.extraction.cache_store import CachedMarkdown
+from bintu_api.extraction.memory_cache import MemoryCacheEntry
 from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.scrape_options import ScrapeOptions
 from bintu_api.extraction.scrape_service import ScrapeService
@@ -155,7 +156,14 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
     assert layer == "none"
     service.robots_enforcer.assert_awaited_once()
     service.html_fetcher.assert_called_once()
-    assert list(cache.data.values()) == [document]
+    cached_entries = list(cache.data.values())
+
+    assert len(cached_entries) == 1
+    cached_entry = cached_entries[0]
+
+    assert isinstance(cached_entry, MemoryCacheEntry)
+    assert cached_entry.document is document
+    assert cached_entry.extracted_at == result.extracted_at
 
 @pytest.mark.asyncio
 async def test_concurrent_cache_misses_may_fetch_independently():

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.builder import build_cached_markdown
@@ -160,14 +161,15 @@ class ScrapeService:
             )
             return document, result, cache_layer
 
-        document = await read_memory_cache(
+        memory_entry = await read_memory_cache(
             self.cache,
             cache_key,
             skip_cache,
             sections,
         )
 
-        if document is not None:
+        if memory_entry is not None:
+            document = memory_entry.document
             cache_layer = "memory"
             self.cache_event_logger(
                 event="cache_hit",
@@ -189,6 +191,12 @@ class ScrapeService:
                 cache_key,
                 render_js,
             )
+
+        extracted_at = (
+            datetime.now(UTC).isoformat()
+            if cache_layer == "none"
+            else memory_entry.extracted_at
+        )
 
         cleaned_text = ""
         cleaning_applied = False
@@ -226,6 +234,7 @@ class ScrapeService:
             document,
             cache_layer,
             extracted.text,
+            extracted_at,
         )
 
         content_cleaning = {
@@ -237,6 +246,7 @@ class ScrapeService:
             document,
             extracted,
             url,
+            extracted_at=extracted_at,
             decode_source_text_fn=self.source_decoder,
             content_cleaning=content_cleaning,
         )
