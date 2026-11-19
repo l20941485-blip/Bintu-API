@@ -45,6 +45,9 @@ class ToolArguments(BaseModel):
     )
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     overlap_tokens: int = Field(default=0, ge=0)
+    return_metadata: bool = True
+    include_heading_path: bool = True
+    include_page_context: bool = True
     cache: bool = True
     persist: bool = True
     sections: str | list[str] | None = None

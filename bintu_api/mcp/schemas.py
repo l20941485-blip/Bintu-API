@@ -260,6 +260,29 @@ TOOL_INPUT_SCHEMA = {
                 "and less than max_tokens."
             ),
         },
+        "return_metadata": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Include optional retrieval enrichment metadata. Core "
+                "provenance and identifiers remain available."
+            ),
+        },
+        "include_heading_path": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Include the hierarchical heading path for each chunk."
+            ),
+        },
+        "include_page_context": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Include deterministic page-level context derived from the "
+                "page title and heading path."
+            ),
+        },
         "cache": {
             "type": "boolean",
             "default": True,
