@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from bintu_api.api import scrape_adapter as routes
+from bintu_api.extraction.memory_cache import MemoryCacheEntry
 from tests.cache.test_cache_bypass import (
     URL,
     FakeCache,
@@ -75,7 +76,11 @@ class CacheRefreshSafetyTests(unittest.TestCase):
         with mock.patch.object(routes, "fetch_html_document", return_value=fresh_document):
             _, result, layer = self.refresh(request)
 
-        self.assertIs(cache.data[cache_key()], fresh_document)
+        cached_entry = cache.data[cache_key()]
+
+        self.assertIsInstance(cached_entry, MemoryCacheEntry)
+        self.assertIs(cached_entry.document, fresh_document)
+        self.assertEqual(cached_entry.extracted_at, result.extracted_at)
         self.assertTrue(result.markdown.strip())
         self.assertEqual(layer, "none")
         self.assertEqual(cache.get_calls, 0)

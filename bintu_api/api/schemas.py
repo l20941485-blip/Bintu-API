@@ -50,7 +50,7 @@ class RestChunk(BaseModel):
     tokens: int
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     chunk_id: str | None = None
-    heading_path: list[str] = Field(default_factory=list)
+    heading_path: list[str] | None = None
     section_index: int | None = None
     contains_code: bool | None = None
     contains_table: bool | None = None
@@ -62,6 +62,7 @@ class RestChunk(BaseModel):
     extracted_at: str | None = None
     page_title: str | None = None
     content_fingerprint: str | None = None
+    page_context: str | None = None
 
 
 class ScrapeChunksResponse(BaseModel):
@@ -93,6 +94,7 @@ class MobileScrapeTextRequest(BaseModel):
     render_js: bool = False
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     overlap_tokens: int = Field(default=0, ge=0, le=1000)
+
 
 
 class VersionResponse(BaseModel):

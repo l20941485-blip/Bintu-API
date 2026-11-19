@@ -44,7 +44,11 @@ def build_cached_markdown(
         html_tokens=html_tokens,
         tokens_saved_estimate=tokens_saved_estimate,
         limiting_factor="char_cap" if extracted.truncated else "none",
-        extracted_at=extracted_at or datetime.now(UTC).isoformat(),
+        extracted_at=(
+            extracted_at
+            if extracted_at is not None
+            else datetime.now(UTC).isoformat()
+        ),
         content_hash=hashlib.sha256(extracted.text.encode("utf-8")).hexdigest(),
         page_title=getattr(document, "page_title", None),
         page_title_source=getattr(document, "page_title_source", "none"),

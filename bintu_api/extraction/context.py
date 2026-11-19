@@ -308,6 +308,9 @@ async def extract_context(
     content_cleaning: dict[str, Any] | None = None,
     chunk_strategy: Literal["sequential", "semantic"] = "sequential",
     overlap_tokens: int = 0,
+    return_metadata: bool = True,
+    include_heading_path: bool = True,
+    include_page_context: bool = True,
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
 
@@ -355,19 +358,32 @@ async def extract_context(
     else:
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
-        resolved_extracted_at = extracted_at or datetime.now(UTC).isoformat()
+        resolved_extracted_at = (
+            extracted_at
+            or (
+                datetime.now(UTC).isoformat()
+                if cache_layer == "none"
+                else ""
+            )
+        )
 
     # Cache lookup observability (Phase 4): measure hit/miss distribution and
     # persistent-cache freshness without logging the raw target URL.
-    cache_age_seconds: float | None = None
+    cache_age_seconds: int | None = None
     if cache_hit and resolved_extracted_at:
         try:
-            extracted_time = datetime.fromisoformat(resolved_extracted_at.replace("Z", "+00:00"))
-            cache_age_seconds = max(
-                0.0,
-                (datetime.now(UTC) - extracted_time).total_seconds(),
+            extracted_time = datetime.fromisoformat(
+                resolved_extracted_at.replace("Z", "+00:00")
             )
+            # Naive timestamps (no timezone) yield null
+            if extracted_time.tzinfo is None:
+                cache_age_seconds = None
+            else:
+                age = (datetime.now(UTC) - extracted_time).total_seconds()
+                # Future timestamps yield 0; otherwise truncate to integer seconds
+                cache_age_seconds = 0 if age < 0 else int(age)
         except (ValueError, TypeError):
+            # Missing, empty, or malformed timestamps yield null
             cache_age_seconds = None
 
     log_cache_lookup_completed(
@@ -550,6 +566,45 @@ async def extract_context(
             chunks,
             **chunk_provenance,
         )
+
+        if include_page_context:
+            for chunk in chunks:
+                heading_path = chunk.get("heading_path") or []
+                context_parts = []
+                if resolved_page_title:
+                    context_parts.append(f"Page: {resolved_page_title}")
+                if heading_path:
+                    context_parts.append(
+                        "Section: " + " > ".join(heading_path)
+                    )
+                chunk["page_context"] = (
+                    " | ".join(context_parts)
+                    if context_parts
+                    else "No additional page context available."
+                )
+
+        if not include_heading_path:
+            for chunk in chunks:
+                chunk.pop("heading_path", None)
+
+        if not include_page_context:
+            for chunk in chunks:
+                chunk.pop("page_context", None)
+
+        if not return_metadata:
+            optional_metadata_keys = (
+                "heading_path",
+                "page_context",
+                "contains_code",
+                "contains_table",
+                "contains_links",
+                "link_count",
+                "page_title",
+                "content_fingerprint",
+            )
+            for chunk in chunks:
+                for key in optional_metadata_keys:
+                    chunk.pop(key, None)
 
     tokens_saved_estimate = delivered_savings(
         html_tokens,

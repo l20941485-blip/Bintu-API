@@ -25,6 +25,28 @@ from bintu_api.settings import Settings
 TOKEN_METHOD = "ceil(characters/4)"
 
 
+def _cache_age_seconds(
+    extracted_at: str | None,
+    now: datetime,
+) -> int | None:
+    """Return whole cache age seconds, or None when unknown or invalid."""
+    if not extracted_at:
+        return None
+
+    try:
+        extracted_time = datetime.fromisoformat(
+            extracted_at.replace("Z", "+00:00")
+        )
+    except (ValueError, TypeError):
+        return None
+
+    if extracted_time.tzinfo is None:
+        return None
+
+    age = (now - extracted_time).total_seconds()
+    return 0 if age < 0 else int(age)
+
+
 def is_sensitive_query_parameter(name: str) -> bool:
     """Return whether a query parameter should be redacted before persistence."""
     normalized = name.strip().lower()
@@ -38,9 +60,16 @@ def build_provenance(
     cache_layer: str,
     request_id: str,
     settings: Settings,
+    *,
+    extracted_at: str | None = None,
 ) -> Provenance:
     """Build provenance using real values only; inapplicable fields stay None."""
     fetched = document is not None and cache_layer == "none"
+    cache_age_seconds = (
+        _cache_age_seconds(extracted_at, datetime.now(UTC))
+        if cache_layer != "none"
+        else None
+    )
     return Provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
@@ -51,7 +80,7 @@ def build_provenance(
         cache=CacheInfo(
             hit=cache_layer != "none",
             layer=cache_layer,
-            age_seconds=None,
+            age_seconds=cache_age_seconds,
         ),
         extractor_version=getattr(settings, "service_version", "unknown"),
         status=getattr(document, "status", None) if fetched else None,
@@ -99,6 +128,7 @@ def build_scrape_response(
             cache_layer,
             request_id,
             settings,
+            extracted_at=result.extracted_at,
         ),
     )
 

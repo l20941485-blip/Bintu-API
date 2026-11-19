@@ -56,6 +56,9 @@ async def scrape_chunks(
     persist: bool = True,
     chunk_strategy: Literal["sequential", "semantic"] = "sequential",
     overlap_tokens: int = 0,
+    return_metadata: bool = True,
+    include_heading_path: bool = True,
+    include_page_context: bool = True,
 ) -> ScrapeChunksResponse:
     settings = request.app.state.settings
     routes_common.verify_api_access(request, settings)
@@ -121,16 +124,40 @@ async def scrape_chunks(
                 tokens=chunk.tokens,
                 chunk_strategy=chunk.chunk_strategy,
                 chunk_id=chunk.chunk_id,
-                heading_path=chunk.heading_path,
+                heading_path=chunk.heading_path if include_heading_path else None,
                 section_index=chunk.section_index,
-                contains_code=chunk.contains_code,
-                contains_table=chunk.contains_table,
-                contains_links=chunk.contains_links,
-                link_count=chunk.link_count,
+                contains_code=chunk.contains_code if return_metadata else None,
+                contains_table=chunk.contains_table if return_metadata else None,
+                contains_links=chunk.contains_links if return_metadata else None,
+                link_count=chunk.link_count if return_metadata else None,
                 source_url=chunk.source_url,
                 final_url=chunk.final_url,
                 content_sha256=chunk.content_sha256,
                 extracted_at=chunk.extracted_at,
+                page_context=(
+                    (
+                        " | ".join(
+                            part
+                            for part in (
+                                (
+                                    f"Page: {result.page_title}"
+                                    if result.page_title
+                                    else None
+                                ),
+                                (
+                                    "Section: "
+                                    + " > ".join(chunk.heading_path)
+                                    if chunk.heading_path
+                                    else None
+                                ),
+                            )
+                            if part
+                        )
+                        or "No additional page context available."
+                    )
+                    if include_page_context
+                    else None
+                ),
             )
             for chunk in semantic_chunks
         ]
@@ -143,6 +170,16 @@ async def scrape_chunks(
                 approx_tokens=_compute_approx_tokens(chunk),
                 tokens=_compute_approx_tokens(chunk),
                 chunk_strategy="sequential",
+                heading_path=None if not include_heading_path else [],
+                page_context=(
+                    (
+                        f"Page: {result.page_title}"
+                        if result.page_title
+                        else "No additional page context available."
+                    )
+                    if include_page_context
+                    else None
+                ),
             )
             for index, chunk in enumerate(chunk_strings)
         ]
