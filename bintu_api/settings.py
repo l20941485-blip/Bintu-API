@@ -73,6 +73,60 @@ def _robots_mode_env() -> str:
     return raw
 
 
+def _https_to_http_redirect_allowed_domains_env() -> frozenset[str]:
+    """Read a comma-separated allowlist of registrable domains.
+
+    Empty or malformed entries are ignored. The allowlist is empty by default,
+    so HTTPS-to-HTTP redirects remain rejected unless explicitly configured.
+    """
+    raw = os.getenv(
+        "BINTU_HTTPS_TO_HTTP_REDIRECT_ALLOWED_DOMAINS",
+        "",
+    )
+    domains = set()
+
+    for item in raw.split(","):
+        domain = item.strip().lower().rstrip(".")
+        if not domain:
+            continue
+        if not domain or "." not in domain:
+            logger.warning(
+                "invalid_https_downgrade_allowlist_domain domain=%r",
+                domain,
+            )
+            continue
+        if any(character in domain for character in "/\\:?#@"):
+            logger.warning(
+                "invalid_https_downgrade_allowlist_domain domain=%r",
+                domain,
+            )
+            continue
+        if not all(
+            character.isalnum() or character in "-._"
+            for character in domain
+        ):
+            logger.warning(
+                "invalid_https_downgrade_allowlist_domain domain=%r",
+                domain,
+            )
+            continue
+        if domain.startswith("-") or domain.endswith("-"):
+            logger.warning(
+                "invalid_https_downgrade_allowlist_domain domain=%r",
+                domain,
+            )
+            continue
+        if ".." in domain:
+            logger.warning(
+                "invalid_https_downgrade_allowlist_domain domain=%r",
+                domain,
+            )
+            continue
+        domains.add(domain)
+
+    return frozenset(domains)
+
+
 @dataclass(frozen=True)
 class Settings:
     api_key: str
@@ -119,6 +173,7 @@ class Settings:
     # reports, off skips the check. Cache TTL is in seconds (0..86400).
     robots_mode: str = "enforce"
     robots_cache_ttl_seconds: int = 3600
+    https_to_http_redirect_allowed_domains: frozenset[str] = frozenset()
     # Comma-separated extra browser origins allowed to send credentialed
     # cross-origin requests. The MCPize gateway origin below is always allowed;
     # this setting exists so operators can add their own dashboards without a
@@ -178,6 +233,7 @@ class Settings:
             upgrade_url=os.getenv("BINTU_UPGRADE_URL", "https://mcpize.com").strip() or "https://mcpize.com",
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
             require_auth=_bool_env("REQUIRE_AUTH", default=False),
+            https_to_http_redirect_allowed_domains=_https_to_http_redirect_allowed_domains_env(),
             bot_info_url=os.getenv("BOT_INFO_URL", "").strip(),
             contact_email=os.getenv("CONTACT_EMAIL", "").strip(),
             robots_mode=_robots_mode_env(),

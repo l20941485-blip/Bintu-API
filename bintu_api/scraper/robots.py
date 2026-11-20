@@ -228,7 +228,7 @@ def _fetch_robots_text(
                 settings,
             )
             _remaining_budget(deadline)
-            address = resolve_public_addresses(host, port)[0]
+            addresses = resolve_public_addresses(host, port)
         except TargetURLRejected as error:
             if hop == 0:
                 raise
@@ -241,36 +241,69 @@ def _fetch_robots_text(
 
         current_scheme = parsed.scheme
         connection = None
+        response = None
+        last_error = None
+
+        # Try every validated address within the remaining robots budget.
+        # A single unreachable IPv6 address must not prevent an IPv4 fallback.
+        address_count = len(addresses)
+        per_address_timeout = (
+            remaining / address_count
+            if address_count
+            else remaining
+        )
+
+        for address in addresses:
+            remaining = _remaining_budget(deadline)
+            candidate = None
+
+            try:
+                candidate = _make_connection(
+                    parsed,
+                    host,
+                    address,
+                    port,
+                    per_address_timeout,
+                )
+
+                _apply_remaining_timeout(candidate, deadline)
+                candidate.request(
+                    "GET",
+                    path,
+                    headers={
+                        "Accept": "text/plain, */*;q=0.1",
+                        "Accept-Encoding": "identity",
+                        "Connection": "close",
+                        "Host": _host_header(
+                            host,
+                            port,
+                            parsed.scheme,
+                        ),
+                        "User-Agent": get_user_agent(settings),
+                    },
+                )
+
+                _apply_remaining_timeout(candidate, deadline)
+                response = candidate.getresponse()
+                _remaining_budget(deadline)
+                connection = candidate
+                break
+            except RobotsUnreachable:
+                if candidate is not None:
+                    candidate.close()
+                raise
+            except (OSError, http.client.HTTPException, TimeoutError) as error:
+                last_error = error
+                if candidate is not None:
+                    candidate.close()
+                continue
+
+        if connection is None or response is None:
+            raise RobotsUnreachable(
+                f"connection problem ({type(last_error).__name__})"
+            ) from last_error
 
         try:
-            connection = _make_connection(
-                parsed,
-                host,
-                address,
-                port,
-                remaining,
-            )
-
-            _apply_remaining_timeout(connection, deadline)
-            connection.request(
-                "GET",
-                path,
-                headers={
-                    "Accept": "text/plain, */*;q=0.1",
-                    "Accept-Encoding": "identity",
-                    "Connection": "close",
-                    "Host": _host_header(
-                        host,
-                        port,
-                        parsed.scheme,
-                    ),
-                    "User-Agent": get_user_agent(settings),
-                },
-            )
-
-            _apply_remaining_timeout(connection, deadline)
-            response = connection.getresponse()
-            _remaining_budget(deadline)
             status = response.status
 
             if status in REDIRECT_STATUSES:
@@ -292,8 +325,12 @@ def _fetch_robots_text(
             _remaining_budget(deadline)
             return text
 
+        except RobotsUnreachable:
+            raise
         except (OSError, http.client.HTTPException, TimeoutError) as error:
-            raise RobotsUnreachable(f"connection problem ({type(error).__name__})") from error
+            raise RobotsUnreachable(
+                f"connection problem ({type(error).__name__})"
+            ) from error
         finally:
             if connection is not None:
                 connection.close()
