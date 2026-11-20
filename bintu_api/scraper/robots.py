@@ -246,6 +246,13 @@ def _fetch_robots_text(
 
         # Try every validated address within the remaining robots budget.
         # A single unreachable IPv6 address must not prevent an IPv4 fallback.
+        address_count = len(addresses)
+        per_address_timeout = (
+            remaining / address_count
+            if address_count
+            else remaining
+        )
+
         for address in addresses:
             remaining = _remaining_budget(deadline)
             candidate = None
@@ -256,7 +263,7 @@ def _fetch_robots_text(
                     host,
                     address,
                     port,
-                    remaining,
+                    per_address_timeout,
                 )
 
                 _apply_remaining_timeout(candidate, deadline)

@@ -542,7 +542,17 @@ def fetch_html_document(
 
         if parsed.scheme != current_scheme:
             if current_scheme == "https" and parsed.scheme == "http":
-                raise TargetURLRejected("Redirects from HTTPS to HTTP are not allowed")
+                allowed_domains = settings.https_to_http_redirect_allowed_domains
+                is_allowed_downgrade = any(
+                    host == allowed_domain
+                    or host.endswith(f".{allowed_domain}")
+                    for allowed_domain in allowed_domains
+                )
+
+                if not is_allowed_downgrade:
+                    raise TargetURLRejected(
+                        "Redirects from HTTPS to HTTP are not allowed"
+                    )
             current_scheme = parsed.scheme
 
         try:
@@ -558,13 +568,19 @@ def fetch_html_document(
         response = None
         last_error = None
 
+        # Divide the page-fetch budget across validated addresses so one
+        # unreachable address cannot consume the entire timeout before the
+        # next address can be tried.
+        address_count = max(len(addresses), 1)
+        per_address_timeout = settings.request_timeout_seconds / address_count
+
         for address in addresses:
             candidate = _make_connection(
                 parsed,
                 host,
                 address,
                 port,
-                settings.request_timeout_seconds,
+                per_address_timeout,
             )
 
             try:
