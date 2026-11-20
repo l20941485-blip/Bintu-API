@@ -43,6 +43,7 @@ class CachedMarkdown:
     page_title_source: str = "none"
     content_fingerprint: str | None = None
     content_cleaning: dict[str, Any] | None = None
+    pre_cleaning_characters: int = 0
 
 
 async def get_cached_markdown(

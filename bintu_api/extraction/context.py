@@ -79,7 +79,11 @@ def resolve_effective_char_cap(
 # Pitch-name aliases: marketing copy uses "chunked" / "chunk_token_budget"
 # while the canonical protocol stays "chunk" / "max_tokens" so existing
 # Claude connectors never break. Normalization is case/whitespace tolerant.
-from bintu_api.extraction.cleaner import normalize_markdown, strip_noise_lines
+from bintu_api.extraction.cleaner import (
+    normalize_markdown,
+    strip_noise_lines,
+    suppress_boilerplate_lines,
+)
 from bintu_api.extraction.dedupe import dedupe_blocks
 from bintu_api.extraction.token_budget import truncate_to_token_budget
 
@@ -435,6 +439,15 @@ async def extract_context(
     raw_text = strip_noise_lines(raw_text)
     raw_text = normalize_markdown(raw_text)
     raw_text, deduplicated_count = dedupe_blocks(raw_text)
+    raw_text, boilerplate_lines_removed = suppress_boilerplate_lines(raw_text)
+
+    if content_cleaning is None:
+        content_cleaning = {}
+
+    content_cleaning = {
+        **content_cleaning,
+        "boilerplate_lines_removed": boilerplate_lines_removed,
+    }
 
     assessment = assess_yield(
         count_tokens(raw_text),
