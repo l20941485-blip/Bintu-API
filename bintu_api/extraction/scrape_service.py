@@ -228,6 +228,8 @@ class ScrapeService:
                 max_footnote_url_length=options.max_footnote_url_length,
             )
 
+        pre_cleaning_characters = len(extracted.text)
+
         write_memory_cache(
             self.cache,
             cache_key,
@@ -249,6 +251,7 @@ class ScrapeService:
             extracted_at=extracted_at,
             decode_source_text_fn=self.source_decoder,
             content_cleaning=content_cleaning,
+            pre_cleaning_characters=pre_cleaning_characters,
         )
 
         if should_write_persistent_cache(
