@@ -28,7 +28,12 @@ from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
 from bintu_api.extraction.fingerprint import compute_content_fingerprint
 from bintu_api.extraction.models import CacheInfo
-from bintu_api.extraction.quality import assess_yield
+from bintu_api.extraction.quality import (
+    ContentQualityAssessment,
+    assess_content_quality,
+    assess_yield,
+    detect_boilerplate_characters,
+)
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.summarizer import summarize_text
@@ -156,6 +161,7 @@ class ContextResult:
     section_match_status: str = "not_filtered"
     warnings: list[str] | None = None
     content_cleaning: dict[str, Any] | None = None
+    content_quality: ContentQualityAssessment | None = None
 
 @dataclass(frozen=True)
 class CacheEconomics:
@@ -281,6 +287,31 @@ def _retain_referenced_footnotes(selected_text: str, raw_text: str) -> str:
     )
 
 
+def _count_markdown_sections(text: str) -> tuple[int, int]:
+    """Count Markdown headings and those followed by nonempty content."""
+    lines = text.splitlines()
+    headings = [
+        index
+        for index, line in enumerate(lines)
+        if re.match(r"^#{1,6}\s+\S", line.strip())
+    ]
+
+    if not headings:
+        return 0, 0
+
+    complete = 0
+    for position, heading_index in enumerate(headings):
+        end = (
+            headings[position + 1]
+            if position + 1 < len(headings)
+            else len(lines)
+        )
+        if "\n".join(lines[heading_index + 1:end]).strip():
+            complete += 1
+
+    return len(headings), complete
+
+
 async def extract_context(
     request: Request,
     url: str,
@@ -400,6 +431,7 @@ async def extract_context(
     token_truncated = False
     scrape_baseline_tokens = 0
 
+    pre_cleaning_text = raw_text
     raw_text = strip_noise_lines(raw_text)
     raw_text = normalize_markdown(raw_text)
     raw_text, deduplicated_count = dedupe_blocks(raw_text)
@@ -632,6 +664,15 @@ async def extract_context(
         resolved_truncated = transformation_truncated
         resolved_limiting_factor = limiting_factor
 
+    section_count, complete_section_count = _count_markdown_sections(final_text)
+    quality_assessment = assess_content_quality(
+        extracted_characters=len(final_text),
+        boilerplate_characters=detect_boilerplate_characters(final_text),
+        pre_cleaning_characters=len(pre_cleaning_text),
+        total_sections=section_count,
+        complete_sections=complete_section_count,
+    )
+
     return ContextResult(
         mode=mode,
         text=final_text,
@@ -676,6 +717,7 @@ async def extract_context(
         section_match_status=section_match_status,
         warnings=section_warnings,
         content_cleaning=content_cleaning,
+        content_quality=quality_assessment,
     )
 
 def attach_chunk_provenance(

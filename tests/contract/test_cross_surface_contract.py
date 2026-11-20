@@ -38,6 +38,7 @@ EXPECTED_TEXT = "Cross-surface contract text"
 PARITY_URL = "https://example.com/parity"
 
 MCP_ENVELOPE_FIELDS = {
+    "content_quality",
     "content_cleaning",
     "text",
     "deduplicated_count",

@@ -56,6 +56,21 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
     return provenance
 
 
+def _content_quality_payload(
+    context: ContextResult,
+) -> dict[str, Any] | None:
+    """Return the additive content-quality payload."""
+    if context.content_quality is None:
+        return None
+
+    return {
+        "score": context.content_quality.score,
+        "boilerplate_ratio": context.content_quality.boilerplate_ratio,
+        "main_content_coverage": context.content_quality.main_content_coverage,
+        "section_completeness": context.content_quality.section_completeness,
+    }
+
+
 def _mcp_selected_text(context: ContextResult) -> str:
     """Return MCP text with selected-section headings restored."""
     if context.selected_sections is None:
@@ -99,6 +114,11 @@ def build_mcp_envelope(
         "deduplicated_count": context.deduplicated_count,
         "low_yield": context.low_yield,
         **({"yield_hint": context.yield_hint} if context.low_yield else {}),
+        **(
+            {"content_quality": _content_quality_payload(context)}
+            if context.content_quality is not None
+            else {}
+        ),
         "text": (
             _mcp_selected_text(context)
             if restore_section_headings
@@ -149,6 +169,11 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
         "tokens_saved_estimate": context.tokens_saved_estimate,
         "low_yield": context.low_yield,
         **({"yield_hint": context.yield_hint} if context.low_yield else {}),
+        **(
+            {"content_quality": _content_quality_payload(context)}
+            if context.content_quality is not None
+            else {}
+        ),
         **(
             {
                 "selected_sections": context.selected_sections,
