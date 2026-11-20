@@ -8,10 +8,8 @@ patch seams in `bintu_api.api.scrape_adapter`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from bintu_api.common.fetch import FetchedHTML
-from bintu_api.extraction.cache_store import CACHE_TTL
 
 
 @dataclass(frozen=True)
@@ -25,37 +23,6 @@ class MemoryCacheEntry:
 # Concurrent misses for the same key may each fetch independently and write
 # the same cache key. This is intentional cache-stampede behavior; single-flight
 # coalescing is deferred until duplicate-fetch cost justifies it.
-
-def memory_cache_age_seconds(
-    extracted_at: str,
-    now: datetime | None = None,
-) -> int | None:
-    """Return whole cache age seconds, or None for an unknown timestamp."""
-    if not extracted_at:
-        return None
-
-    try:
-        extracted_time = datetime.fromisoformat(
-            extracted_at.replace("Z", "+00:00")
-        )
-    except (ValueError, TypeError):
-        return None
-
-    if extracted_time.tzinfo is None:
-        return None
-
-    age = ((now or datetime.now(UTC)) - extracted_time).total_seconds()
-    return 0 if age < 0 else int(age)
-
-
-def is_memory_cache_fresh(
-    extracted_at: str,
-    now: datetime | None = None,
-) -> bool:
-    """Return whether a memory-cache timestamp is within the declared TTL."""
-    age = memory_cache_age_seconds(extracted_at, now)
-    return age is not None and age <= int(CACHE_TTL.total_seconds())
-
 
 async def read_memory_cache(
     cache,
