@@ -24,6 +24,12 @@ from bintu_api.extraction.cacheaccess import (
     should_read_persistent_cache,
     should_write_persistent_cache,
 )
+from bintu_api.extraction.cleaner import (
+    normalize_markdown,
+    strip_noise_lines,
+    suppress_boilerplate_lines,
+)
+from bintu_api.extraction.dedupe import dedupe_blocks
 from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
     read_memory_cache,
@@ -230,19 +236,38 @@ class ScrapeService:
 
         pre_cleaning_characters = len(extracted.text)
 
+        cleaned_text = strip_noise_lines(extracted.text)
+        cleaned_text = normalize_markdown(cleaned_text)
+        cleaned_text, deduplicated_count = dedupe_blocks(cleaned_text)
+        cleaned_text, boilerplate_lines_removed = suppress_boilerplate_lines(cleaned_text)
+
+        cleaning_applied = cleaning_applied or boilerplate_lines_removed > 0
+        content_cleaning = {
+            "applied": cleaning_applied,
+            "strategy": (
+                "main_content"
+                if cleaning_applied and boilerplate_lines_removed == 0
+                else "boilerplate_suppression"
+                if boilerplate_lines_removed > 0
+                else "standard"
+            ),
+            "boilerplate_lines_removed": boilerplate_lines_removed,
+            "deduplicated_count": deduplicated_count,
+        }
+
+        extracted = ExtractedText(
+            text=cleaned_text,
+            truncated=extracted.truncated,
+        )
+
         write_memory_cache(
             self.cache,
             cache_key,
             document,
             cache_layer,
-            extracted.text,
+            cleaned_text,
             extracted_at,
         )
-
-        content_cleaning = {
-            "applied": cleaning_applied,
-            "strategy": "main_content" if cleaning_applied else "standard",
-        }
 
         result = build_cached_markdown(
             document,
