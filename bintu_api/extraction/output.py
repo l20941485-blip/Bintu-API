@@ -7,7 +7,6 @@ surfaces. It does not perform metering or MCP JSON-RPC formatting.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import asdict
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -15,11 +14,7 @@ from bintu_api.common.fetch import FetchedHTML, compute_approx_tokens
 from bintu_api.extraction.cache import compute_saved_tokens
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.models import CacheInfo, Provenance, ScrapeTextResponse
-from bintu_api.extraction.quality import (
-    assess_content_quality,
-    assess_yield,
-    detect_boilerplate_characters,
-)
+from bintu_api.extraction.quality import assess_yield
 from bintu_api.security.credentials import CREDENTIAL_QUERY_PARAMS
 from bintu_api.security.url_safety import (
     SENSITIVE_QUERY_PARAMETER_NAMES,
@@ -94,31 +89,6 @@ def build_provenance(
     )
 
 
-def _count_markdown_sections(text: str) -> tuple[int, int]:
-    """Count Markdown headings and those followed by nonempty content."""
-    lines = text.splitlines()
-    headings = [
-        index
-        for index, line in enumerate(lines)
-        if line.strip().startswith("#")
-    ]
-
-    if not headings:
-        return 0, 0
-
-    complete = 0
-    for position, heading_index in enumerate(headings):
-        end = (
-            headings[position + 1]
-            if position + 1 < len(headings)
-            else len(lines)
-        )
-        if "\n".join(lines[heading_index + 1 : end]).strip():
-            complete += 1
-
-    return len(headings), complete
-
-
 def build_scrape_response(
     url: str,
     result: CachedMarkdown,
@@ -137,22 +107,6 @@ def build_scrape_response(
 
     assessment = assess_yield(approx_tokens, result.html_tokens)
 
-    pre_cleaning_characters = (
-        result.pre_cleaning_characters
-        if result.pre_cleaning_characters > 0
-        else len(result.markdown)
-    )
-    section_count, complete_section_count = _count_markdown_sections(
-        result.markdown
-    )
-    quality_assessment = assess_content_quality(
-        extracted_characters=len(result.markdown),
-        boilerplate_characters=detect_boilerplate_characters(result.markdown),
-        pre_cleaning_characters=pre_cleaning_characters,
-        total_sections=section_count,
-        complete_sections=complete_section_count,
-    )
-
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -167,7 +121,6 @@ def build_scrape_response(
         yield_hint=assessment.hint,
         content_cleaning=result.content_cleaning
         or {"applied": False, "strategy": "standard"},
-        content_quality=asdict(quality_assessment),
         provenance=build_provenance(
             url,
             result.markdown,
