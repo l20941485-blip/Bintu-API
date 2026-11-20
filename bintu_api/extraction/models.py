@@ -14,14 +14,6 @@ class CacheInfo(BaseModel):
         default=None,
         description="Age of the cached entry in seconds, when known.",
     )
-    fresh: bool = Field(
-        default=True,
-        description=(
-            "Whether the result is fresh under Bintu's declared cache policy. "
-            "A fresh extraction is always fresh; a cache hit is fresh when its "
-            "known age is within the cache TTL."
-        ),
-    )
 
 
 class Provenance(BaseModel):

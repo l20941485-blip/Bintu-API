@@ -13,7 +13,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from bintu_api.common.fetch import FetchedHTML, compute_approx_tokens
 from bintu_api.extraction.cache import compute_saved_tokens
-from bintu_api.extraction.cache_store import CACHE_TTL, CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.models import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.extraction.quality import (
     assess_content_quality,
@@ -75,14 +75,6 @@ def build_provenance(
         if cache_layer != "none"
         else None
     )
-    cache_fresh = (
-        True
-        if cache_layer == "none"
-        else (
-            cache_age_seconds is not None
-            and cache_age_seconds <= int(CACHE_TTL.total_seconds())
-        )
-    )
     return Provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
@@ -94,7 +86,6 @@ def build_provenance(
             hit=cache_layer != "none",
             layer=cache_layer,
             age_seconds=cache_age_seconds,
-            fresh=cache_fresh,
         ),
         extractor_version=getattr(settings, "service_version", "unknown"),
         status=getattr(document, "status", None) if fetched else None,
