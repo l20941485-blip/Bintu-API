@@ -58,6 +58,29 @@ class Provenance(BaseModel):
     )
 
 
+class ContentQuality(BaseModel):
+    score: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Overall extraction quality signal from 0.0 to 1.0.",
+    )
+    boilerplate_ratio: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Estimated share of extracted text identified as boilerplate.",
+    )
+    main_content_coverage: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Estimated share of meaningful pre-cleaning content retained.",
+    )
+    section_completeness: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Share of detected sections with a heading and nonempty content.",
+    )
+
+
 class ScrapeTextResponse(BaseModel):
     url: str
     text: str = Field(description="Readable extracted text, limited by the service's configured character cap.")
@@ -148,6 +171,10 @@ class ScrapeTextResponse(BaseModel):
     content_cleaning: dict[str, Any] | None = Field(
         default=None,
         description="Reports whether stronger main-content extraction was applied.",
+    )
+    content_quality: ContentQuality | None = Field(
+        default=None,
+        description="Quality signals describing extraction usefulness and boilerplate contamination.",
     )
     provenance: Provenance | None = Field(
         default=None,

@@ -49,3 +49,142 @@ def assess_yield(extracted_tokens: int, html_tokens: int, html_text: str ="") ->
     if html_text and any(pattern.search(html_text) for pattern in _JS_MARKERS):
         return YieldAssessment(True, "javascript_rendered", HINT_JAVASCRIPT, round(ratio, 4))
     return YieldAssessment(True, "little_text", HINT_LITTLE_TEXT, round(ratio, 4))
+_BOILERPLATE_LINE_PATTERNS = (
+    re.compile(
+        r"^(?:references|external links|see also|further reading|bibliography|notes|citations)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:navigation|main menu|site navigation|footer|breadcrumbs|categories|tags)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:edit|edit source|history|talk|discussion|share|print|cite)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:skip to (?:main )?content|back to top|scroll to top)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:sign in|log in|sign up|subscribe|newsletter|cookie|privacy|terms|about|contact|careers)$",
+        re.IGNORECASE,
+    ),
+)
+
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+@dataclass(frozen=True)
+class ContentQualityAssessment:
+    score: float
+    boilerplate_ratio: float
+    main_content_coverage: float
+    section_completeness: float
+
+
+def detect_boilerplate_characters(text: str) -> int:
+    """Count characters in conservatively identified boilerplate lines."""
+    line_counts: dict[str, int] = {}
+    stripped_lines: list[str] = []
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        stripped_lines.append(stripped)
+        if len(stripped) <= 80:
+            key = stripped.casefold()
+            line_counts[key] = line_counts.get(key, 0) + 1
+
+    boilerplate = 0
+    for stripped in stripped_lines:
+        is_known_noise = any(
+            pattern.fullmatch(stripped)
+            for pattern in _BOILERPLATE_LINE_PATTERNS
+        )
+        is_repeated = (
+            len(stripped) <= 80
+            and line_counts.get(stripped.casefold(), 0) >= 3
+        )
+
+        if is_known_noise or is_repeated:
+            boilerplate += len(stripped)
+
+    return boilerplate
+
+
+def _section_completeness(text: str) -> float:
+    lines = text.splitlines()
+    headings = [
+        index
+        for index, line in enumerate(lines)
+        if _HEADING_RE.match(line.strip())
+    ]
+
+    if not headings:
+        return 1.0
+
+    complete = 0
+    for position, heading_index in enumerate(headings):
+        end = (
+            headings[position + 1]
+            if position + 1 < len(headings)
+            else len(lines)
+        )
+        body = "\n".join(lines[heading_index + 1:end]).strip()
+        if body:
+            complete += 1
+
+    return complete / len(headings)
+
+
+def assess_content_quality(
+    *,
+    extracted_characters: int,
+    boilerplate_characters: int,
+    pre_cleaning_characters: int,
+    total_sections: int,
+    complete_sections: int,
+) -> ContentQualityAssessment:
+    """Calculate deterministic extraction-quality signals."""
+    extracted_characters = max(int(extracted_characters or 0), 0)
+    boilerplate_characters = max(int(boilerplate_characters or 0), 0)
+    pre_cleaning_characters = max(int(pre_cleaning_characters or 0), 0)
+    total_sections = max(int(total_sections or 0), 0)
+    complete_sections = max(int(complete_sections or 0), 0)
+
+    if extracted_characters == 0:
+        return ContentQualityAssessment(0.0, 0.0, 0.0, 0.0)
+
+    boilerplate_ratio = min(
+        boilerplate_characters / extracted_characters,
+        1.0,
+    )
+    main_content_coverage = (
+        min(extracted_characters / pre_cleaning_characters, 1.0)
+        if pre_cleaning_characters > 0
+        else 1.0
+    )
+
+    if total_sections > 0:
+        section_completeness = min(
+            complete_sections / total_sections,
+            1.0,
+        )
+    else:
+        section_completeness = 1.0
+
+    score = (
+        0.45 * main_content_coverage
+        + 0.30 * (1.0 - boilerplate_ratio)
+        + 0.25 * section_completeness
+    )
+
+    return ContentQualityAssessment(
+        score=round(min(max(score, 0.0), 1.0), 4),
+        boilerplate_ratio=round(boilerplate_ratio, 4),
+        main_content_coverage=round(main_content_coverage, 4),
+        section_completeness=round(section_completeness, 4),
+    )
