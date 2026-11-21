@@ -25,7 +25,7 @@ from typing import Any, Literal
 from fastapi import Request
 
 from bintu_api.common.fetch import FetchedHTML
-from bintu_api.extraction.chunk_location import annotate_sequential_chunk_locations
+from bintu_api.extraction.chunk_location import annotate_chunk_locations
 from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
 from bintu_api.extraction.fingerprint import compute_content_fingerprint
 from bintu_api.extraction.models import CacheInfo
@@ -559,7 +559,7 @@ async def extract_context(
                 }
                 for index, chunk in enumerate(chunk_strings)
             ]
-            chunks = annotate_sequential_chunk_locations(
+            chunks = annotate_chunk_locations(
                 chunks,
                 source_text=policy_text,
             )

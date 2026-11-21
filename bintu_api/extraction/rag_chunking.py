@@ -124,6 +124,14 @@ def _build_headings(text: str) -> list[_Heading]:
     return headings
 
 
+Heading = _Heading
+
+
+def build_headings(text: str) -> list[Heading]:
+    """Build a public, fence-aware index of Markdown headings."""
+    return _build_headings(text)
+
+
 def _split_sections(
     text: str,
     headings: list[_Heading],
