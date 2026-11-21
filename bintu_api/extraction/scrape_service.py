@@ -32,6 +32,7 @@ from bintu_api.extraction.cleaner import (
 from bintu_api.extraction.dedupe import dedupe_blocks
 from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
+    is_memory_cache_fresh,
     read_memory_cache,
     write_memory_cache,
 )
@@ -174,7 +175,12 @@ class ScrapeService:
             sections,
         )
 
-        if memory_entry is not None:
+        memory_cache_fresh = (
+            memory_entry is not None
+            and is_memory_cache_fresh(memory_entry.extracted_at)
+        )
+
+        if memory_entry is not None and memory_cache_fresh:
             document = memory_entry.document
             cache_layer = "memory"
             self.cache_event_logger(
@@ -184,19 +190,40 @@ class ScrapeService:
                 layer=cache_layer,
             )
         else:
-            self.cache_event_logger(
-                event="cache_miss",
-                url=url,
-                request_id=request_id,
-                layer="none",
-            )
+            if memory_entry is not None:
+                self.cache_event_logger(
+                    event="stale_cache_refresh",
+                    url=url,
+                    request_id=request_id,
+                    layer="memory",
+                )
+            else:
+                self.cache_event_logger(
+                    event="cache_miss",
+                    url=url,
+                    request_id=request_id,
+                    layer="none",
+                )
 
-            document = await self._fetch_document(
-                url,
-                settings,
-                cache_key,
-                render_js,
-            )
+            try:
+                document = await self._fetch_document(
+                    url,
+                    settings,
+                    cache_key,
+                    render_js,
+                )
+            except Exception:
+                if memory_entry is None:
+                    raise
+
+                document = memory_entry.document
+                cache_layer = "memory"
+                self.cache_event_logger(
+                    event="stale_cache_fallback",
+                    url=url,
+                    request_id=request_id,
+                    layer=cache_layer,
+                )
 
         extracted_at = (
             datetime.now(UTC).isoformat()
