@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -41,7 +42,7 @@ class RagIngestionService:
     def __init__(self, repository: ChunkRepository) -> None:
         self._repository = repository
 
-    def ingest(
+    async def ingest(
         self,
         request: ExtractionIngestionRequest,
     ) -> IngestedRevision:
@@ -66,7 +67,10 @@ class RagIngestionService:
         )
 
         chunks = [self._to_rag_chunk(request, chunk) for chunk in request.chunks]
-        return self._repository.ingest_revision(document, revision, chunks)
+        result = self._repository.ingest_revision(document, revision, chunks)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
 
     def _document_id(self, request: ExtractionIngestionRequest) -> str:
         material = "\n".join(

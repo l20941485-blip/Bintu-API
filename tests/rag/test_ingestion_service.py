@@ -47,13 +47,13 @@ def make_request() -> ExtractionIngestionRequest:
     )
 
 
-class RagIngestionServiceTests(unittest.TestCase):
-    def test_maps_semantic_chunks_into_rag_chunks(self) -> None:
+class RagIngestionServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_maps_semantic_chunks_into_rag_chunks(self) -> None:
         repository = InMemoryChunkRepository()
         service = RagIngestionService(repository)
         request = make_request()
 
-        result = service.ingest(request)
+        result = await service.ingest(request)
 
         self.assertIsInstance(result, IngestedRevision)
         self.assertIsNotNone(result.revision_id)
@@ -75,13 +75,13 @@ class RagIngestionServiceTests(unittest.TestCase):
             self.assertEqual(persisted.access_labels, ("public",))
             self.assertIsNone(persisted.owner_identity)
 
-    def test_identical_extraction_is_idempotent(self) -> None:
+    async def test_identical_extraction_is_idempotent(self) -> None:
         repository = InMemoryChunkRepository()
         service = RagIngestionService(repository)
         request = make_request()
 
-        first = service.ingest(request)
-        second = service.ingest(request)
+        first = await service.ingest(request)
+        second = await service.ingest(request)
 
         self.assertEqual(first.revision_id, second.revision_id)
         self.assertEqual(

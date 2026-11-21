@@ -191,3 +191,92 @@ def test_mobile_answer_uses_authenticated_owner_identity(
             "p_owner_identity": "user-1",
         },
     )
+
+
+@pytest.fixture
+def ingestion_client():
+    settings = Settings(
+        api_key=API_KEY,
+        rapidapi_proxy_secret="rag-route-test-proxy",
+        supabase_url="https://supabase.example",
+        supabase_anon_key="anon-key",
+        require_auth=True,
+        rate_limit_requests=1000,
+    )
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.rate_limiter = BurstRateLimiter(settings)
+    app.include_router(router)
+
+    supabase = Mock()
+    supabase.rpc = Mock(
+        return_value=Mock(
+            execute=AsyncMock(
+                return_value=Mock(
+                    data={
+                        "revision_id": "revision-1",
+                        "chunks": [
+                            {
+                                "chunk_id": "chunk-1",
+                                "chunk_sha256": "chunk-hash-1",
+                                "chunk_index": 0,
+                            }
+                        ],
+                    }
+                )
+            )
+        )
+    )
+    app.state.supabase_client = supabase
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@patch(
+    "bintu_api.api.routes.rag.verify_supabase_user",
+    return_value="user-1",
+)
+@patch(
+    "bintu_api.api.routes.rag.fetch_and_extract",
+    new_callable=AsyncMock,
+)
+def test_mobile_ingest_persists_owner_knowledge(
+    fetch,
+    verify_user,
+    ingestion_client,
+):
+    fetched = Mock()
+    fetched.final_url = "https://example.com/final"
+    result = Mock(
+        markdown="# Guide\n\nIntroduction.",
+        content_hash="sha256:content",
+        content_fingerprint="sha256:fingerprint",
+        extracted_at="2026-11-21T00:00:00+00:00",
+        page_title="Example Documentation",
+    )
+    fetch.return_value = (fetched, result, "none", False)
+
+    response = ingestion_client.post(
+        "/api/v1/mobile/rag/ingest",
+        json={
+            "url": "https://example.com/docs",
+            "max_tokens": 1000,
+            "overlap_tokens": 0,
+            "access_labels": [],
+        },
+        headers={"Authorization": "Bearer valid-session"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["revision_id"] == "revision-1"
+    assert body["chunk_count"] == 1
+    assert body["chunks"][0]["chunk_id"] == "chunk-1"
+
+    ingestion_client.app.state.supabase_client.rpc.assert_called_once()
+    arguments = (
+        ingestion_client.app.state.supabase_client.rpc.call_args.args[1]
+    )
+    assert arguments["p_document"]["owner_identity"] == "user-1"
+    assert arguments["p_chunks"][0]["access_labels"] == []
