@@ -236,13 +236,14 @@ security invoker
 set search_path = ''
 as $$
     with query_terms as (
-        select unnest(
-            string_to_array(
+        select term
+        from unnest(
+            regexp_split_to_array(
                 lower(trim(p_query)),
-                ' '
+                '\W+'
             )
         ) as term
-        where nullif(trim(p_query), '') is not null
+        where term <> ''
     ),
     scored_chunks as (
         select
@@ -257,26 +258,28 @@ as $$
             (
                 select count(*)
                 from query_terms
-                where position(query_terms.term in lower(chunk.text)) > 0
+                where lower(chunk.text) ~* ('\m' || query_terms.term || '\M')
                    or exists (
                         select 1
                         from unnest(chunk.heading_path) as heading
-                        where position(query_terms.term in lower(heading)) > 0
+                        where lower(heading) ~* ('\m' || query_terms.term || '\M')
                    )
             )::double precision / greatest(
                 (select count(*) from query_terms),
                 1
             ) as score
         from public.rag_chunks chunk
+        join public.rag_documents document
+          on document.document_id = chunk.document_id
         where
             (
                 p_access_labels is null
+                or cardinality(p_access_labels) = 0
                 or chunk.access_labels && p_access_labels
             )
             and (
-                p_owner_identity is null
-                or chunk.owner_identity is null
-                or chunk.owner_identity = p_owner_identity
+                document.owner_identity is null
+                or document.owner_identity = p_owner_identity
             )
     )
     select
@@ -297,3 +300,5 @@ $$;
 
 grant execute on function public.search_rag_chunks(text, integer, text[], text)
     to service_role;
+
+
