@@ -6,7 +6,6 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Protocol
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -7,34 +7,38 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request, Security
 
 from bintu_api.api import scrape_adapter as routes_common
-from bintu_api.api.scrape_adapter import fetch_and_extract
 from bintu_api.api.schemas import (
     ErrorResponse,
     MobileRagAnswerRequest,
-    MobileRagIngestRequest,
-    MobileRagIngestResponse,
-    MobileRagDocument,
     MobileRagChunkPreview,
+    MobileRagDocument,
     MobileRagDocumentDeleteResponse,
     MobileRagDocumentDetailResponse,
     MobileRagDocumentMetadata,
     MobileRagDocumentRefreshRequest,
-    MobileRagDocumentRefreshRequest,
-    MobileRagRevisionMetadata,
     MobileRagDocumentsResponse,
     MobileRagIngestedChunk,
+    MobileRagIngestRequest,
+    MobileRagIngestResponse,
+    MobileRagRevisionMetadata,
     RagAnswerCitation,
-    RagDocsAnswerRequest,
-    RagDocsIngestRequest,
     RagAnswerRequest,
     RagAnswerResponse,
+    RagDocsAnswerRequest,
+    RagDocsIngestRequest,
 )
+from bintu_api.api.scrape_adapter import fetch_and_extract
 from bintu_api.extraction.output import sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
-from bintu_api.rag.supabase import SupabaseChunkRepository, SupabaseDocumentDeletionRepository, SupabaseDocumentDetailRepository, SupabaseDocumentRepository
 from bintu_api.rag.retrieval import RagRetrievalService
+from bintu_api.rag.supabase import (
+    SupabaseChunkRepository,
+    SupabaseDocumentDeletionRepository,
+    SupabaseDocumentDetailRepository,
+    SupabaseDocumentRepository,
+)
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import api_key_scheme, bearer_scheme, verify_supabase_user
 

@@ -12,7 +12,6 @@ from bintu_api.rag.observability import (
 )
 from bintu_api.rag.retrieval import RagRetrievalService, RetrievedChunk
 
-
 _STOPWORDS = frozenset(
     {
         "a",

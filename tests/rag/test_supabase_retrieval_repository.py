@@ -5,7 +5,6 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, Mock
 
-from bintu_api.rag.retrieval import RetrievedChunk
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 
 

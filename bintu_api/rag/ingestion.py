@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from bintu_api.extraction.rag_chunking import SemanticChunk
 from bintu_api.rag.models import (
