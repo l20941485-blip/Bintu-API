@@ -69,6 +69,62 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
             "https://example.com/original",
         )
 
+    async def test_combines_evidence_from_multiple_chunks(self) -> None:
+        repository = FakeAnswerRepository(
+            [
+                make_chunk(
+                    "chunk-auth",
+                    "## Authentication\n\nUse an API key.",
+                    1.0,
+                ),
+                make_chunk(
+                    "chunk-rate-limits",
+                    "## Rate limits\n\nRequests are limited to 100 per minute.",
+                    0.8,
+                ),
+            ]
+        )
+        service = RagAnswerService(RagRetrievalService(repository))
+
+        result = await service.answer(
+            query="How do I use authentication and what are the rate limits?"
+        )
+
+        self.assertFalse(result.insufficient_evidence)
+        self.assertEqual(
+            result.answer,
+            "Use an API key. Requests are limited to 100 per minute.",
+        )
+        self.assertEqual(
+            [citation.chunk_id for citation in result.citations],
+            ["chunk-auth", "chunk-rate-limits"],
+        )
+
+    async def test_does_not_duplicate_identical_evidence(self) -> None:
+        repository = FakeAnswerRepository(
+            [
+                make_chunk(
+                    "chunk-auth",
+                    "## Authentication\n\nUse an API key.",
+                    1.0,
+                ),
+                make_chunk(
+                    "chunk-auth-duplicate",
+                    "## Authentication\n\nUse an API key.",
+                    0.9,
+                ),
+            ]
+        )
+        service = RagAnswerService(RagRetrievalService(repository))
+
+        result = await service.answer(query="How do I use authentication?")
+
+        self.assertEqual(result.answer, "Use an API key.")
+        self.assertEqual(
+            [citation.chunk_id for citation in result.citations],
+            ["chunk-auth"],
+        )
+
     async def test_marks_insufficient_evidence_without_chunks(self) -> None:
         service = RagAnswerService(
             RagRetrievalService(FakeAnswerRepository([]))
@@ -87,10 +143,6 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ValueError):
             await service.answer(query="   ")
-
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
 
 
 class OwnerIdentityAnswerRepository:
@@ -115,3 +167,7 @@ class RagOwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
             access_labels=("public",),
             owner_identity="user-1",
         )
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

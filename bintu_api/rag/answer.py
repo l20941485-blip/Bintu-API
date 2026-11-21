@@ -58,14 +58,40 @@ class RagAnswerService:
                 insufficient_evidence=True,
             )
 
-        best = chunks[0]
-        answer = self._extract_answer(best.text)
+        evidence: list[tuple[RetrievedChunk, str]] = []
+        seen_statements: set[str] = set()
+
+        for chunk in chunks:
+            statement = self._extract_answer(chunk.text)
+            if not statement:
+                continue
+
+            normalized = statement.casefold()
+            if normalized in seen_statements:
+                continue
+
+            seen_statements.add(normalized)
+            evidence.append((chunk, statement))
+
+            if len(evidence) == 3:
+                break
+
+        if not evidence:
+            return RagAnswer(
+                answer="",
+                citations=(),
+                retrieved_chunks=tuple(chunks),
+                insufficient_evidence=True,
+            )
 
         return RagAnswer(
-            answer=answer,
-            citations=(self._to_citation(best),),
+            answer=" ".join(statement for _, statement in evidence),
+            citations=tuple(
+                self._to_citation(chunk)
+                for chunk, _ in evidence
+            ),
             retrieved_chunks=tuple(chunks),
-            insufficient_evidence=not answer,
+            insufficient_evidence=False,
         )
 
     def _extract_answer(self, text: str) -> str:
