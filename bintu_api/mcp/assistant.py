@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from bintu_api.mcp.schemas import TOOL_NAME
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion_workflow import ingest_public_knowledge
+from bintu_api.rag.refresh_workflow import refresh_user_knowledge
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase import (
     SupabaseDocumentDetailRepository,
@@ -59,7 +60,7 @@ class AssistantArguments(BaseModel):
     url: str | None = None
     query: str | None = None
     document_id: str | None = None
-    operation: Literal["list", "inspect"] | None = None
+    operation: Literal["list", "inspect", "refresh"] | None = None
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     limit: int = Field(default=5, ge=1, le=20)
 
@@ -134,11 +135,12 @@ ASSISTANT_INPUT_SCHEMA = {
         },
         "operation": {
             "type": "string",
-            "enum": ["list", "inspect"],
+            "enum": ["list", "inspect", "refresh"],
             "description": (
                 "Required for knowledge/manage_knowledge. Use list to return "
-                "the signed-in user's documents or inspect to return one "
-                "document's metadata."
+                "the signed-in user's documents, inspect to return one "
+                "document's metadata, or refresh to re-fetch and update one "
+                "document."
             ),
         },
         "max_tokens": {
@@ -263,6 +265,39 @@ async def call_assistant_tool(
                         }
                         for document in documents
                     ],
+                }
+            )
+
+        if arguments.operation == "refresh":
+            try:
+                ingested = await refresh_user_knowledge(
+                    request=request,
+                    settings=settings,
+                    user_id=user_id,
+                    document_id=arguments.document_id or "",
+                )
+            except HTTPException as error:
+                detail = error.detail if isinstance(error.detail, dict) else {}
+                return _tool_error(
+                    str(detail.get("code", "refresh_failed")),
+                    str(
+                        detail.get(
+                            "message",
+                            "Unable to refresh the requested document.",
+                        )
+                    ),
+                )
+
+            return _tool_result(
+                {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "refresh",
+                    "document_id": ingested.document.document_id,
+                    "revision_id": ingested.revision_id,
+                    "title": ingested.document.title,
+                    "source_url": ingested.revision.source_url,
+                    "chunk_count": len(ingested.chunks),
                 }
             )
 
