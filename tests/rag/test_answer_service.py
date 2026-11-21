@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.retrieval import RagRetrievalService, RetrievedChunk
@@ -28,6 +28,8 @@ def make_chunk(
     chunk_id: str,
     text: str,
     score: float,
+    *,
+    heading_path: tuple[str, ...] = ("Guide",),
 ) -> RetrievedChunk:
     return RetrievedChunk(
         chunk_id=chunk_id,
@@ -37,7 +39,7 @@ def make_chunk(
         score=score,
         source_url="https://example.com/original",
         final_url="https://example.com/final",
-        heading_path=("Guide",),
+        heading_path=heading_path,
         access_labels=("public",),
     )
 
@@ -50,6 +52,7 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
                     "chunk-auth",
                     "## Authentication\n\nUse an API key.",
                     1.0,
+                    heading_path=("Guide", "Authentication"),
                 )
             ]
         )
@@ -58,10 +61,7 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
         result = await service.answer(query="How do I authenticate?")
 
         self.assertFalse(result.insufficient_evidence)
-        self.assertEqual(
-            result.answer,
-            "Use an API key.",
-        )
+        self.assertEqual(result.answer, "Use an API key.")
         self.assertEqual(len(result.citations), 1)
         self.assertEqual(result.citations[0].chunk_id, "chunk-auth")
         self.assertEqual(
@@ -76,11 +76,13 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
                     "chunk-auth",
                     "## Authentication\n\nUse an API key.",
                     1.0,
+                    heading_path=("Guide", "Authentication"),
                 ),
                 make_chunk(
                     "chunk-rate-limits",
                     "## Rate limits\n\nRequests are limited to 100 per minute.",
                     0.8,
+                    heading_path=("Guide", "Rate limits"),
                 ),
             ]
         )
@@ -100,6 +102,33 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
             ["chunk-auth", "chunk-rate-limits"],
         )
 
+    async def test_excludes_irrelevant_evidence(self) -> None:
+        repository = FakeAnswerRepository(
+            [
+                make_chunk(
+                    "chunk-introduction",
+                    "## Introduction\n\nThis guide explains the product.",
+                    0.9,
+                    heading_path=("Guide", "Introduction"),
+                ),
+                make_chunk(
+                    "chunk-auth",
+                    "## Authentication\n\nUse an API key.",
+                    0.8,
+                    heading_path=("Guide", "Authentication"),
+                ),
+            ]
+        )
+        service = RagAnswerService(RagRetrievalService(repository))
+
+        result = await service.answer(query="How do I authenticate?")
+
+        self.assertEqual(result.answer, "Use an API key.")
+        self.assertEqual(
+            [citation.chunk_id for citation in result.citations],
+            ["chunk-auth"],
+        )
+
     async def test_does_not_duplicate_identical_evidence(self) -> None:
         repository = FakeAnswerRepository(
             [
@@ -107,11 +136,13 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
                     "chunk-auth",
                     "## Authentication\n\nUse an API key.",
                     1.0,
+                    heading_path=("Guide", "Authentication"),
                 ),
                 make_chunk(
                     "chunk-auth-duplicate",
                     "## Authentication\n\nUse an API key.",
                     0.9,
+                    heading_path=("Guide", "Authentication"),
                 ),
             ]
         )
