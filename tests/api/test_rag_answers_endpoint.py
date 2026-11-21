@@ -1,0 +1,117 @@
+"""HTTP contract tests for the grounded RAG answer endpoint."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from bintu_api.api.routes.rag import router
+from bintu_api.security.rate_limit import BurstRateLimiter
+from bintu_api.settings import Settings
+
+API_KEY = "rag-route-test-key"
+AUTH = {"X-API-Key": API_KEY}
+
+
+@pytest.fixture
+def client():
+    settings = Settings(
+        api_key=API_KEY,
+        rapidapi_proxy_secret="rag-route-test-proxy",
+        require_auth=True,
+        rate_limit_requests=1000,
+    )
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.rate_limiter = BurstRateLimiter(settings)
+    app.include_router(router)
+
+    supabase = Mock()
+    supabase.rpc = Mock(
+        return_value=Mock(
+            execute=AsyncMock(
+                return_value=Mock(
+                    data=[
+                        {
+                            "chunk_id": "chunk-auth",
+                            "revision_id": "revision-1",
+                            "document_id": "document-1",
+                            "text": "## Authentication\n\nUse an API key.",
+                            "score": 1.0,
+                            "source_url": "https://example.com/original",
+                            "final_url": "https://example.com/final",
+                            "heading_path": ["Guide", "Authentication"],
+                            "access_labels": ["public"],
+                        }
+                    ]
+                )
+            )
+        )
+    )
+    app.state.supabase_client = supabase
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def test_answer_returns_grounded_response(client):
+    response = client.post(
+        "/api/v1/rag/answers",
+        json={
+            "query": "How do I use authentication?",
+            "limit": 5,
+            "access_labels": ["public"],
+        },
+        headers=AUTH,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["answer"] == "Use an API key."
+    assert body["insufficient_evidence"] is False
+    assert len(body["citations"]) == 1
+    assert body["citations"][0]["chunk_id"] == "chunk-auth"
+    assert body["citations"][0]["heading_path"] == [
+        "Guide",
+        "Authentication",
+    ]
+
+
+def test_blank_query_is_rejected(client):
+    response = client.post(
+        "/api/v1/rag/answers",
+        json={"query": "   "},
+        headers=AUTH,
+    )
+
+    assert response.status_code == 422
+
+
+def test_missing_knowledge_core_returns_503():
+    settings = Settings(
+        api_key=API_KEY,
+        rapidapi_proxy_secret="rag-route-test-proxy",
+        require_auth=True,
+        rate_limit_requests=1000,
+    )
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.rate_limiter = BurstRateLimiter(settings)
+    app.state.supabase_client = None
+    app.include_router(router)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/rag/answers",
+            json={"query": "How do I use authentication?"},
+            headers=AUTH,
+        )
+
+    assert response.status_code == 503
+    assert (
+        response.json()["detail"]["code"]
+        == "knowledge_core_unavailable"
+    )

@@ -7,7 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from bintu_api.extraction.models import CacheInfo as CacheInfo
 from bintu_api.extraction.models import Provenance as Provenance
@@ -111,3 +111,32 @@ class VersionResponse(BaseModel):
     rate_limit_requests: int
     rate_limit_window_seconds: int
     cache_ttl_seconds: int
+
+
+class RagAnswerCitation(BaseModel):
+    chunk_id: str
+    revision_id: str
+    document_id: str
+    source_url: str
+    final_url: str | None = None
+    heading_path: list[str] = Field(default_factory=list)
+
+
+class RagAnswerRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=20)
+    access_labels: list[str] = Field(default_factory=list)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        query = value.strip()
+        if not query:
+            raise ValueError("query must not be blank")
+        return query
+
+
+class RagAnswerResponse(BaseModel):
+    answer: str
+    insufficient_evidence: bool
+    citations: list[RagAnswerCitation]
