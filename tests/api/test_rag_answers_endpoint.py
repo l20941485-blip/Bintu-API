@@ -280,3 +280,27 @@ def test_mobile_ingest_persists_owner_knowledge(
     )
     assert arguments["p_document"]["owner_identity"] == "user-1"
     assert arguments["p_chunks"][0]["access_labels"] == []
+
+
+def test_api_key_answer_does_not_request_owner_knowledge(client):
+    response = client.post(
+        "/api/v1/rag/answers",
+        json={
+            "query": "How do I use authentication?",
+            "limit": 5,
+            "access_labels": ["public"],
+        },
+        headers=AUTH,
+    )
+
+    assert response.status_code == 200, response.text
+
+    client.app.state.supabase_client.rpc.assert_called_once_with(
+        "search_rag_chunks",
+        {
+            "p_query": "How do I use authentication?",
+            "p_limit": 5,
+            "p_access_labels": ["public"],
+            "p_owner_identity": None,
+        },
+    )

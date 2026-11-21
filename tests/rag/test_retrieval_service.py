@@ -42,6 +42,43 @@ class RagRetrievalServiceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await service.search(query="   ")
 
+    async def test_search_returns_private_chunks_only_to_owner(self) -> None:
+        repository = FakeRetrievalRepository()
+        service = RagRetrievalService(repository)
+
+        owner_results = await service.search(
+            query="authentication",
+            limit=10,
+            owner_identity="user-1",
+        )
+
+        self.assertIn("chunk-private", [result.chunk_id for result in owner_results])
+
+        other_results = await service.search(
+            query="authentication",
+            limit=10,
+            owner_identity="user-2",
+        )
+
+        self.assertNotIn(
+            "chunk-private",
+            [result.chunk_id for result in other_results],
+        )
+
+    async def test_search_hides_private_chunks_from_anonymous_callers(self) -> None:
+        repository = FakeRetrievalRepository()
+        service = RagRetrievalService(repository)
+
+        results = await service.search(
+            query="authentication",
+            limit=10,
+        )
+
+        self.assertNotIn(
+            "chunk-private",
+            [result.chunk_id for result in results],
+        )
+
 
 class FakeRetrievalRepository:
     async def search_chunks(
@@ -94,6 +131,10 @@ class FakeRetrievalRepository:
             if term
         }
 
+        owners = {
+            "chunk-private": "user-1",
+        }
+
         filtered = [
             candidate
             for candidate in candidates
@@ -101,6 +142,10 @@ class FakeRetrievalRepository:
             and (
                 not access_labels
                 or any(label in candidate.access_labels for label in access_labels)
+            )
+            and (
+                "private" not in candidate.access_labels
+                or owner_identity == owners.get(candidate.chunk_id)
             )
         ]
         return sorted(filtered, key=lambda candidate: candidate.score, reverse=True)[:limit]
