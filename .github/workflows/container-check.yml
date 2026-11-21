@@ -191,13 +191,18 @@ jobs:
 
               tools = document.get("result", {}).get("tools")
               require(
-                  isinstance(tools, list) and len(tools) == 1,
+                  isinstance(tools, list) and len(tools) == 2,
                   f"{version}: unexpected tool list",
               )
               tool = tools[0]
               require(
                   tool.get("name") == "bintu_scrape_text",
                   f"{version}: unexpected tool name",
+              )
+              assistant_tool = tools[1]
+              require(
+                  assistant_tool.get("name") == "bintu_assistant",
+                  f"{version}: unexpected assistant tool name",
               )
               require(
                   isinstance(tool.get("inputSchema"), dict),
