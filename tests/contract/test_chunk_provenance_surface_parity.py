@@ -41,6 +41,9 @@ SHARED_SEMANTIC_CHUNK_FIELDS = (
     "final_url",
     "content_sha256",
     "extracted_at",
+    "page_title",
+    "content_fingerprint",
+    "chunk_sha256",
 )
 
 

@@ -50,6 +50,8 @@ class SemanticChunkEndpointTests(unittest.IsolatedAsyncioTestCase):
         result.truncated = False
         result.extracted_at = "2026-11-17T00:00:00+00:00"
         result.content_hash = "test-content-sha256"
+        result.page_title = "Example Guide"
+        result.content_fingerprint = "sha256:test-content-fingerprint"
         return result
 
     async def test_default_chunk_strategy_is_sequential(self) -> None:

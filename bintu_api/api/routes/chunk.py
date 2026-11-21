@@ -11,6 +11,7 @@ Important boundaries, invariants, or compatibility notes:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
 from typing import Literal
 
@@ -134,6 +135,11 @@ async def scrape_chunks(
                 final_url=chunk.final_url,
                 content_sha256=chunk.content_sha256,
                 extracted_at=chunk.extracted_at,
+                page_title=result.page_title,
+                content_fingerprint=result.content_fingerprint,
+                chunk_sha256=hashlib.sha256(
+                    chunk.text.encode("utf-8")
+                ).hexdigest(),
                 page_context=(
                     (
                         " | ".join(
