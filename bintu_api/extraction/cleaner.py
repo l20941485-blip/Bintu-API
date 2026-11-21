@@ -60,6 +60,53 @@ def strip_noise_lines(text: str) -> str:
     ]
     return "\n".join(kept)
 
+_BOILERPLATE_CANDIDATE_RE = re.compile(r"^[^#>|*\-\d\s].{0,80}$")
+
+
+def suppress_boilerplate_lines(
+    text: str,
+    *,
+    min_occurrences: int = 3,
+) -> tuple[str, int]:
+    """Remove short standalone labels repeated across a document.
+
+    This is intentionally conservative: it only removes non-heading,
+    non-list, non-table, non-footnote lines of at most 80 characters that
+    occur at least ``min_occurrences`` times. Unique navigation entries,
+    reference lists, URLs, and meaningful prose are preserved.
+    """
+    lines = text.split("\n")
+    counts: dict[str, int] = {}
+
+    for line in lines:
+        candidate = line.strip()
+        if not candidate or len(candidate) > 80:
+            continue
+        if _BOILERPLATE_CANDIDATE_RE.fullmatch(candidate) is None:
+            continue
+        counts[candidate] = counts.get(candidate, 0) + 1
+
+    repeated = {
+        candidate
+        for candidate, count in counts.items()
+        if count >= min_occurrences
+    }
+
+    if not repeated:
+        return text, 0
+
+    kept: list[str] = []
+    removed = 0
+
+    for line in lines:
+        candidate = line.strip()
+        if candidate in repeated:
+            removed += 1
+            continue
+        kept.append(line)
+
+    return "\n".join(kept), removed
+
 _INLINE_HEADING_RE = re.compile(r"(?<=[.!?)\]\u201d\"']) +(?=#{1,6} \S)")
 
 

@@ -24,8 +24,15 @@ from bintu_api.extraction.cacheaccess import (
     should_read_persistent_cache,
     should_write_persistent_cache,
 )
+from bintu_api.extraction.cleaner import (
+    normalize_markdown,
+    strip_noise_lines,
+    suppress_boilerplate_lines,
+)
+from bintu_api.extraction.dedupe import dedupe_blocks
 from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
+    is_memory_cache_fresh,
     read_memory_cache,
     write_memory_cache,
 )
@@ -168,7 +175,12 @@ class ScrapeService:
             sections,
         )
 
-        if memory_entry is not None:
+        memory_cache_fresh = (
+            memory_entry is not None
+            and is_memory_cache_fresh(memory_entry.extracted_at)
+        )
+
+        if memory_entry is not None and memory_cache_fresh:
             document = memory_entry.document
             cache_layer = "memory"
             self.cache_event_logger(
@@ -178,19 +190,40 @@ class ScrapeService:
                 layer=cache_layer,
             )
         else:
-            self.cache_event_logger(
-                event="cache_miss",
-                url=url,
-                request_id=request_id,
-                layer="none",
-            )
+            if memory_entry is not None:
+                self.cache_event_logger(
+                    event="stale_cache_refresh",
+                    url=url,
+                    request_id=request_id,
+                    layer="memory",
+                )
+            else:
+                self.cache_event_logger(
+                    event="cache_miss",
+                    url=url,
+                    request_id=request_id,
+                    layer="none",
+                )
 
-            document = await self._fetch_document(
-                url,
-                settings,
-                cache_key,
-                render_js,
-            )
+            try:
+                document = await self._fetch_document(
+                    url,
+                    settings,
+                    cache_key,
+                    render_js,
+                )
+            except Exception:
+                if memory_entry is None:
+                    raise
+
+                document = memory_entry.document
+                cache_layer = "memory"
+                self.cache_event_logger(
+                    event="stale_cache_fallback",
+                    url=url,
+                    request_id=request_id,
+                    layer=cache_layer,
+                )
 
         extracted_at = (
             datetime.now(UTC).isoformat()
@@ -228,19 +261,40 @@ class ScrapeService:
                 max_footnote_url_length=options.max_footnote_url_length,
             )
 
+        pre_cleaning_characters = len(extracted.text)
+
+        cleaned_text = strip_noise_lines(extracted.text)
+        cleaned_text = normalize_markdown(cleaned_text)
+        cleaned_text, deduplicated_count = dedupe_blocks(cleaned_text)
+        cleaned_text, boilerplate_lines_removed = suppress_boilerplate_lines(cleaned_text)
+
+        cleaning_applied = cleaning_applied or boilerplate_lines_removed > 0
+        content_cleaning = {
+            "applied": cleaning_applied,
+            "strategy": (
+                "main_content"
+                if cleaning_applied and boilerplate_lines_removed == 0
+                else "boilerplate_suppression"
+                if boilerplate_lines_removed > 0
+                else "standard"
+            ),
+            "boilerplate_lines_removed": boilerplate_lines_removed,
+            "deduplicated_count": deduplicated_count,
+        }
+
+        extracted = ExtractedText(
+            text=cleaned_text,
+            truncated=extracted.truncated,
+        )
+
         write_memory_cache(
             self.cache,
             cache_key,
             document,
             cache_layer,
-            extracted.text,
+            cleaned_text,
             extracted_at,
         )
-
-        content_cleaning = {
-            "applied": cleaning_applied,
-            "strategy": "main_content" if cleaning_applied else "standard",
-        }
 
         result = build_cached_markdown(
             document,
@@ -249,6 +303,7 @@ class ScrapeService:
             extracted_at=extracted_at,
             decode_source_text_fn=self.source_decoder,
             content_cleaning=content_cleaning,
+            pre_cleaning_characters=pre_cleaning_characters,
         )
 
         if should_write_persistent_cache(

@@ -10,6 +10,7 @@ from bintu_api.extraction.memory_cache import (
     write_memory_cache,
 )
 from bintu_api.extraction.output import build_provenance
+from bintu_api.settings import Settings
 
 
 class FakeMemoryCache:
@@ -185,3 +186,24 @@ def test_memory_cache_does_not_write_empty_extraction() -> None:
     )
 
     assert cache.items == {}
+
+
+def test_fresh_extraction_is_fresh_without_cache_age():
+    settings = Settings(
+        api_key="",
+        rapidapi_proxy_secret="",
+    )
+    provenance = build_provenance(
+        "https://example.com/article",
+        "Meaningful content.",
+        None,
+        "none",
+        "request-1",
+        settings,
+        extracted_at=None,
+    )
+
+    assert provenance.cache.hit is False
+    assert provenance.cache.layer == "none"
+    assert provenance.cache.age_seconds is None
+    assert provenance.cache.fresh is True

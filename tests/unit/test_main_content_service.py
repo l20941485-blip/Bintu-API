@@ -131,11 +131,13 @@ async def test_main_content_only_skips_persistent_cache():
     )
 
     assert layer == "none"
-    assert result.markdown == "Cleaned article content. " * 1000
+    assert result.markdown == ("Cleaned article content. " * 1000).rstrip()
     assert result.content_cleaning == {
-        "applied": True,
-        "strategy": "main_content",
-    }
+            "applied": True,
+            "strategy": "main_content",
+            "boilerplate_lines_removed": 0,
+            "deduplicated_count": 0,
+        }
     assert cache.data[cleaned_key] is not None
     service.persistent_cache_reader.assert_not_awaited()
     service.persistent_cache_writer.assert_not_awaited()
@@ -170,9 +172,11 @@ async def test_main_content_only_memory_hit_skips_persistent_cache():
     assert returned_document is document
     assert layer == "memory"
     assert result.content_cleaning == {
-        "applied": True,
-        "strategy": "main_content",
-    }
+            "applied": True,
+            "strategy": "main_content",
+            "boilerplate_lines_removed": 0,
+            "deduplicated_count": 0,
+        }
     service.persistent_cache_reader.assert_not_awaited()
     service.persistent_cache_writer.assert_not_awaited()
 
@@ -192,9 +196,11 @@ async def test_standard_extraction_writes_persistent_cache():
     assert layer == "none"
     assert result.markdown == "extracted"
     assert result.content_cleaning == {
-        "applied": False,
-        "strategy": "standard",
-    }
+            "applied": False,
+            "strategy": "standard",
+            "boilerplate_lines_removed": 0,
+            "deduplicated_count": 0,
+        }
     service.persistent_cache_reader.assert_awaited_once()
     service.persistent_cache_writer.assert_awaited_once()
 
@@ -223,8 +229,10 @@ async def test_main_content_only_applies_with_links_false():
         "https://example.com/final",
         links="false",
     )
-    assert result.markdown == "Cleaned article content. " * 1000
+    assert result.markdown == ("Cleaned article content. " * 1000).rstrip()
     assert result.content_cleaning == {
-        "applied": True,
-        "strategy": "main_content",
-    }
+            "applied": True,
+            "strategy": "main_content",
+            "boilerplate_lines_removed": 0,
+            "deduplicated_count": 0,
+        }

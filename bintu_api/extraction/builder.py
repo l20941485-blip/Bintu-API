@@ -28,6 +28,7 @@ def build_cached_markdown(
     extracted_at: str | None = None,
     decode_source_text_fn=None,
     content_cleaning: dict[str, Any] | None = None,
+    pre_cleaning_characters: int = 0,
 ) -> CachedMarkdown:
     """Build the canonical extraction result for a freshly extracted page."""
     decode_source = decode_source_text_fn or decode_source_text
@@ -54,5 +55,6 @@ def build_cached_markdown(
         page_title_source=getattr(document, "page_title_source", "none"),
         content_fingerprint=compute_content_fingerprint(extracted.text),
         content_cleaning=content_cleaning,
+        pre_cleaning_characters=max(0, int(pre_cleaning_characters)),
     )
 
