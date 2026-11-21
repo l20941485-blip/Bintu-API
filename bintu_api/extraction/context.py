@@ -26,6 +26,10 @@ from fastapi import Request
 
 from bintu_api.common.fetch import FetchedHTML
 from bintu_api.extraction.chunk_location import annotate_chunk_locations
+from bintu_api.extraction.chunk_selection import (
+    omitted_sections,
+    select_chunks_for_budget,
+)
 from bintu_api.extraction.chunker import apply_link_policy, split_into_chunks
 from bintu_api.extraction.fingerprint import compute_content_fingerprint
 from bintu_api.extraction.models import CacheInfo
@@ -168,6 +172,10 @@ class ContextResult:
     warnings: list[str] | None = None
     content_cleaning: dict[str, Any] | None = None
     content_quality: ContentQualityAssessment | None = None
+    chunk_selection_policy: str = "all"
+    selected_chunk_count: int = 0
+    omitted_chunk_count: int = 0
+    omitted_sections: list[str] | None = None
 
 @dataclass(frozen=True)
 class CacheEconomics:
@@ -348,6 +356,7 @@ async def extract_context(
     return_metadata: bool = True,
     include_heading_path: bool = True,
     include_page_context: bool = True,
+    chunk_selection_policy: Literal["all", "first"] = "all",
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
 
@@ -463,6 +472,8 @@ async def extract_context(
     limiting_factor = "char_cap" if content_truncated else "none"
 
     transformation_truncated = False
+    omitted_chunks: list[dict[str, Any]] = []
+    selected_chunks: list[dict[str, Any]] = []
     selected_sections = None
     requested_sections = None
     unmatched_sections = None
@@ -563,10 +574,21 @@ async def extract_context(
                 chunks,
                 source_text=policy_text,
             )
+
+        selected_chunks, omitted_chunks = select_chunks_for_budget(
+            chunks,
+            max_tokens=max_tokens,
+            policy=chunk_selection_policy,
+        )
+        chunks = selected_chunks
+        chunk_strings = [chunk["text"] for chunk in chunks]
+
         final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
         approx_tokens = sum(chunk["tokens"] for chunk in chunks)
         split = len(chunk_strings) > 1
-        transformation_truncated = content_truncated
+        transformation_truncated = content_truncated or bool(omitted_chunks)
+        if omitted_chunks:
+            limiting_factor = "token_budget"
 
     elif mode == "summarize":
         if section_selection is not None and not section_selection.sections:
@@ -696,6 +718,10 @@ async def extract_context(
 
     return ContextResult(
         mode=mode,
+        chunk_selection_policy=chunk_selection_policy,
+        selected_chunk_count=len(selected_chunks),
+        omitted_chunk_count=len(omitted_chunks),
+        omitted_sections=omitted_sections(omitted_chunks),
         text=final_text,
         approx_tokens=approx_tokens,
         html_tokens=html_tokens,

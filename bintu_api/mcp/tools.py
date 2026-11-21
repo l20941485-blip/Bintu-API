@@ -48,6 +48,7 @@ class ToolArguments(BaseModel):
     return_metadata: bool = True
     include_heading_path: bool = True
     include_page_context: bool = True
+    chunk_selection_policy: Literal["all", "first"] = "all"
     cache: bool = True
     persist: bool = True
     sections: str | list[str] | None = None

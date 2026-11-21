@@ -10,7 +10,7 @@ formatting.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from bintu_api.extraction.context import ContextResult, extract_context
 from bintu_api.settings import Settings
@@ -32,6 +32,7 @@ async def run_extraction(
     return_metadata: bool = True,
     include_heading_path: bool = True,
     include_page_context: bool = True,
+    chunk_selection_policy: Literal["all", "first"] = "all",
     sections: list[str] | None = None,
     cache: bool = True,
     render_js: bool = False,
@@ -63,6 +64,7 @@ async def run_extraction(
         return_metadata=return_metadata,
         include_heading_path=include_heading_path,
         include_page_context=include_page_context,
+        chunk_selection_policy=chunk_selection_policy,
         sections=sections,
         cache=cache,
         render_js=render_js,
