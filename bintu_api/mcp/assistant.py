@@ -19,6 +19,7 @@ from bintu_api.rag.ingestion_workflow import ingest_public_knowledge
 from bintu_api.rag.refresh_workflow import refresh_user_knowledge
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase import (
+    SupabaseDocumentDeletionRepository,
     SupabaseDocumentDetailRepository,
     SupabaseDocumentRepository,
 )
@@ -60,7 +61,8 @@ class AssistantArguments(BaseModel):
     url: str | None = None
     query: str | None = None
     document_id: str | None = None
-    operation: Literal["list", "inspect", "refresh"] | None = None
+    operation: Literal["list", "inspect", "refresh", "delete"] | None = None
+    confirm: bool = False
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     limit: int = Field(default=5, ge=1, le=20)
 
@@ -79,10 +81,29 @@ class AssistantArguments(BaseModel):
                 return self
 
             if self.action == "manage_knowledge":
-                if self.operation not in {"list", "inspect"}:
-                    raise ValueError("manage_knowledge supports only operation=list or operation=inspect")
-                if self.operation == "inspect" and not self.document_id:
-                    raise ValueError("inspect requires document_id")
+                if self.operation not in {
+                    "list",
+                    "inspect",
+                    "refresh",
+                    "delete",
+                }:
+                    raise ValueError(
+                        "manage_knowledge supports only operation=list, "
+                        "operation=inspect, operation=refresh, or "
+                        "operation=delete"
+                    )
+                if (
+                    self.operation
+                    in {
+                        "inspect",
+                        "refresh",
+                        "delete",
+                    }
+                    and not self.document_id
+                ):
+                    raise ValueError(f"{self.operation} requires document_id")
+                if self.operation == "delete" and not self.confirm:
+                    raise ValueError("delete requires confirm=true")
                 return self
 
             if self.action != "ask_knowledge":
@@ -133,14 +154,20 @@ ASSISTANT_INPUT_SCHEMA = {
                 "Required for knowledge/ask_knowledge and knowledge/manage_knowledge with operation=inspect."
             ),
         },
+        "confirm": {
+            "type": "boolean",
+            "default": False,
+            "description": ("Required and must be true for knowledge/manage_knowledge with operation=delete."),
+        },
         "operation": {
             "type": "string",
-            "enum": ["list", "inspect", "refresh"],
+            "enum": ["list", "inspect", "refresh", "delete"],
             "description": (
                 "Required for knowledge/manage_knowledge. Use list to return "
                 "the signed-in user's documents, inspect to return one "
-                "document's metadata, or refresh to re-fetch and update one "
-                "document."
+                "document's metadata, refresh to re-fetch and update one "
+                "document, or delete to remove one document after explicit "
+                "confirmation."
             ),
         },
         "max_tokens": {
@@ -265,6 +292,29 @@ async def call_assistant_tool(
                         }
                         for document in documents
                     ],
+                }
+            )
+
+        if arguments.operation == "delete":
+            repository = SupabaseDocumentDeletionRepository(supabase_client)
+            deleted = await repository.delete_document(
+                owner_identity=user_id,
+                document_id=arguments.document_id or "",
+            )
+
+            if not deleted:
+                return _tool_error(
+                    "document_not_found",
+                    "The requested knowledge document was not found.",
+                )
+
+            return _tool_result(
+                {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "delete",
+                    "document_id": arguments.document_id,
+                    "deleted": True,
                 }
             )
 
