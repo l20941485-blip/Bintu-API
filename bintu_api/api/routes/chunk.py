@@ -199,7 +199,7 @@ async def scrape_chunks(
         cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
         revalidated=revalidated,
-        source_url=document.final_url if document else payload.url,
+        source_url=sanitize_url(payload.url),
         extracted_at=result.extracted_at,
         tokens_saved_estimate=max(
             0,
