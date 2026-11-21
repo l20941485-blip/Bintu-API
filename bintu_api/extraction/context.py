@@ -34,7 +34,7 @@ from bintu_api.extraction.quality import (
     assess_yield,
     detect_boilerplate_characters,
 )
-from bintu_api.extraction.rag_chunking import split_semantic_chunks
+from bintu_api.extraction.rag_chunking import make_chunk_id, split_semantic_chunks
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.summarizer import summarize_text
 from bintu_api.observability import (
@@ -611,6 +611,8 @@ async def extract_context(
         chunks = attach_chunk_provenance(
             chunks,
             **chunk_provenance,
+            max_tokens=max_tokens,
+            overlap_tokens=overlap_tokens,
         )
 
         if include_page_context:
@@ -744,8 +746,10 @@ def attach_chunk_provenance(
     page_title: str | None = None,
     page_title_source: str = "none",
     content_fingerprint: str | None = None,
+    max_tokens: int | None = None,
+    overlap_tokens: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Attach source provenance to successful chunk dictionaries."""
+    """Attach source provenance and stable retrieval identity to chunks."""
     provenance = {
         "source_url": sanitize_url(source_url),
         "final_url": final_url,
@@ -755,7 +759,29 @@ def attach_chunk_provenance(
         "page_title_source": page_title_source,
         "content_fingerprint": content_fingerprint,
     }
-    return [{**chunk, **provenance} for chunk in chunks]
+    enriched: list[dict[str, Any]] = []
+
+    for index, chunk in enumerate(chunks):
+        chunk_text = str(chunk.get("text", ""))
+        chunk_digest = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+        chunk_id = chunk.get("chunk_id") or make_chunk_id(
+            source_url=sanitize_url(source_url),
+            content_sha256=content_sha256 or "",
+            chunk_strategy="sequential",
+            chunk_index=index,
+            max_tokens=max_tokens,
+            overlap_tokens=overlap_tokens,
+        )
+        enriched.append(
+            {
+                **chunk,
+                **provenance,
+                "chunk_id": chunk_id,
+                "chunk_sha256": chunk_digest,
+            }
+        )
+
+    return enriched
 
 
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:

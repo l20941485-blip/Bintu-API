@@ -51,11 +51,24 @@ class CachedTitlePropagationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.extracted_at, TIMESTAMP)
                 self.assertTrue(result.chunks)
                 self.assertEqual(result.page_title_source, "html_title")
+                chunk_ids = [chunk["chunk_id"] for chunk in result.chunks]
+                chunk_hashes = [
+                    chunk["chunk_sha256"] for chunk in result.chunks
+                ]
+
+                self.assertEqual(len(chunk_ids), len(set(chunk_ids)))
+                self.assertEqual(len(chunk_hashes), len(set(chunk_hashes)))
+
                 for chunk in result.chunks:
                     self.assertEqual(chunk["page_title"], TITLE)
                     self.assertEqual(
                         chunk["page_title_source"],
                         "html_title",
+                    )
+                    self.assertTrue(chunk["chunk_id"].startswith("sha256:"))
+                    self.assertEqual(
+                        len(chunk["chunk_sha256"]),
+                        64,
                     )
 
     async def test_legacy_cached_title_can_remain_null(self):
