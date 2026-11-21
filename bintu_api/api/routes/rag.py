@@ -15,6 +15,7 @@ from bintu_api.api.schemas import (
     MobileRagIngestResponse,
     MobileRagIngestedChunk,
     RagAnswerCitation,
+    RagDocsAnswerRequest,
     RagAnswerRequest,
     RagAnswerResponse,
 )
@@ -272,5 +273,69 @@ async def mobile_ingest_knowledge(
                 chunk_sha256=chunk.chunk_sha256 or "",
             )
             for chunk in ingested.chunks
+        ],
+    )
+
+
+@router.post(
+    "/api/v1/rag/docs/answers",
+    response_model=RagAnswerResponse,
+    summary="Answer a question from Bintu documentation",
+    description=(
+        "Retrieves authorized Bintu documentation chunks and returns a "
+        "grounded, extractive answer with chunk-level citations."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (400, 401, 403, 422, 429, 503)
+    },
+    dependencies=[Security(api_key_scheme, scopes=[])],
+)
+async def answer_documentation_question(
+    request: Request,
+    payload: RagDocsAnswerRequest,
+) -> RagAnswerResponse:
+    settings = request.app.state.settings
+    routes_common.verify_api_access(request, settings)
+
+    supabase_client = getattr(request.app.state, "supabase_client", None)
+    if supabase_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "knowledge_core_unavailable",
+                "message": "The knowledge core is not configured.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
+
+    repository = SupabaseRetrievalRepository(supabase_client)
+    retrieval = RagRetrievalService(repository)
+    answer_service = RagAnswerService(retrieval)
+
+    answer = await answer_service.answer(
+        query=payload.query,
+        limit=payload.limit,
+        access_labels=("docs",),
+    )
+
+    return RagAnswerResponse(
+        answer=answer.answer,
+        insufficient_evidence=answer.insufficient_evidence,
+        citations=[
+            RagAnswerCitation(
+                chunk_id=citation.chunk_id,
+                revision_id=citation.revision_id,
+                document_id=citation.document_id,
+                source_url=citation.source_url,
+                final_url=citation.final_url,
+                heading_path=list(citation.heading_path),
+            )
+            for citation in answer.citations
         ],
     )

@@ -174,3 +174,18 @@ class MobileRagIngestResponse(BaseModel):
     revision_id: str
     chunk_count: int
     chunks: list[MobileRagIngestedChunk]
+
+
+class RagDocsAnswerRequest(BaseModel):
+    """Request for answers restricted to Bintu documentation."""
+
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=20)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        query = value.strip()
+        if not query:
+            raise ValueError("query must not be blank")
+        return query
