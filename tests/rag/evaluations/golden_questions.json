@@ -1,0 +1,26 @@
+[
+  {
+    "question": "How do I use authentication?",
+    "expected_chunk_ids": [
+      "chunk-auth"
+    ],
+    "expected_answer_contains": [
+      "API key"
+    ],
+    "access_labels": [
+      "public"
+    ]
+  },
+  {
+    "question": "What is the guide introduction?",
+    "expected_chunk_ids": [
+      "chunk-guide"
+    ],
+    "expected_answer_contains": [
+      "Introduction"
+    ],
+    "access_labels": [
+      "public"
+    ]
+  }
+]
