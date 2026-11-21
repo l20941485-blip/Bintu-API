@@ -197,6 +197,79 @@ class MCPOutputContractTests(unittest.TestCase):
                     532,
                 )
 
+        for surface in ("legacy", "streamable"):
+            with self.subTest(surface=surface, mode="chunk"):
+                fresh_result, _ = self.call(
+                    surface,
+                    {
+                        "url": URL,
+                        "mode": "chunk",
+                        "max_tokens": 100,
+                    },
+                    cache_layer="none",
+                )
+                fresh = self.assert_valid_result(fresh_result)
+
+                cached_result, _ = self.call(
+                    surface,
+                    {
+                        "url": URL,
+                        "mode": "chunk",
+                        "max_tokens": 100,
+                    },
+                    cache_layer="persistent",
+                )
+                cached = self.assert_valid_result(cached_result)
+
+                self.assertTrue(cached["cache_hit"])
+                self.assertEqual(cached["cache_layer"], "persistent")
+                self.assertEqual(
+                    cached["extracted_at"],
+                    "2026-10-26T17:00:00+00:00",
+                )
+                self.assertEqual(
+                    len(cached["chunks"]),
+                    len(fresh["chunks"]),
+                )
+
+                for fresh_chunk, cached_chunk in zip(
+                    fresh["chunks"],
+                    cached["chunks"],
+                    strict=True,
+                ):
+                    self.assertEqual(
+                        cached_chunk["chunk_id"],
+                        fresh_chunk["chunk_id"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["chunk_sha256"],
+                        fresh_chunk["chunk_sha256"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["content_sha256"],
+                        fresh_chunk["content_sha256"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["extracted_at"],
+                        cached["extracted_at"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["heading_path"],
+                        fresh_chunk["heading_path"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["char_start"],
+                        fresh_chunk["char_start"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["char_end"],
+                        fresh_chunk["char_end"],
+                    )
+                    self.assertEqual(
+                        cached_chunk["reassembled"],
+                        fresh_chunk["reassembled"],
+                    )
+
     def test_both_surfaces_forward_cache_false_as_skip_cache(self):
         for surface in ("legacy", "streamable"):
             with self.subTest(surface=surface):
