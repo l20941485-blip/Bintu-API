@@ -198,9 +198,14 @@ class RagEvaluationTests(unittest.IsolatedAsyncioTestCase):
 
             recalls.append(recall_at_k(expected_ids, retrieved_ids))
             precisions.append(precision_at_k(expected_ids, retrieved_ids))
-            reciprocal_ranks.append(
-                reciprocal_rank(expected_ids, retrieved_ids)
-            )
+
+            # MRR is defined over queries with at least one relevant result.
+            # No-answer and access-denial cases are evaluated through the
+            # insufficient-evidence assertion below.
+            if expected_ids:
+                reciprocal_ranks.append(
+                    reciprocal_rank(expected_ids, retrieved_ids)
+                )
 
             self.assertEqual(
                 set(expected_ids),
@@ -225,12 +230,9 @@ class RagEvaluationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertGreaterEqual(sum(recalls) / len(recalls), 0.9)
         self.assertGreaterEqual(sum(precisions) / len(precisions), 0.8)
-        # The keyword baseline retrieves required evidence but does not yet
-        # consistently rank the first relevant chunk first. Raise this gate
-        # after improving SQL relevance scoring.
         self.assertGreaterEqual(
             sum(reciprocal_ranks) / len(reciprocal_ranks),
-            0.6,
+            0.9,
         )
 
     async def test_no_evidence_returns_insufficient_evidence(self) -> None:
