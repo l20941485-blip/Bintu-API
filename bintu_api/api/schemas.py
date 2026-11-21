@@ -198,3 +198,24 @@ class RagDocsIngestRequest(BaseModel):
     url: str
     max_tokens: int = Field(default=1000, ge=100, le=50000)
     overlap_tokens: int = Field(default=0, ge=0, le=1000)
+
+
+class MobileRagDocument(BaseModel):
+    """A document owned by the authenticated mobile user."""
+
+    document_id: str
+    canonical_url: str
+    title: str | None = None
+    source_type: str
+    created_at: str
+    updated_at: str
+    revision_count: int
+
+
+class MobileRagDocumentsResponse(BaseModel):
+    """A paginated list of documents owned by the authenticated user."""
+
+    documents: list[MobileRagDocument]
+    total: int
+    limit: int
+    offset: int

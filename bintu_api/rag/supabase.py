@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import Any
 
 from bintu_api.extraction.rag_chunking import make_chunk_id
@@ -136,3 +137,58 @@ class SupabaseChunkRepository:
             extracted_at=chunk.extracted_at,
             access_labels=chunk.access_labels,
         )
+
+
+@dataclass(frozen=True)
+class DocumentSummary:
+    """A user-owned document summary for knowledge management."""
+
+    document_id: str
+    canonical_url: str
+    title: str | None
+    source_type: str
+    created_at: str
+    updated_at: str
+    revision_count: int
+
+
+class SupabaseDocumentRepository:
+    """Lists user-owned RAG documents through a Supabase RPC."""
+
+    def __init__(self, supabase_client: Any) -> None:
+        self._supabase_client = supabase_client
+
+    async def list_documents(
+        self,
+        *,
+        owner_identity: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[DocumentSummary], int]:
+        response = await self._supabase_client.rpc(
+            "list_rag_documents",
+            {
+                "p_owner_identity": owner_identity,
+                "p_limit": limit,
+                "p_offset": offset,
+            },
+        ).execute()
+
+        rows = response.data or []
+
+        documents = [
+            DocumentSummary(
+                document_id=row["document_id"],
+                canonical_url=row["canonical_url"],
+                title=row.get("title"),
+                source_type=row["source_type"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+                revision_count=int(row["revision_count"]),
+            )
+            for row in rows
+        ]
+
+        total = int(rows[0]["total"]) if rows else 0
+
+        return documents, total

@@ -13,6 +13,8 @@ from bintu_api.api.schemas import (
     MobileRagAnswerRequest,
     MobileRagIngestRequest,
     MobileRagIngestResponse,
+    MobileRagDocument,
+    MobileRagDocumentsResponse,
     MobileRagIngestedChunk,
     RagAnswerCitation,
     RagDocsAnswerRequest,
@@ -24,7 +26,7 @@ from bintu_api.extraction.output import sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
-from bintu_api.rag.supabase import SupabaseChunkRepository
+from bintu_api.rag.supabase import SupabaseChunkRepository, SupabaseDocumentRepository
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import api_key_scheme, bearer_scheme, verify_supabase_user
@@ -449,4 +451,90 @@ async def ingest_documentation(
             )
             for chunk in ingested.chunks
         ],
+    )
+
+
+@router.get(
+    "/api/v1/mobile/rag/documents",
+    response_model=MobileRagDocumentsResponse,
+    summary="List the signed-in user's knowledge documents",
+    description=(
+        "Returns a paginated list of knowledge documents owned by the "
+        "authenticated Supabase user."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (401, 403, 429, 503)
+    },
+    dependencies=[Security(bearer_scheme, scopes=[])],
+)
+async def list_mobile_rag_documents(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+) -> MobileRagDocumentsResponse:
+    settings = request.app.state.settings
+    user_id = await asyncio.to_thread(
+        verify_supabase_user,
+        request,
+        settings,
+    )
+
+    supabase_client = getattr(request.app.state, "supabase_client", None)
+    if supabase_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "knowledge_core_unavailable",
+                "message": "The knowledge core is not configured.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
+
+    if limit < 1 or limit > 100:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_limit",
+                "message": "limit must be between 1 and 100.",
+            },
+        )
+
+    if offset < 0:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_offset",
+                "message": "offset must not be negative.",
+            },
+        )
+
+    repository = SupabaseDocumentRepository(supabase_client)
+    documents, total = await repository.list_documents(
+        owner_identity=user_id,
+        limit=limit,
+        offset=offset,
+    )
+
+    return MobileRagDocumentsResponse(
+        documents=[
+            MobileRagDocument(
+                document_id=document.document_id,
+                canonical_url=document.canonical_url,
+                title=document.title,
+                source_type=document.source_type,
+                created_at=document.created_at,
+                updated_at=document.updated_at,
+                revision_count=document.revision_count,
+            )
+            for document in documents
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
