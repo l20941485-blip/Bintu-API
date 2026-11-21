@@ -11,6 +11,7 @@ Important boundaries, invariants, or compatibility notes:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
 from typing import Literal
 
@@ -26,7 +27,7 @@ from bintu_api.api.schemas import (
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import split_into_chunks
-from bintu_api.extraction.output import TOKEN_METHOD
+from bintu_api.extraction.output import TOKEN_METHOD, sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
@@ -111,9 +112,9 @@ async def scrape_chunks(
             result.markdown,
             max_tokens=max_tokens,
             overlap_tokens=overlap_tokens,
-            source_url=document.final_url if document else payload.url,
+            source_url=sanitize_url(payload.url),
             final_url=document.final_url if document else payload.url,
-            content_sha256=getattr(result, "content_sha256", None),
+            content_sha256=result.content_hash,
             extracted_at=result.extracted_at,
         )
         chunks = [
@@ -134,6 +135,11 @@ async def scrape_chunks(
                 final_url=chunk.final_url,
                 content_sha256=chunk.content_sha256,
                 extracted_at=chunk.extracted_at,
+                page_title=result.page_title,
+                content_fingerprint=result.content_fingerprint,
+                chunk_sha256=hashlib.sha256(
+                    chunk.text.encode("utf-8")
+                ).hexdigest(),
                 page_context=(
                     (
                         " | ".join(
@@ -199,7 +205,7 @@ async def scrape_chunks(
         cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
         revalidated=revalidated,
-        source_url=document.final_url if document else payload.url,
+        source_url=sanitize_url(payload.url),
         extracted_at=result.extracted_at,
         tokens_saved_estimate=max(
             0,

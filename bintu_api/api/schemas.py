@@ -65,6 +65,7 @@ class RestChunk(BaseModel):
     extracted_at: str | None = None
     page_title: str | None = None
     content_fingerprint: str | None = None
+    chunk_sha256: str | None = None
     page_context: str | None = None
 
 
