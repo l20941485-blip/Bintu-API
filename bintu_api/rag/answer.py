@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
+from bintu_api.rag.observability import (
+    RagAnswerObservability,
+    RagAnswerObserver,
+)
 from bintu_api.rag.retrieval import RagRetrievalService, RetrievedChunk
 
 
@@ -55,8 +60,14 @@ class RagAnswer:
 class RagAnswerService:
     """Produces extractive answers strictly from retrieved evidence."""
 
-    def __init__(self, retrieval_service: RagRetrievalService) -> None:
+    def __init__(
+        self,
+        retrieval_service: RagRetrievalService,
+        *,
+        observer: RagAnswerObserver | None = None,
+    ) -> None:
         self._retrieval_service = retrieval_service
+        self._observer = observer
 
     async def answer(
         self,
@@ -66,6 +77,7 @@ class RagAnswerService:
         access_labels: tuple[str, ...] = (),
         owner_identity: str | None = None,
     ) -> RagAnswer:
+        started_at = time.perf_counter()
         query_terms = self._query_terms(query)
 
         chunks = await self._retrieval_service.search(
@@ -76,24 +88,40 @@ class RagAnswerService:
         )
 
         if not chunks:
-            return RagAnswer(
+            answer = RagAnswer(
                 answer="",
                 citations=(),
                 retrieved_chunks=(),
                 insufficient_evidence=True,
             )
+            self._record(
+                query=query,
+                answer=answer,
+                access_labels=access_labels,
+                owner_identity=owner_identity,
+                started_at=started_at,
+            )
+            return answer
 
         evidence = self._select_evidence(chunks, query_terms)
 
         if not evidence:
-            return RagAnswer(
+            answer = RagAnswer(
                 answer="",
                 citations=(),
                 retrieved_chunks=tuple(chunks),
                 insufficient_evidence=True,
             )
+            self._record(
+                query=query,
+                answer=answer,
+                access_labels=access_labels,
+                owner_identity=owner_identity,
+                started_at=started_at,
+            )
+            return answer
 
-        return RagAnswer(
+        answer = RagAnswer(
             answer=" ".join(statement for _, statement, _ in evidence),
             citations=tuple(
                 self._to_citation(chunk)
@@ -102,6 +130,14 @@ class RagAnswerService:
             retrieved_chunks=tuple(chunks),
             insufficient_evidence=False,
         )
+        self._record(
+            query=query,
+            answer=answer,
+            access_labels=access_labels,
+            owner_identity=owner_identity,
+            started_at=started_at,
+        )
+        return answer
 
     def _select_evidence(
         self,
@@ -220,4 +256,43 @@ class RagAnswerService:
             source_url=chunk.source_url,
             final_url=chunk.final_url,
             heading_path=chunk.heading_path,
+        )
+
+    def _record(
+        self,
+        *,
+        query: str,
+        answer: RagAnswer,
+        access_labels: tuple[str, ...],
+        owner_identity: str | None,
+        started_at: float,
+    ) -> None:
+        if self._observer is None:
+            return
+
+        latency_ms = (time.perf_counter() - started_at) * 1000
+
+        self._observer.record_answer(
+            RagAnswerObservability(
+                query_length=len(query.strip()),
+                retrieved_chunk_count=len(answer.retrieved_chunks),
+                selected_evidence_count=len(
+                    answer.answer.split(". ")
+                )
+                if answer.answer
+                else 0,
+                citation_count=len(answer.citations),
+                insufficient_evidence=answer.insufficient_evidence,
+                latency_ms=latency_ms,
+                retrieved_chunk_ids=tuple(
+                    chunk.chunk_id
+                    for chunk in answer.retrieved_chunks
+                ),
+                citation_chunk_ids=tuple(
+                    citation.chunk_id
+                    for citation in answer.citations
+                ),
+                access_label_count=len(access_labels),
+                has_owner_identity=owner_identity is not None,
+            )
         )
