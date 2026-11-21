@@ -1,5 +1,6 @@
 """Contract tests for first-class chunk provenance."""
 
+import hashlib
 from dataclasses import asdict
 
 from bintu_api.extraction.context import (
@@ -21,6 +22,11 @@ def _assert_chunk_provenance(chunk):
     assert chunk["final_url"] == PROVENANCE["final_url"]
     assert chunk["content_sha256"] == PROVENANCE["content_sha256"]
     assert chunk["extracted_at"] == PROVENANCE["extracted_at"]
+    assert chunk["chunk_id"].startswith("sha256:")
+    assert len(chunk["chunk_id"]) == 71
+    assert len(chunk["chunk_sha256"]) == 64
+    expected_digest = hashlib.sha256(chunk["text"].encode("utf-8")).hexdigest()
+    assert chunk["chunk_sha256"] == expected_digest
 
 
 def test_sequential_chunks_carry_core_provenance():
@@ -44,6 +50,8 @@ def test_sequential_chunks_carry_core_provenance():
     for chunk in enriched:
         _assert_chunk_provenance(chunk)
 
+    assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
+
 
 def test_semantic_chunks_carry_core_provenance():
     semantic_chunks = split_semantic_chunks(
@@ -62,6 +70,9 @@ def test_semantic_chunks_carry_core_provenance():
     for chunk in enriched:
         _assert_chunk_provenance(chunk)
 
+    assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
+
+    assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
 
 def test_chunk_provenance_includes_content_fingerprint():
     from bintu_api.extraction.fingerprint import compute_content_fingerprint

@@ -1,5 +1,7 @@
 """Contract tests for page title and content fingerprint provenance."""
 
+import hashlib
+
 from bintu_api.extraction.context import attach_chunk_provenance
 
 PROVENANCE = {
@@ -21,6 +23,12 @@ def test_chunks_include_title_and_fingerprint():
     enriched = attach_chunk_provenance(chunks, **PROVENANCE)
 
     assert len(enriched) == 2
+    assert len({chunk["chunk_id"] for chunk in enriched}) == 2
+
     for chunk in enriched:
         assert chunk["page_title"] == "Example Page"
         assert chunk["content_fingerprint"].startswith("sha256:")
+        assert chunk["chunk_id"].startswith("sha256:")
+        assert len(chunk["chunk_id"]) == 71
+        expected_digest = hashlib.sha256(chunk["text"].encode("utf-8")).hexdigest()
+        assert chunk["chunk_sha256"] == expected_digest
