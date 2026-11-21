@@ -140,3 +140,17 @@ class RagAnswerResponse(BaseModel):
     answer: str
     insufficient_evidence: bool
     citations: list[RagAnswerCitation]
+
+
+class MobileRagAnswerRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=20)
+    access_labels: list[str] = Field(default_factory=list)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        query = value.strip()
+        if not query:
+            raise ValueError("query must not be blank")
+        return query

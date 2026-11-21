@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, Security
 from bintu_api.api import scrape_adapter as routes_common
 from bintu_api.api.schemas import (
     ErrorResponse,
+    MobileRagAnswerRequest,
     RagAnswerCitation,
     RagAnswerRequest,
     RagAnswerResponse,
@@ -16,7 +17,7 @@ from bintu_api.api.schemas import (
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
-from bintu_api.security.auth import api_key_scheme
+from bintu_api.security.auth import api_key_scheme, bearer_scheme, verify_supabase_user
 
 router = APIRouter(tags=["RAG"])
 
@@ -66,6 +67,76 @@ async def answer_question(
         query=payload.query,
         limit=payload.limit,
         access_labels=tuple(payload.access_labels),
+    )
+
+    return RagAnswerResponse(
+        answer=answer.answer,
+        insufficient_evidence=answer.insufficient_evidence,
+        citations=[
+            RagAnswerCitation(
+                chunk_id=citation.chunk_id,
+                revision_id=citation.revision_id,
+                document_id=citation.document_id,
+                source_url=citation.source_url,
+                final_url=citation.final_url,
+                heading_path=list(citation.heading_path),
+            )
+            for citation in answer.citations
+        ],
+    )
+
+
+@router.post(
+    "/api/v1/mobile/rag/answers",
+    response_model=RagAnswerResponse,
+    summary="Answer a question from a signed-in user's knowledge",
+    description=(
+        "Requires an Authorization Bearer token from the configured Supabase "
+        "project. Returns public knowledge and knowledge owned by the "
+        "authenticated user, with chunk-level citations."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (400, 401, 403, 422, 429, 503)
+    },
+    dependencies=[Security(bearer_scheme, scopes=[])],
+)
+async def mobile_answer_question(
+    request: Request,
+    payload: MobileRagAnswerRequest,
+) -> RagAnswerResponse:
+    settings = request.app.state.settings
+    user_id = await asyncio.to_thread(
+        verify_supabase_user,
+        request,
+        settings,
+    )
+
+    supabase_client = getattr(request.app.state, "supabase_client", None)
+    if supabase_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "knowledge_core_unavailable",
+                "message": "The knowledge core is not configured.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
+
+    repository = SupabaseRetrievalRepository(supabase_client)
+    retrieval = RagRetrievalService(repository)
+    answer_service = RagAnswerService(retrieval)
+
+    answer = await answer_service.answer(
+        query=payload.query,
+        limit=payload.limit,
+        access_labels=tuple(payload.access_labels),
+        owner_identity=user_id,
     )
 
     return RagAnswerResponse(
