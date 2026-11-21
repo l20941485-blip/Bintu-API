@@ -145,3 +145,160 @@ alter table public.scrape_cache
 -- Preserve the source content hash across persistent-cache hits.
 alter table public.scrape_cache
     add column if not exists content_hash text;
+
+-- RAG knowledge core: canonical documents, immutable revisions, and retrieval-ready chunks.
+create table if not exists public.rag_documents (
+    document_id uuid primary key default gen_random_uuid(),
+    canonical_url text not null,
+    source_type text not null default 'web',
+    title text,
+    owner_identity text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (canonical_url, source_type)
+);
+
+create table if not exists public.rag_document_revisions (
+    revision_id uuid primary key default gen_random_uuid(),
+    document_id uuid not null references public.rag_documents(document_id) on delete cascade,
+    source_url text not null,
+    final_url text,
+    content_sha256 text not null,
+    content_fingerprint text,
+    extracted_at timestamptz not null,
+    language text,
+    status text not null default 'active',
+    created_at timestamptz not null default now(),
+    unique (document_id, content_sha256)
+);
+
+create table if not exists public.rag_chunks (
+    chunk_id text primary key,
+    revision_id uuid not null references public.rag_document_revisions(revision_id) on delete cascade,
+    document_id uuid not null references public.rag_documents(document_id) on delete cascade,
+    owner_identity text,
+    chunk_index integer not null,
+    chunk_strategy text not null,
+    text text not null,
+    chunk_sha256 text not null,
+    heading_path text[] not null default '{}',
+    section_path text,
+    char_start integer,
+    char_end integer,
+    source_url text not null,
+    final_url text,
+    content_sha256 text not null,
+    content_fingerprint text,
+    extracted_at timestamptz not null,
+    access_labels text[] not null default '{}',
+    created_at timestamptz not null default now()
+);
+
+create index if not exists rag_chunks_revision_id_idx
+    on public.rag_chunks (revision_id, chunk_index);
+
+create index if not exists rag_chunks_document_id_idx
+    on public.rag_chunks (document_id);
+
+create index if not exists rag_chunks_access_labels_idx
+    on public.rag_chunks using gin (access_labels);
+
+alter table public.rag_documents enable row level security;
+alter table public.rag_document_revisions enable row level security;
+alter table public.rag_chunks enable row level security;
+
+revoke all on public.rag_documents, public.rag_document_revisions, public.rag_chunks
+    from anon, authenticated;
+
+grant all on public.rag_documents, public.rag_document_revisions, public.rag_chunks
+    to service_role;
+
+-- Keyword retrieval baseline for the RAG knowledge core.
+create or replace function public.search_rag_chunks(
+    p_query text,
+    p_limit integer,
+    p_access_labels text[],
+    p_owner_identity text
+)
+returns table (
+    chunk_id text,
+    revision_id uuid,
+    document_id uuid,
+    text text,
+    score double precision,
+    source_url text,
+    final_url text,
+    heading_path text[],
+    access_labels text[]
+)
+language sql
+security invoker
+set search_path = ''
+as $$
+    with query_terms as (
+        select term
+        from unnest(
+            regexp_split_to_array(
+                lower(trim(p_query)),
+                '\W+'
+            )
+        ) as term
+        where term <> ''
+    ),
+    scored_chunks as (
+        select
+            chunk.chunk_id,
+            chunk.revision_id,
+            chunk.document_id,
+            chunk.text,
+            chunk.source_url,
+            chunk.final_url,
+            chunk.heading_path,
+            chunk.access_labels,
+            (
+                select count(*)
+                from query_terms
+                where lower(chunk.text) ~* ('\m' || query_terms.term || '\M')
+                   or exists (
+                        select 1
+                        from unnest(chunk.heading_path) as heading
+                        where lower(heading) ~* ('\m' || query_terms.term || '\M')
+                   )
+            )::double precision / greatest(
+                (select count(*) from query_terms),
+                1
+            ) as score
+        from public.rag_chunks chunk
+        join public.rag_documents document
+          on document.document_id = chunk.document_id
+        where
+            (
+                p_access_labels is null
+                or cardinality(p_access_labels) = 0
+                or chunk.access_labels && p_access_labels
+            )
+            and (
+                document.owner_identity is null
+                or document.owner_identity = p_owner_identity
+            )
+    )
+    select
+        chunk_id,
+        revision_id,
+        document_id,
+        text,
+        score,
+        source_url,
+        final_url,
+        heading_path,
+        access_labels
+    from scored_chunks
+    where score > 0
+    order by score desc, chunk_id asc
+    limit greatest(coalesce(p_limit, 8), 1);
+$$;
+
+grant execute on function public.search_rag_chunks(text, integer, text[], text)
+    to service_role;
+
+

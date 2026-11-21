@@ -7,7 +7,7 @@ Important boundaries, invariants, and compatibility notes are documented here so
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from bintu_api.extraction.models import CacheInfo as CacheInfo
 from bintu_api.extraction.models import Provenance as Provenance
@@ -111,3 +111,165 @@ class VersionResponse(BaseModel):
     rate_limit_requests: int
     rate_limit_window_seconds: int
     cache_ttl_seconds: int
+
+
+class RagAnswerCitation(BaseModel):
+    chunk_id: str
+    revision_id: str
+    document_id: str
+    source_url: str
+    final_url: str | None = None
+    heading_path: list[str] = Field(default_factory=list)
+
+
+class RagAnswerRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=20)
+    access_labels: list[str] = Field(default_factory=list)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        query = value.strip()
+        if not query:
+            raise ValueError("query must not be blank")
+        return query
+
+
+class RagAnswerResponse(BaseModel):
+    answer: str
+    insufficient_evidence: bool
+    citations: list[RagAnswerCitation]
+
+
+class MobileRagAnswerRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=20)
+    access_labels: list[str] = Field(default_factory=list)
+    document_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        query = value.strip()
+        if not query:
+            raise ValueError("query must not be blank")
+        return query
+
+
+class MobileRagIngestRequest(BaseModel):
+    url: str
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
+    access_labels: list[str] = Field(default_factory=list)
+
+
+class MobileRagIngestedChunk(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    chunk_sha256: str
+
+
+class MobileRagIngestResponse(BaseModel):
+    document_id: str
+    revision_id: str
+    chunk_count: int
+    chunks: list[MobileRagIngestedChunk]
+
+
+class RagDocsAnswerRequest(BaseModel):
+    """Request for answers restricted to Bintu documentation."""
+
+    query: str = Field(min_length=1, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=20)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        query = value.strip()
+        if not query:
+            raise ValueError("query must not be blank")
+        return query
+
+
+class RagDocsIngestRequest(BaseModel):
+    """Request to ingest a public documentation page into the docs collection."""
+
+    url: str
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
+
+
+class MobileRagDocument(BaseModel):
+    """A document owned by the authenticated mobile user."""
+
+    document_id: str
+    canonical_url: str
+    title: str | None = None
+    source_type: str
+    created_at: str
+    updated_at: str
+    revision_count: int
+
+
+class MobileRagDocumentsResponse(BaseModel):
+    """A paginated list of documents owned by the authenticated user."""
+
+    documents: list[MobileRagDocument]
+    total: int
+    limit: int
+    offset: int
+
+
+class MobileRagDocumentDeleteResponse(BaseModel):
+    """Result of deleting a user-owned knowledge document."""
+
+    document_id: str
+    deleted: bool
+
+
+class MobileRagDocumentMetadata(BaseModel):
+    """Metadata for a user-owned knowledge document."""
+
+    document_id: str
+    canonical_url: str
+    title: str | None = None
+    source_type: str
+    created_at: str
+    updated_at: str
+
+
+class MobileRagRevisionMetadata(BaseModel):
+    """Metadata for the latest revision of a knowledge document."""
+
+    revision_id: str
+    source_url: str
+    final_url: str | None = None
+    extracted_at: str
+    status: str
+
+
+class MobileRagChunkPreview(BaseModel):
+    """A bounded preview of a retrievable knowledge chunk."""
+
+    chunk_id: str
+    chunk_index: int
+    heading_path: list[str] = Field(default_factory=list)
+    preview: str
+
+
+class MobileRagDocumentDetailResponse(BaseModel):
+    """Detailed metadata and chunk previews for a user-owned document."""
+
+    document: MobileRagDocumentMetadata
+    revision: MobileRagRevisionMetadata
+    chunk_count: int
+    chunks: list[MobileRagChunkPreview]
+
+
+class MobileRagDocumentRefreshRequest(BaseModel):
+    """Request to refresh a user-owned knowledge document."""
+
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
+    access_labels: list[str] = Field(default_factory=list)
