@@ -145,3 +145,70 @@ alter table public.scrape_cache
 -- Preserve the source content hash across persistent-cache hits.
 alter table public.scrape_cache
     add column if not exists content_hash text;
+
+-- RAG knowledge core: canonical documents, immutable revisions, and retrieval-ready chunks.
+create table if not exists public.rag_documents (
+    document_id uuid primary key default gen_random_uuid(),
+    canonical_url text not null,
+    source_type text not null default 'web',
+    title text,
+    owner_identity text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (canonical_url, source_type)
+);
+
+create table if not exists public.rag_document_revisions (
+    revision_id uuid primary key default gen_random_uuid(),
+    document_id uuid not null references public.rag_documents(document_id) on delete cascade,
+    source_url text not null,
+    final_url text,
+    content_sha256 text not null,
+    content_fingerprint text,
+    extracted_at timestamptz not null,
+    language text,
+    status text not null default 'active',
+    created_at timestamptz not null default now(),
+    unique (document_id, content_sha256)
+);
+
+create table if not exists public.rag_chunks (
+    chunk_id text primary key,
+    revision_id uuid not null references public.rag_document_revisions(revision_id) on delete cascade,
+    document_id uuid not null references public.rag_documents(document_id) on delete cascade,
+    owner_identity text,
+    chunk_index integer not null,
+    chunk_strategy text not null,
+    text text not null,
+    chunk_sha256 text not null,
+    heading_path text[] not null default '{}',
+    section_path text,
+    char_start integer,
+    char_end integer,
+    source_url text not null,
+    final_url text,
+    content_sha256 text not null,
+    content_fingerprint text,
+    extracted_at timestamptz not null,
+    access_labels text[] not null default '{}',
+    created_at timestamptz not null default now()
+);
+
+create index if not exists rag_chunks_revision_id_idx
+    on public.rag_chunks (revision_id, chunk_index);
+
+create index if not exists rag_chunks_document_id_idx
+    on public.rag_chunks (document_id);
+
+create index if not exists rag_chunks_access_labels_idx
+    on public.rag_chunks using gin (access_labels);
+
+alter table public.rag_documents enable row level security;
+alter table public.rag_document_revisions enable row level security;
+alter table public.rag_chunks enable row level security;
+
+revoke all on public.rag_documents, public.rag_document_revisions, public.rag_chunks
+    from anon, authenticated;
+
+grant all on public.rag_documents, public.rag_document_revisions, public.rag_chunks
+    to service_role;
