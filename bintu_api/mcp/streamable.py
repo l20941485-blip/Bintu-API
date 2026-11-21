@@ -506,7 +506,7 @@ async def _tools_call_result(
 
         sections = arguments.sections
 
-        document, cached, cache_layer = await routes_common_fetch_and_extract(
+        document, cached, cache_layer, _revalidated = await routes_common_fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
@@ -596,12 +596,9 @@ async def _tools_call_result(
     # persistent cache. The cached row no longer contains source HTML, so
     # recomputing these values would incorrectly report zero savings.
 
-
     cache_economics = mcp_adapter.build_cache_economics(document, cached, cache_layer)
 
     try:
-
-
         context = await mcp_adapter.run_extraction(
             request,
             arguments.url,
@@ -629,8 +626,7 @@ async def _tools_call_result(
             settings=settings,
             cache_economics=cache_economics,
             extracted_at=cached.extracted_at,
-            content_cleaning=getattr(cached, "content_cleaning", None)
-            or {"applied": False, "strategy": "standard"},
+            content_cleaning=getattr(cached, "content_cleaning", None) or {"applied": False, "strategy": "standard"},
         )
     except HTTPException as error:
         tool_error = _tool_error_for_http_exception(error)
@@ -671,7 +667,6 @@ async def _tools_call_result(
     # `token_method` names the counter; `html_tokens` is the fetched-document
     # baseline for `tokens_saved_estimate`; `limiting_factor` says which cap bound.
     # provenance is added additively (Phase D): same shape as REST response.
-
 
     envelope = mcp_adapter.build_mcp_envelope(
         context,
@@ -787,11 +782,7 @@ async def mcp_messages(request: Request):
         try:
             verify_mcp_execution_access(request, settings)
         except HTTPException as error:
-            detail = (
-                error.detail
-                if isinstance(error.detail, dict)
-                else {"message": "Authentication required."}
-            )
+            detail = error.detail if isinstance(error.detail, dict) else {"message": "Authentication required."}
             # 401 detail always carries the canonical upgrade_url so agents can
             # print a clickable subscribe link in-chat.
             upgrade_url = detail.get("upgrade_url") or mcp_upgrade_url(settings)
@@ -852,12 +843,8 @@ async def mcp_messages(request: Request):
             if isinstance(envelope, dict) and ("approx_tokens" in envelope or "tokens" in envelope):
                 response.headers["X-Token-Usage"] = str(max(0, int(approx)))
                 response.headers["X-Mode"] = str(envelope.get("mode", ""))
-                response.headers["X-Cache-Hit"] = (
-                    "true" if envelope.get("cache_hit") is True else "false"
-                )
-                response.headers["X-Cache-Hit"] = (
-                    "true" if envelope.get("cache_hit") is True else "false"
-                )
+                response.headers["X-Cache-Hit"] = "true" if envelope.get("cache_hit") is True else "false"
+                response.headers["X-Cache-Hit"] = "true" if envelope.get("cache_hit") is True else "false"
         except Exception:
             pass
         return response
@@ -905,7 +892,3 @@ async def mcp_listen_nested_alias(request: Request) -> Response:
 async def mcp_unsupported_methods() -> Response:
     # Stateless server: no sessions to end (DELETE); PUT/PATCH are undefined.
     return Response(status_code=405, headers={"Allow": "POST, GET"})
-
-
-
-

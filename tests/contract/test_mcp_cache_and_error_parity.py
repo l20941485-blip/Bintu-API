@@ -82,7 +82,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
         with patch(
             "bintu_api.api.scrape_adapter._fetch_and_extract",
-            new=AsyncMock(return_value=(None, cached_row, "none")),
+            new=AsyncMock(return_value=(None, cached_row, "none", False)),
         ) as fetch:
             envelope = self._call_tool(
                 {
@@ -111,7 +111,7 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
         with patch(
             "bintu_api.api.scrape_adapter._fetch_and_extract",
-            new=AsyncMock(return_value=(None, cached_row, "persistent")),
+            new=AsyncMock(return_value=(None, cached_row, "persistent", False)),
         ) as fetch:
             self._call_tool(
                 {
@@ -156,7 +156,3 @@ class McpCacheAndErrorParityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
-
-
-

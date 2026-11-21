@@ -54,9 +54,7 @@ def make_service(cache, **overrides):
         "robots_enforcer": AsyncMock(),
         "html_fetcher": MagicMock(return_value=fake_document()),
         "rendered_html_fetcher": AsyncMock(return_value=fake_document()),
-        "text_extractor": MagicMock(
-            return_value=SimpleNamespace(text="extracted", truncated=False)
-        ),
+        "text_extractor": MagicMock(return_value=SimpleNamespace(text="extracted", truncated=False)),
         "source_decoder": MagicMock(return_value="source"),
         "cache_event_logger": MagicMock(),
     }
@@ -107,7 +105,7 @@ async def test_persistent_cache_hit_returns_row_without_fetching():
         persistent_cache_reader=AsyncMock(return_value=cached),
     )
 
-    document, result, layer = await call_service(service, request)
+    document, result, layer, _revalidated = await call_service(service, request)
 
     assert document is None
     assert result is cached
@@ -129,7 +127,7 @@ async def test_memory_cache_hit_returns_document_without_fetching():
     request = make_request(cache)
     service = make_service(cache)
 
-    returned_document, result, layer = await call_service(service, request)
+    returned_document, result, layer, _revalidated = await call_service(service, request)
 
     assert returned_document is document
     assert result.markdown == "extracted"
@@ -149,7 +147,7 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
         html_fetcher=MagicMock(return_value=document),
     )
 
-    returned_document, result, layer = await call_service(service, request)
+    returned_document, result, layer, _revalidated = await call_service(service, request)
 
     assert returned_document is document
     assert result.markdown == "extracted"
@@ -164,6 +162,7 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
     assert isinstance(cached_entry, MemoryCacheEntry)
     assert cached_entry.document is document
     assert cached_entry.extracted_at == result.extracted_at
+
 
 @pytest.mark.asyncio
 async def test_concurrent_cache_misses_may_fetch_independently():
@@ -190,20 +189,12 @@ async def test_concurrent_cache_misses_may_fetch_independently():
         call_service(service, second_request, url="https://example.com/second"),
     )
 
-    assert len(first) == 3
-    assert len(second) == 3
+    assert len(first) == 4
+    assert len(second) == 4
     assert first[2] == "none"
     assert second[2] == "none"
     assert fetch_calls == 2
     assert len(cache.data) == 2
-
-
-
-
-
-
-
-
 
 
 @pytest.mark.asyncio
@@ -212,7 +203,7 @@ async def test_skip_cache_bypasses_reads_but_allows_persistent_write():
     request = make_request(cache, database_client=object())
     service = make_service(cache)
 
-    _, result, layer = await call_service(
+    _, result, layer, _revalidated = await call_service(
         service,
         request,
         skip_cache=True,
@@ -230,7 +221,7 @@ async def test_sections_reads_both_caches_then_extracts():
     request = make_request(cache, database_client=object())
     service = make_service(cache)
 
-    _, result, layer = await call_service(
+    _, result, layer, _revalidated = await call_service(
         service,
         request,
         sections=["introduction"],
@@ -249,7 +240,7 @@ async def test_persist_false_reads_but_does_not_write():
     request = make_request(cache, database_client=object())
     service = make_service(cache)
 
-    _, result, layer = await call_service(
+    _, result, layer, _revalidated = await call_service(
         service,
         request,
         persist=False,

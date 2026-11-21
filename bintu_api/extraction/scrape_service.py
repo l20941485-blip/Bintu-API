@@ -100,7 +100,7 @@ class ScrapeService:
         context: ScrapeRequestContext,
         url: str,
         options: ScrapeOptions,
-    ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
+    ) -> tuple[FetchedHTML | None, CachedMarkdown, str, bool]:
         """Fetch, enforce robots, consult caches, and extract markdown."""
         include_nav = options.include_nav
         include_header = options.include_header
@@ -128,6 +128,7 @@ class ScrapeService:
         result = None
         document = None
         cache_layer = "none"
+        revalidated = False
         request_id = context.request_id
 
         if should_read_persistent_cache(
@@ -166,7 +167,7 @@ class ScrapeService:
                 request_id=request_id,
                 layer=cache_layer,
             )
-            return document, result, cache_layer
+            return document, result, cache_layer, revalidated
 
         memory_entry = await read_memory_cache(
             self.cache,
@@ -218,6 +219,7 @@ class ScrapeService:
 
                 document = memory_entry.document
                 cache_layer = "memory"
+                revalidated = True
                 self.cache_event_logger(
                     event="stale_cache_fallback",
                     url=url,
@@ -326,7 +328,7 @@ class ScrapeService:
                 request_id=request_id,
             )
 
-        return document, result, cache_layer
+        return document, result, cache_layer, revalidated
 
 
 

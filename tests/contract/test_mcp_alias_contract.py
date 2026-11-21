@@ -88,7 +88,7 @@ def patch_fetch():
 
     return patch(
         "bintu_api.api.scrape_adapter._fetch_and_extract",
-        new=AsyncMock(return_value=(document, cached, "persistent")),
+        new=AsyncMock(return_value=(document, cached, "persistent", False)),
     )
 
 
@@ -151,9 +151,6 @@ def test_input_schema_advertises_chunked_alias():
         "chunked",
     ]
     assert "chunk_token_budget" in TOOL_INPUT_SCHEMA["properties"]
-
-
-
 
 
 def test_main_content_only_is_forwarded_to_fetch_boundary(client: TestClient):

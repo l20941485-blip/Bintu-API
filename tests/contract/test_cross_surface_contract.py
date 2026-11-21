@@ -52,6 +52,7 @@ MCP_ENVELOPE_FIELDS = {
     "chunk_count",
     "cache_hit",
     "cache_layer",
+    "revalidated",
     "source_url",
     "extracted_at",
     "tokens_saved_estimate",

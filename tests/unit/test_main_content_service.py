@@ -29,11 +29,7 @@ class FakeCache:
 
 def build_large_html():
     article = "<p>" + ("Meaningful article sentence. " * 500) + "</p>"
-    boilerplate = (
-        "<nav>Site navigation</nav>"
-        "<aside>Related links</aside>"
-        "<footer>Copyright and footer links</footer>"
-    )
+    boilerplate = "<nav>Site navigation</nav><aside>Related links</aside><footer>Copyright and footer links</footer>"
     return (
         b"<html><body>"
         + boilerplate.encode("utf-8")
@@ -74,9 +70,7 @@ def make_service(cache):
         robots_enforcer=AsyncMock(),
         html_fetcher=MagicMock(return_value=fake_document()),
         rendered_html_fetcher=AsyncMock(return_value=fake_document()),
-        text_extractor=MagicMock(
-            return_value=SimpleNamespace(text="extracted", truncated=False)
-        ),
+        text_extractor=MagicMock(return_value=SimpleNamespace(text="extracted", truncated=False)),
         source_decoder=MagicMock(return_value="source"),
         cache_event_logger=MagicMock(),
     )
@@ -113,12 +107,11 @@ async def test_main_content_only_skips_persistent_cache():
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
     ) as extract_main_content:
-        _, result, layer = await call_service(
+        _, result, layer, _revalidated = await call_service(
             service,
             request,
             main_content_only=True,
         )
-
 
     cleaned_key = compute_cache_key(
         render_js=False,
@@ -133,11 +126,11 @@ async def test_main_content_only_skips_persistent_cache():
     assert layer == "none"
     assert result.markdown == ("Cleaned article content. " * 1000).rstrip()
     assert result.content_cleaning == {
-            "applied": True,
-            "strategy": "main_content",
-            "boilerplate_lines_removed": 0,
-            "deduplicated_count": 0,
-        }
+        "applied": True,
+        "strategy": "main_content",
+        "boilerplate_lines_removed": 0,
+        "deduplicated_count": 0,
+    }
     assert cache.data[cleaned_key] is not None
     service.persistent_cache_reader.assert_not_awaited()
     service.persistent_cache_writer.assert_not_awaited()
@@ -163,7 +156,7 @@ async def test_main_content_only_memory_hit_skips_persistent_cache():
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
     ):
-        returned_document, result, layer = await call_service(
+        returned_document, result, layer, _revalidated = await call_service(
             service,
             request,
             main_content_only=True,
@@ -172,11 +165,11 @@ async def test_main_content_only_memory_hit_skips_persistent_cache():
     assert returned_document is document
     assert layer == "memory"
     assert result.content_cleaning == {
-            "applied": True,
-            "strategy": "main_content",
-            "boilerplate_lines_removed": 0,
-            "deduplicated_count": 0,
-        }
+        "applied": True,
+        "strategy": "main_content",
+        "boilerplate_lines_removed": 0,
+        "deduplicated_count": 0,
+    }
     service.persistent_cache_reader.assert_not_awaited()
     service.persistent_cache_writer.assert_not_awaited()
 
@@ -187,7 +180,7 @@ async def test_standard_extraction_writes_persistent_cache():
     request = make_request(cache, database_client=object())
     service = make_service(cache)
 
-    _, result, layer = await call_service(
+    _, result, layer, _revalidated = await call_service(
         service,
         request,
         main_content_only=False,
@@ -196,11 +189,11 @@ async def test_standard_extraction_writes_persistent_cache():
     assert layer == "none"
     assert result.markdown == "extracted"
     assert result.content_cleaning == {
-            "applied": False,
-            "strategy": "standard",
-            "boilerplate_lines_removed": 0,
-            "deduplicated_count": 0,
-        }
+        "applied": False,
+        "strategy": "standard",
+        "boilerplate_lines_removed": 0,
+        "deduplicated_count": 0,
+    }
     service.persistent_cache_reader.assert_awaited_once()
     service.persistent_cache_writer.assert_awaited_once()
 
@@ -215,7 +208,7 @@ async def test_main_content_only_applies_with_links_false():
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
     ) as extract_main_content:
-        _, result, _ = await call_service(
+        _, result, _, _revalidated = await call_service(
             service,
             request,
             main_content_only=True,
@@ -231,8 +224,8 @@ async def test_main_content_only_applies_with_links_false():
     )
     assert result.markdown == ("Cleaned article content. " * 1000).rstrip()
     assert result.content_cleaning == {
-            "applied": True,
-            "strategy": "main_content",
-            "boilerplate_lines_removed": 0,
-            "deduplicated_count": 0,
-        }
+        "applied": True,
+        "strategy": "main_content",
+        "boilerplate_lines_removed": 0,
+        "deduplicated_count": 0,
+    }

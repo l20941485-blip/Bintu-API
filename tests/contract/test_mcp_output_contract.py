@@ -67,7 +67,7 @@ class MCPOutputContractTests(unittest.TestCase):
         if cache_layer == "persistent":
             document = None
 
-        return document, cached, cache_layer
+        return document, cached, cache_layer, False
 
     def call(self, surface, arguments, cache_layer="none"):
         fetch = AsyncMock(
@@ -301,10 +301,6 @@ class MCPOutputContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
-
-
-
 
 
 def test_mcp_semantic_chunk_metadata_contract():

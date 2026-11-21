@@ -131,6 +131,7 @@ class ContextResult:
     chunk_count: int = 0
     cache_hit: bool = False
     cache_layer: Literal["none", "memory", "persistent"] = "none"
+    revalidated: bool = False
     chunks: list[dict[str, Any]] | None = None
     source_url: str = ""
     extracted_at: str = ""

@@ -45,8 +45,6 @@ router = APIRouter(prefix="/mcp", tags=["MCP"])
 logger = logging.getLogger("bintu_api.mcp")
 
 
-
-
 def _mcp_error_response(
     code: str,
     message: str,
@@ -130,7 +128,7 @@ async def call_tool(
     sections = arguments.sections
 
     try:
-        document, cached, cache_layer = await mcp_adapter.fetch_and_extract(
+        document, cached, cache_layer, _revalidated = await mcp_adapter.fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,
@@ -146,7 +144,7 @@ async def call_tool(
             max_footnote_url_length=arguments.max_footnote_url_length,
             sections=sections,
             main_content_only=arguments.main_content_only,
-            )
+        )
 
     except mcp_adapter.TargetURLRejected as error:
         return _mcp_error_response(
@@ -168,8 +166,6 @@ async def call_tool(
         raise
 
     cache_economics = mcp_adapter.build_cache_economics(document, cached, cache_layer)
-
-
 
     context = await mcp_adapter.run_extraction(
         request,
@@ -198,8 +194,7 @@ async def call_tool(
         settings=settings,
         cache_economics=cache_economics,
         extracted_at=cached.extracted_at,
-        content_cleaning=getattr(cached, "content_cleaning", None)
-        or {"applied": False, "strategy": "standard"},
+        content_cleaning=getattr(cached, "content_cleaning", None) or {"applied": False, "strategy": "standard"},
     )
 
     log_extraction_completed(
@@ -219,8 +214,6 @@ async def call_tool(
         limiting_factor=context.limiting_factor,
     )
 
-
-
     envelope = mcp_adapter.build_mcp_envelope(context, arguments.url)
 
     return {
@@ -233,7 +226,3 @@ async def call_tool(
         "structuredContent": envelope,
         "isError": False,
     }
-
-
-
-
