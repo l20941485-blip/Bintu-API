@@ -130,7 +130,7 @@ async def call_tool(
     sections = arguments.sections
 
     try:
-        document, cached, cache_layer = await mcp_adapter.fetch_and_extract(
+        document, cached, cache_layer, _revalidated = await mcp_adapter.fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,

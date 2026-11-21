@@ -138,7 +138,7 @@ class McpStreamableTests(unittest.TestCase):
 
         with patch(
             "bintu_api.api.scrape_adapter._fetch_and_extract",
-            new=mock.AsyncMock(return_value=(None, cached, "none")),
+            new=mock.AsyncMock(return_value=(None, cached, "none", False)),
         ):
             response = self.rpc(
                 "tools/call",

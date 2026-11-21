@@ -67,7 +67,7 @@ class MCPOutputContractTests(unittest.TestCase):
         if cache_layer == "persistent":
             document = None
 
-        return document, cached, cache_layer
+        return document, cached, cache_layer, False
 
     def call(self, surface, arguments, cache_layer="none"):
         fetch = AsyncMock(

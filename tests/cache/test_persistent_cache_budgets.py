@@ -80,9 +80,9 @@ async def _check_small_first_request_does_not_shorten_persistent_extraction():
         patch.object(routes, "_decode_source_text", return_value=HTML.decode("utf-8")),
         patch.object(routes, "extract_text_result", wraps=routes.extract_text_result) as extractor,
     ):
-        _, first, first_layer = await extract(request, budget=450)
-        _, larger, larger_layer = await extract(request, budget=2600)
-        _, chunk, chunk_layer = await extract(request, mode="chunk", budget=10000)
+        _, first, first_layer, _revalidated = await extract(request, budget=450)
+        _, larger, larger_layer, _revalidated = await extract(request, budget=2600)
+        _, chunk, chunk_layer, _revalidated = await extract(request, mode="chunk", budget=10000)
 
     assert first_layer == "none"
     assert larger_layer == chunk_layer == "persistent"
@@ -112,8 +112,8 @@ async def _check_custom_cap_bypasses_persistent_rows_and_applies_to_chunk_mode()
         patch.object(routes, "_decode_source_text", return_value=HTML.decode("utf-8")),
         patch.object(routes, "extract_text_result", wraps=routes.extract_text_result) as extractor,
     ):
-        _, first, first_layer = await extract(request, budget=450)
-        _, chunk, chunk_layer = await extract(request, mode="chunk", budget=10000)
+        _, first, first_layer, _revalidated = await extract(request, budget=450)
+        _, chunk, chunk_layer, _revalidated = await extract(request, mode="chunk", budget=10000)
 
     read.assert_not_awaited()
     write.assert_not_awaited()

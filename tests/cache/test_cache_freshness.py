@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from bintu_api.extraction.memory_cache import (
     MemoryCacheEntry,
+    evaluate_cache_freshness,
     read_memory_cache,
     write_memory_cache,
 )
@@ -34,6 +35,7 @@ def _provenance(
     *,
     cache_layer: str,
     extracted_at: str | None,
+    revalidated: bool = False,
 ) -> object:
     return build_provenance(
         url="https://example.com",
@@ -43,6 +45,7 @@ def _provenance(
         request_id="req-test",
         settings=_settings(),
         extracted_at=extracted_at,
+        revalidated=revalidated,
     )
 
 
@@ -207,3 +210,118 @@ def test_fresh_extraction_is_fresh_without_cache_age():
     assert provenance.cache.layer == "none"
     assert provenance.cache.age_seconds is None
     assert provenance.cache.fresh is True
+
+
+def _freshness_entry(
+    *,
+    extracted_at: str,
+    extractor_version: str = "1.0.0",
+    content_hash: str = "abc",
+) -> MemoryCacheEntry:
+    return MemoryCacheEntry(
+        document=MagicMock(),
+        extracted_at=extracted_at,
+        extractor_version=extractor_version,
+        content_hash=content_hash,
+    )
+
+
+def test_evaluate_freshness_fresh_within_ttl() -> None:
+    now = datetime.now(UTC)
+    entry = _freshness_entry(
+        extracted_at=(now - timedelta(minutes=10)).isoformat()
+    )
+
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry, now=now, extractor_version="1.0.0"
+    )
+
+    assert is_fresh is True
+    assert stale_reason is None
+
+
+def test_evaluate_freshness_ttl_expired() -> None:
+    now = datetime.now(UTC)
+    entry = _freshness_entry(
+        extracted_at=(now - timedelta(hours=25)).isoformat()
+    )
+
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry, now=now, extractor_version="1.0.0"
+    )
+
+    assert is_fresh is False
+    assert stale_reason == "ttl_expired"
+
+
+def test_evaluate_freshness_extractor_version_changed() -> None:
+    now = datetime.now(UTC)
+    entry = _freshness_entry(
+        extracted_at=(now - timedelta(minutes=10)).isoformat(),
+        extractor_version="0.9.0",
+    )
+
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry, now=now, extractor_version="1.0.0"
+    )
+
+    assert is_fresh is False
+    assert stale_reason == "extractor_version_changed"
+
+
+def test_evaluate_freshness_missing_timestamp() -> None:
+    now = datetime.now(UTC)
+    entry = _freshness_entry(extracted_at="")
+
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry, now=now, extractor_version="1.0.0"
+    )
+
+    assert is_fresh is False
+    assert stale_reason == "missing_timestamp"
+
+
+def test_evaluate_freshness_future_timestamp_is_fresh() -> None:
+    now = datetime.now(UTC)
+    entry = _freshness_entry(
+        extracted_at=(now + timedelta(minutes=5)).isoformat()
+    )
+
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry, now=now, extractor_version="1.0.0"
+    )
+
+    assert is_fresh is True
+    assert stale_reason is None
+
+def test_stale_fallback_reports_revalidated() -> None:
+    provenance = _provenance(
+        cache_layer="memory",
+        extracted_at=(
+            datetime.now(UTC) - timedelta(hours=48)
+        ).isoformat(),
+        revalidated=True,
+    )
+
+    assert provenance.cache.revalidated is True
+    assert provenance.cache.fresh is False
+
+
+def test_fresh_and_persistent_hits_report_not_revalidated() -> None:
+    fresh = _provenance(
+        cache_layer="memory",
+        extracted_at=datetime.now(UTC).isoformat(),
+    )
+    persistent = _provenance(
+        cache_layer="persistent",
+        extracted_at=None,
+    )
+    bypass = _provenance(
+        cache_layer="none",
+        extracted_at=None,
+    )
+
+    assert fresh.cache.revalidated is False
+    assert persistent.cache.revalidated is False
+    assert bypass.cache.revalidated is False
+

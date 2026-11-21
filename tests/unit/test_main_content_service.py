@@ -113,7 +113,7 @@ async def test_main_content_only_skips_persistent_cache():
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
     ) as extract_main_content:
-        _, result, layer = await call_service(
+        _, result, layer, _revalidated = await call_service(
             service,
             request,
             main_content_only=True,
@@ -163,7 +163,7 @@ async def test_main_content_only_memory_hit_skips_persistent_cache():
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
     ):
-        returned_document, result, layer = await call_service(
+        returned_document, result, layer, _revalidated = await call_service(
             service,
             request,
             main_content_only=True,
@@ -187,7 +187,7 @@ async def test_standard_extraction_writes_persistent_cache():
     request = make_request(cache, database_client=object())
     service = make_service(cache)
 
-    _, result, layer = await call_service(
+    _, result, layer, _revalidated = await call_service(
         service,
         request,
         main_content_only=False,
@@ -215,7 +215,7 @@ async def test_main_content_only_applies_with_links_false():
         "bintu_api.extraction.scrape_service.extract_main_content",
         return_value=("Cleaned article content. " * 1000, True),
     ) as extract_main_content:
-        _, result, _ = await call_service(
+        _, result, _, _revalidated = await call_service(
             service,
             request,
             main_content_only=True,

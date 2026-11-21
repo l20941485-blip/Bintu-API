@@ -506,7 +506,7 @@ async def _tools_call_result(
 
         sections = arguments.sections
 
-        document, cached, cache_layer = await routes_common_fetch_and_extract(
+        document, cached, cache_layer, _revalidated = await routes_common_fetch_and_extract(
             request,
             arguments.url,
             include_nav=False,

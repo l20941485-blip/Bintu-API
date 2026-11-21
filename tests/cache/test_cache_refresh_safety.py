@@ -74,7 +74,7 @@ class CacheRefreshSafetyTests(unittest.TestCase):
         request = make_request(cache)
 
         with mock.patch.object(routes, "fetch_html_document", return_value=fresh_document):
-            _, result, layer = self.refresh(request)
+            _, result, layer, _revalidated = self.refresh(request)
 
         cached_entry = cache.data[cache_key()]
 

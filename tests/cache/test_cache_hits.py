@@ -48,7 +48,7 @@ class PersistentCacheHitTests(unittest.IsolatedAsyncioTestCase):
                 side_effect=AssertionError("persistent cache hit must not render"),
             ),
         ):
-            document, result, cache_layer = await _fetch_and_extract(
+            document, result, cache_layer, _revalidated = await _fetch_and_extract(
                 request,
                 "https://example.com/article",
                 include_nav=False,

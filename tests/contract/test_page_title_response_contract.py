@@ -124,7 +124,7 @@ class PageTitleSurfaceTests(unittest.TestCase):
             page_title_source=title_source if title else "none",
         )
 
-        return AsyncMock(return_value=(document, cached, "none"))
+        return AsyncMock(return_value=(document, cached, "none", False))
 
     def call(self, surface, title, title_source="html_title"):
         fetch = self.make_fetch(title, title_source)

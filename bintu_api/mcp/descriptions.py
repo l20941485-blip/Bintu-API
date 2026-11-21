@@ -25,7 +25,8 @@ TOOL_DESCRIPTION = (
     "was hit, while token_budget means max_tokens was. Token counts are approximate "
     "estimates, not tokenizer counts; tokens_saved_estimate reports estimated "
     "savings. low_yield=true includes yield_hint. Results may come from cache "
-    "(cache_hit, cache_layer); set cache=false to bypass cache reads and "
+    "(cache_hit, cache_layer); revalidated=true means a stale memory entry "
+    "was refreshed by a fresh fetch; set cache=false to bypass cache reads and "
     "persist=false to skip the persistent write. URLs with credential-like query "
     "parameters are never stored, and robots.txt is honored. render_js requires "
     "operator enablement. Failures return isError=true with stable codes such as "
@@ -174,5 +175,13 @@ OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
         "type": "array",
         "items": {"type": "string"},
         "description": "Non-fatal section-selection warnings.",
+    },
+    "revalidated": {
+        "type": "boolean",
+        "description": (
+            "True when a stale memory-cache entry was refreshed by a fresh "
+            "fetch after the cached fetch failed. False for fresh hits, "
+            "persistent hits, and cache bypass."
+        ),
     },
 }
