@@ -51,6 +51,9 @@ class RestChunk(BaseModel):
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     chunk_id: str | None = None
     heading_path: list[str] | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    reassembled: bool | None = None
     section_index: int | None = None
     contains_code: bool | None = None
     contains_table: bool | None = None

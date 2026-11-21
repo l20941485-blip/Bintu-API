@@ -3,6 +3,9 @@
 import hashlib
 from dataclasses import asdict
 
+from bintu_api.extraction.chunk_location import (
+    annotate_sequential_chunk_locations,
+)
 from bintu_api.extraction.context import (
     attach_chunk_provenance,
     split_into_chunks,
@@ -43,12 +46,25 @@ def test_sequential_chunks_carry_core_provenance():
         }
         for index, text in enumerate(chunk_strings)
     ]
+    chunks = annotate_sequential_chunk_locations(
+        chunks,
+        source_text="First paragraph.\n\nSecond paragraph.",
+    )
 
     enriched = attach_chunk_provenance(chunks, **PROVENANCE)
 
     assert len(enriched) > 0
     for chunk in enriched:
         _assert_chunk_provenance(chunk)
+
+        assert "heading_path" in chunk
+        assert "char_start" in chunk
+        assert "char_end" in chunk
+        assert "reassembled" in chunk
+
+        assert chunk["reassembled"] is False
+        assert chunk["char_start"] is not None
+        assert chunk["char_end"] > chunk["char_start"]
 
     assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
 
