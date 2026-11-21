@@ -123,6 +123,44 @@ TOOL_OUTPUT_SCHEMA = {
                         "type": "integer",
                         "minimum": 0,
                     },
+                    "heading_path": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": (
+                            "Hierarchical Markdown heading path containing the chunk."
+                        ),
+                    },
+                    "char_start": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0,
+                        "description": (
+                            "Zero-based character offset of the chunk in the link-policy-filtered source text."
+                        ),
+                    },
+                    "char_end": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0,
+                        "description": (
+                            "Exclusive character offset of the chunk in the link-policy-filtered source text."
+                        ),
+                    },
+                    "reassembled": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ],
+                        "description": (
+                            "True when lead-in handling prevented a reliable source location; offsets are null in that case."
+                        ),
+                    },
                 },
                 "required": [
                     "index",

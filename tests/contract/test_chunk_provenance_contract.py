@@ -3,6 +3,9 @@
 import hashlib
 from dataclasses import asdict
 
+from bintu_api.extraction.chunk_location import (
+    annotate_chunk_locations,
+)
 from bintu_api.extraction.context import (
     attach_chunk_provenance,
     split_into_chunks,
@@ -43,12 +46,25 @@ def test_sequential_chunks_carry_core_provenance():
         }
         for index, text in enumerate(chunk_strings)
     ]
+    chunks = annotate_chunk_locations(
+        chunks,
+        source_text="First paragraph.\n\nSecond paragraph.",
+    )
 
     enriched = attach_chunk_provenance(chunks, **PROVENANCE)
 
     assert len(enriched) > 0
     for chunk in enriched:
         _assert_chunk_provenance(chunk)
+
+        assert "heading_path" in chunk
+        assert "char_start" in chunk
+        assert "char_end" in chunk
+        assert "reassembled" in chunk
+
+        assert chunk["reassembled"] is False
+        assert chunk["char_start"] is not None
+        assert chunk["char_end"] > chunk["char_start"]
 
     assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
 
@@ -63,6 +79,13 @@ def test_semantic_chunks_carry_core_provenance():
         extracted_at=PROVENANCE["extracted_at"],
     )
     chunks = [asdict(chunk) for chunk in semantic_chunks]
+    chunks = annotate_chunk_locations(
+        chunks,
+        source_text=(
+            "# Heading\n\nFirst paragraph.\n\n"
+            "## Subheading\n\nSecond paragraph."
+        ),
+    )
 
     enriched = attach_chunk_provenance(chunks, **PROVENANCE)
 
@@ -73,6 +96,26 @@ def test_semantic_chunks_carry_core_provenance():
     assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
 
     assert len({chunk["chunk_id"] for chunk in enriched}) == len(enriched)
+
+def test_chunk_location_marks_unlocatable_chunk_reassembled():
+    chunks = [
+        {
+            "index": 0,
+            "text": "Moved heading\n\nBody",
+            "approx_tokens": 4,
+            "tokens": 4,
+        }
+    ]
+
+    annotated = annotate_chunk_locations(
+        chunks,
+        source_text="Different source text.",
+    )
+
+    assert annotated[0]["reassembled"] is True
+    assert annotated[0]["char_start"] is None
+    assert annotated[0]["char_end"] is None
+
 
 def test_chunk_provenance_includes_content_fingerprint():
     from bintu_api.extraction.fingerprint import compute_content_fingerprint
