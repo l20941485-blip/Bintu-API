@@ -154,3 +154,23 @@ class MobileRagAnswerRequest(BaseModel):
         if not query:
             raise ValueError("query must not be blank")
         return query
+
+
+class MobileRagIngestRequest(BaseModel):
+    url: str
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
+    access_labels: list[str] = Field(default_factory=list)
+
+
+class MobileRagIngestedChunk(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    chunk_sha256: str
+
+
+class MobileRagIngestResponse(BaseModel):
+    document_id: str
+    revision_id: str
+    chunk_count: int
+    chunks: list[MobileRagIngestedChunk]
