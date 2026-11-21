@@ -17,6 +17,10 @@ from bintu_api.mcp.schemas import TOOL_NAME
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion_workflow import ingest_public_knowledge
 from bintu_api.rag.retrieval import RagRetrievalService
+from bintu_api.rag.supabase import (
+    SupabaseDocumentDetailRepository,
+    SupabaseDocumentRepository,
+)
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import verify_supabase_user
 from bintu_api.settings import Settings
@@ -50,10 +54,12 @@ class AssistantArguments(BaseModel):
         "scrape",
         "add_knowledge",
         "ask_knowledge",
+        "manage_knowledge",
     ]
     url: str | None = None
     query: str | None = None
     document_id: str | None = None
+    operation: Literal["list", "inspect"] | None = None
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     limit: int = Field(default=5, ge=1, le=20)
 
@@ -69,6 +75,13 @@ class AssistantArguments(BaseModel):
             if self.action == "add_knowledge":
                 if not self.url:
                     raise ValueError("add_knowledge requires url")
+                return self
+
+            if self.action == "manage_knowledge":
+                if self.operation not in {"list", "inspect"}:
+                    raise ValueError("manage_knowledge supports only operation=list or operation=inspect")
+                if self.operation == "inspect" and not self.document_id:
+                    raise ValueError("inspect requires document_id")
                 return self
 
             if self.action != "ask_knowledge":
@@ -91,7 +104,12 @@ ASSISTANT_INPUT_SCHEMA = {
         },
         "action": {
             "type": "string",
-            "enum": ["scrape", "add_knowledge", "ask_knowledge"],
+            "enum": [
+                "scrape",
+                "add_knowledge",
+                "ask_knowledge",
+                "manage_knowledge",
+            ],
             "description": (
                 "For extraction, use scrape. For knowledge, use "
                 "add_knowledge to ingest a public URL or ask_knowledge to "
@@ -110,7 +128,18 @@ ASSISTANT_INPUT_SCHEMA = {
         },
         "document_id": {
             "type": "string",
-            "description": "Required for knowledge/ask_knowledge: the user-owned document to query.",
+            "description": (
+                "Required for knowledge/ask_knowledge and knowledge/manage_knowledge with operation=inspect."
+            ),
+        },
+        "operation": {
+            "type": "string",
+            "enum": ["list", "inspect"],
+            "description": (
+                "Required for knowledge/manage_knowledge. Use list to return "
+                "the signed-in user's documents or inspect to return one "
+                "document's metadata."
+            ),
         },
         "max_tokens": {
             "type": "integer",
@@ -190,6 +219,91 @@ async def call_assistant_tool(
             "invalid_arguments",
             str(error),
             "Check the bintu_assistant input schema and retry.",
+        )
+
+    if arguments.domain == "knowledge" and arguments.action == "manage_knowledge":
+        supabase_client = getattr(request.app.state, "supabase_client", None)
+        if supabase_client is None:
+            return _tool_error(
+                "knowledge_core_unavailable",
+                "The knowledge core is not configured.",
+            )
+
+        try:
+            user_id = await verify_supabase_user(request, settings)
+        except HTTPException as error:
+            detail = error.detail if isinstance(error.detail, dict) else {}
+            return _tool_error(
+                str(detail.get("code", "invalid_session")),
+                str(detail.get("message", "A valid sign-in session is required.")),
+            )
+
+        if arguments.operation == "list":
+            repository = SupabaseDocumentRepository(supabase_client)
+            documents, total = await repository.list_documents(
+                owner_identity=user_id,
+                limit=arguments.limit,
+            )
+
+            return _tool_result(
+                {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "list",
+                    "total": total,
+                    "documents": [
+                        {
+                            "document_id": document.document_id,
+                            "title": document.title,
+                            "canonical_url": document.canonical_url,
+                            "source_type": document.source_type,
+                            "created_at": document.created_at,
+                            "updated_at": document.updated_at,
+                            "revision_count": document.revision_count,
+                        }
+                        for document in documents
+                    ],
+                }
+            )
+
+        repository = SupabaseDocumentDetailRepository(supabase_client)
+        details = await repository.get_document_details(
+            owner_identity=user_id,
+            document_id=arguments.document_id or "",
+        )
+
+        if not details:
+            return _tool_error(
+                "document_not_found",
+                "The requested knowledge document was not found.",
+            )
+
+        document = details["document"]
+        revision = details["revision"]
+        chunks = details.get("chunks", [])
+
+        return _tool_result(
+            {
+                "domain": "knowledge",
+                "action": "manage_knowledge",
+                "operation": "inspect",
+                "document": {
+                    "document_id": document["document_id"],
+                    "title": document.get("title"),
+                    "canonical_url": document["canonical_url"],
+                    "source_type": document["source_type"],
+                    "created_at": document["created_at"],
+                    "updated_at": document["updated_at"],
+                },
+                "revision": {
+                    "revision_id": revision["revision_id"],
+                    "source_url": revision["source_url"],
+                    "final_url": revision.get("final_url"),
+                    "status": revision["status"],
+                    "extracted_at": revision["extracted_at"],
+                },
+                "chunk_count": len(chunks),
+            }
         )
 
     if arguments.domain == "knowledge" and arguments.action == "add_knowledge":
