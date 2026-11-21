@@ -22,13 +22,14 @@ security invoker
 set search_path = ''
 as $$
     with query_terms as (
-        select unnest(
-            string_to_array(
+        select term
+        from unnest(
+            regexp_split_to_array(
                 lower(trim(p_query)),
-                ' '
+                '\W+'
             )
         ) as term
-        where nullif(trim(p_query), '') is not null
+        where term <> ''
     ),
     scored_chunks as (
         select
@@ -43,11 +44,11 @@ as $$
             (
                 select count(*)
                 from query_terms
-                where position(query_terms.term in lower(chunk.text)) > 0
+                where lower(chunk.text) ~* ('\m' || query_terms.term || '\M')
                    or exists (
                         select 1
                         from unnest(chunk.heading_path) as heading
-                        where position(query_terms.term in lower(heading)) > 0
+                        where lower(heading) ~* ('\m' || query_terms.term || '\M')
                    )
             )::double precision / greatest(
                 (select count(*) from query_terms),
