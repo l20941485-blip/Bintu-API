@@ -26,7 +26,7 @@ from bintu_api.api.schemas import (
 from bintu_api.errors.upstream import translate_upstream_error
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import split_into_chunks
-from bintu_api.extraction.output import TOKEN_METHOD
+from bintu_api.extraction.output import TOKEN_METHOD, sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
@@ -111,9 +111,9 @@ async def scrape_chunks(
             result.markdown,
             max_tokens=max_tokens,
             overlap_tokens=overlap_tokens,
-            source_url=document.final_url if document else payload.url,
+            source_url=sanitize_url(payload.url),
             final_url=document.final_url if document else payload.url,
-            content_sha256=getattr(result, "content_sha256", None),
+            content_sha256=result.content_hash,
             extracted_at=result.extracted_at,
         )
         chunks = [
