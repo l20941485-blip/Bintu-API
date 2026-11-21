@@ -161,6 +161,90 @@ TOOL_OUTPUT_SCHEMA = {
                             "True when lead-in handling prevented a reliable source location; offsets are null in that case."
                         ),
                     },
+                    "chunk_id": {
+                        "type": "string",
+                        "description": (
+                            "Stable retrieval identifier for the chunk. It changes when the source URL, "
+                            "source content, chunk strategy, token budget, overlap, or chunk index changes."
+                        ),
+                    },
+                    "chunk_strategy": {
+                        "type": "string",
+                        "enum": [
+                            "sequential",
+                            "semantic"
+                        ],
+                        "description": "Strategy used to produce the chunk.",
+                    },
+                    "section_index": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0,
+                        "description": (
+                            "Zero-based index of the semantic section containing the chunk; null when "
+                            "section indexing is unavailable."
+                        ),
+                    },
+                    "chunk_sha256": {
+                        "type": "string",
+                        "description": "SHA-256 digest of the exact delivered chunk text.",
+                    },
+                    "source_url": {
+                        "type": "string",
+                        "description": (
+                            "Requested URL with sensitive-looking query parameters removed."
+                        ),
+                    },
+                    "final_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "URL after redirects, when available.",
+                    },
+                    "content_sha256": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": (
+                            "SHA-256 digest of the link-policy-filtered source text."
+                        ),
+                    },
+                    "extracted_at": {
+                        "type": "string",
+                        "description": (
+                            "UTC ISO 8601 timestamp of the original extraction, including for "
+                            "cache-served responses."
+                        ),
+                    },
+                    "page_title": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Resolved page title, when available.",
+                    },
+                    "content_fingerprint": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": (
+                            "Stable fingerprint of the canonical extracted content."
+                        ),
+                    },
+                    "page_context": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": (
+                            "Human-readable page and section context for the chunk."
+                        ),
+                    },
                 },
                 "required": [
                     "index",
