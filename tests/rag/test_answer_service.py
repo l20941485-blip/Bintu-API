@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import AsyncMock, Mock
 
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.retrieval import RagRetrievalService, RetrievedChunk
@@ -90,3 +91,27 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class OwnerIdentityAnswerRepository:
+    def __init__(self) -> None:
+        self.search_chunks = AsyncMock(return_value=[])
+
+
+class RagOwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_passes_owner_identity_to_repository(self) -> None:
+        repository = OwnerIdentityAnswerRepository()
+        service = RagAnswerService(RagRetrievalService(repository))
+
+        await service.answer(
+            query="How do I use authentication?",
+            access_labels=("public",),
+            owner_identity="user-1",
+        )
+
+        repository.search_chunks.assert_awaited_once_with(
+            query="How do I use authentication?",
+            limit=5,
+            access_labels=("public",),
+            owner_identity="user-1",
+        )
