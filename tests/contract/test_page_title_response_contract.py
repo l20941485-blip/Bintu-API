@@ -1,6 +1,5 @@
 """Expose document-level page titles in REST and MCP responses."""
 
-
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -102,11 +101,7 @@ class PageTitleSurfaceTests(unittest.TestCase):
 
     def make_fetch(self, title, title_source="html_title"):
         document = FetchedHTML(
-            body=(
-                b"<html><body><main><p>"
-                b"Readable example content."
-                b"</p></main></body></html>"
-            ),
+            body=(b"<html><body><main><p>Readable example content.</p></main></body></html>"),
             charset="utf-8",
             final_url=URL,
             page_title=title,
@@ -184,7 +179,6 @@ class PageTitleSurfaceTests(unittest.TestCase):
 
                 structured = result["structuredContent"]
                 self.assertNotIn("page_title", structured)
-
 
     def test_both_surfaces_omit_title_source_without_title(self):
         for surface in ("legacy", "streamable"):

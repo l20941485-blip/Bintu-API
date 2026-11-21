@@ -153,9 +153,6 @@ def test_input_schema_advertises_chunked_alias():
     assert "chunk_token_budget" in TOOL_INPUT_SCHEMA["properties"]
 
 
-
-
-
 def test_main_content_only_is_forwarded_to_fetch_boundary(client: TestClient):
     with patch_fetch() as fetch_mock:
         result = call_tool(

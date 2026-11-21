@@ -303,10 +303,6 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
-
-
-
-
 def test_mcp_semantic_chunk_metadata_contract():
     """MCP semantic chunking must expose the same retrieval metadata as REST."""
     from bintu_api.extraction.context import ContextResult

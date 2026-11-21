@@ -86,9 +86,7 @@ MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION = (
     "truncated policy, the destination. Positive integer. Default: 100."
 )
 
-CHUNK_TOKEN_BUDGET_DESCRIPTION = (
-    "Accepted alias for max_tokens; max_tokens wins on conflict. Range 100 to 50000."
-)
+CHUNK_TOKEN_BUDGET_DESCRIPTION = "Accepted alias for max_tokens; max_tokens wins on conflict. Range 100 to 50000."
 
 MAIN_CONTENT_ONLY_DESCRIPTION = (
     "Apply stronger main-content extraction before sections filtering and "
@@ -107,8 +105,8 @@ CONTENT_CLEANING_DESCRIPTION = (
 
 SECTIONS_DESCRIPTION = (
     "Optional heading selectors that filter the page before mode processing. "
-    "Accepts either a newline-separated string (for example \"Alpha\\nBeta\") or "
-    "an array of strings (for example [\"Alpha\", \"Beta\"]). Whitespace and case "
+    'Accepts either a newline-separated string (for example "Alpha\\nBeta") or '
+    'an array of strings (for example ["Alpha", "Beta"]). Whitespace and case '
     "are normalized for heading matching. When provided, scrape returns only "
     "matching sections, chunk/chunked splits only matching sections, and "
     "summarize summarizes only matching sections. If no requested section "
@@ -122,17 +120,12 @@ SECTIONS_DESCRIPTION = (
 OUTPUT_SCHEMA_EXTRA_PROPERTIES = {
     "page_title": {
         "type": "string",
-        "description": (
-            "Human-readable title of the source document, when available."
-        ),
+        "description": ("Human-readable title of the source document, when available."),
     },
     "page_title_source": {
         "type": "string",
         "enum": ["html_title", "heading", "url_fallback", "none"],
-        "description": (
-            "Origin of page_title: html_title, heading, url_fallback, "
-            "or none."
-        ),
+        "description": ("Origin of page_title: html_title, heading, url_fallback, or none."),
     },
     "deduplicated_count": {
         "type": "integer",

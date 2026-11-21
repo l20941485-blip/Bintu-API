@@ -54,9 +54,7 @@ def make_service(cache, **overrides):
         "robots_enforcer": AsyncMock(),
         "html_fetcher": MagicMock(return_value=fake_document()),
         "rendered_html_fetcher": AsyncMock(return_value=fake_document()),
-        "text_extractor": MagicMock(
-            return_value=SimpleNamespace(text="extracted", truncated=False)
-        ),
+        "text_extractor": MagicMock(return_value=SimpleNamespace(text="extracted", truncated=False)),
         "source_decoder": MagicMock(return_value="source"),
         "cache_event_logger": MagicMock(),
     }
@@ -165,6 +163,7 @@ async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
     assert cached_entry.document is document
     assert cached_entry.extracted_at == result.extracted_at
 
+
 @pytest.mark.asyncio
 async def test_concurrent_cache_misses_may_fetch_independently():
     """Concurrent misses for distinct URLs may each fetch and cache independently."""
@@ -196,14 +195,6 @@ async def test_concurrent_cache_misses_may_fetch_independently():
     assert second[2] == "none"
     assert fetch_calls == 2
     assert len(cache.data) == 2
-
-
-
-
-
-
-
-
 
 
 @pytest.mark.asyncio

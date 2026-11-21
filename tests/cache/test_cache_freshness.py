@@ -59,9 +59,7 @@ def test_fresh_response_has_null_age() -> None:
 
 
 def test_memory_hit_reports_truncated_integer_age() -> None:
-    extracted_at = (
-        datetime.now(UTC) - timedelta(seconds=90.7)
-    ).isoformat()
+    extracted_at = (datetime.now(UTC) - timedelta(seconds=90.7)).isoformat()
 
     provenance = _provenance(
         cache_layer="memory",
@@ -72,9 +70,7 @@ def test_memory_hit_reports_truncated_integer_age() -> None:
 
 
 def test_persistent_hit_reports_truncated_integer_age() -> None:
-    extracted_at = (
-        datetime.now(UTC) - timedelta(seconds=300.9)
-    ).isoformat()
+    extracted_at = (datetime.now(UTC) - timedelta(seconds=300.9)).isoformat()
 
     provenance = _provenance(
         cache_layer="persistent",
@@ -85,9 +81,7 @@ def test_persistent_hit_reports_truncated_integer_age() -> None:
 
 
 def test_future_timestamp_clamps_to_zero() -> None:
-    extracted_at = (
-        datetime.now(UTC) + timedelta(seconds=30)
-    ).isoformat()
+    extracted_at = (datetime.now(UTC) + timedelta(seconds=30)).isoformat()
 
     provenance = _provenance(
         cache_layer="persistent",
@@ -117,9 +111,7 @@ def test_naive_timestamp_yields_null() -> None:
 
 
 def test_z_timestamp_is_supported() -> None:
-    extracted_at = (
-        datetime.now(UTC) - timedelta(seconds=60)
-    ).isoformat().replace("+00:00", "Z")
+    extracted_at = (datetime.now(UTC) - timedelta(seconds=60)).isoformat().replace("+00:00", "Z")
 
     provenance = _provenance(
         cache_layer="memory",
@@ -130,9 +122,7 @@ def test_z_timestamp_is_supported() -> None:
 
 
 def test_non_utc_offset_is_supported() -> None:
-    extracted_at = (
-        datetime.now(UTC) - timedelta(seconds=120)
-    ).astimezone().isoformat()
+    extracted_at = (datetime.now(UTC) - timedelta(seconds=120)).astimezone().isoformat()
 
     provenance = _provenance(
         cache_layer="memory",
@@ -228,13 +218,9 @@ def _freshness_entry(
 
 def test_evaluate_freshness_fresh_within_ttl() -> None:
     now = datetime.now(UTC)
-    entry = _freshness_entry(
-        extracted_at=(now - timedelta(minutes=10)).isoformat()
-    )
+    entry = _freshness_entry(extracted_at=(now - timedelta(minutes=10)).isoformat())
 
-    is_fresh, stale_reason = evaluate_cache_freshness(
-        entry, now=now, extractor_version="1.0.0"
-    )
+    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
 
     assert is_fresh is True
     assert stale_reason is None
@@ -242,13 +228,9 @@ def test_evaluate_freshness_fresh_within_ttl() -> None:
 
 def test_evaluate_freshness_ttl_expired() -> None:
     now = datetime.now(UTC)
-    entry = _freshness_entry(
-        extracted_at=(now - timedelta(hours=25)).isoformat()
-    )
+    entry = _freshness_entry(extracted_at=(now - timedelta(hours=25)).isoformat())
 
-    is_fresh, stale_reason = evaluate_cache_freshness(
-        entry, now=now, extractor_version="1.0.0"
-    )
+    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
 
     assert is_fresh is False
     assert stale_reason == "ttl_expired"
@@ -261,9 +243,7 @@ def test_evaluate_freshness_extractor_version_changed() -> None:
         extractor_version="0.9.0",
     )
 
-    is_fresh, stale_reason = evaluate_cache_freshness(
-        entry, now=now, extractor_version="1.0.0"
-    )
+    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
 
     assert is_fresh is False
     assert stale_reason == "extractor_version_changed"
@@ -273,9 +253,7 @@ def test_evaluate_freshness_missing_timestamp() -> None:
     now = datetime.now(UTC)
     entry = _freshness_entry(extracted_at="")
 
-    is_fresh, stale_reason = evaluate_cache_freshness(
-        entry, now=now, extractor_version="1.0.0"
-    )
+    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
 
     assert is_fresh is False
     assert stale_reason == "missing_timestamp"
@@ -283,23 +261,18 @@ def test_evaluate_freshness_missing_timestamp() -> None:
 
 def test_evaluate_freshness_future_timestamp_is_fresh() -> None:
     now = datetime.now(UTC)
-    entry = _freshness_entry(
-        extracted_at=(now + timedelta(minutes=5)).isoformat()
-    )
+    entry = _freshness_entry(extracted_at=(now + timedelta(minutes=5)).isoformat())
 
-    is_fresh, stale_reason = evaluate_cache_freshness(
-        entry, now=now, extractor_version="1.0.0"
-    )
+    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
 
     assert is_fresh is True
     assert stale_reason is None
 
+
 def test_stale_fallback_reports_revalidated() -> None:
     provenance = _provenance(
         cache_layer="memory",
-        extracted_at=(
-            datetime.now(UTC) - timedelta(hours=48)
-        ).isoformat(),
+        extracted_at=(datetime.now(UTC) - timedelta(hours=48)).isoformat(),
         revalidated=True,
     )
 
@@ -324,4 +297,3 @@ def test_fresh_and_persistent_hits_report_not_revalidated() -> None:
     assert fresh.cache.revalidated is False
     assert persistent.cache.revalidated is False
     assert bypass.cache.revalidated is False
-
