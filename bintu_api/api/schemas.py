@@ -265,3 +265,19 @@ class MobileRagDocumentDetailResponse(BaseModel):
     revision: MobileRagRevisionMetadata
     chunk_count: int
     chunks: list[MobileRagChunkPreview]
+
+
+class MobileRagDocumentRefreshRequest(BaseModel):
+    """Request to refresh a user-owned knowledge document."""
+
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
+    access_labels: list[str] = Field(default_factory=list)
+
+
+class MobileRagDocumentRefreshRequest(BaseModel):
+    """Request to refresh a user-owned knowledge document."""
+
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
+    access_labels: list[str] = Field(default_factory=list)
