@@ -20,6 +20,7 @@ class FakeAnswerRepository:
         limit: int,
         access_labels: tuple[str, ...],
         owner_identity: str | None,
+        document_id: str | None = None,
     ) -> list[RetrievedChunk]:
         return self._chunks[:limit]
 
@@ -190,6 +191,7 @@ class RagOwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
             query="How do I use authentication?",
             access_labels=("public",),
             owner_identity="user-1",
+            document_id=None,
         )
 
         repository.search_chunks.assert_awaited_once_with(
@@ -197,6 +199,7 @@ class RagOwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
             limit=5,
             access_labels=("public",),
             owner_identity="user-1",
+            document_id=None,
         )
 
 

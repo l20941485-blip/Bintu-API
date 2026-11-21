@@ -31,6 +31,7 @@ class RetrievalRepository(Protocol):
         limit: int,
         access_labels: tuple[str, ...],
         owner_identity: str | None,
+        document_id: str | None = None,
     ) -> list[RetrievedChunk]:
         ...
 
@@ -48,6 +49,7 @@ class RagRetrievalService:
         limit: int = 8,
         access_labels: tuple[str, ...] = (),
         owner_identity: str | None = None,
+        document_id: str | None = None,
     ) -> list[RetrievedChunk]:
         if not query or not query.strip():
             raise ValueError("query must not be blank")
@@ -60,4 +62,5 @@ class RagRetrievalService:
             limit=limit,
             access_labels=access_labels,
             owner_identity=owner_identity,
+            document_id=document_id,
         )

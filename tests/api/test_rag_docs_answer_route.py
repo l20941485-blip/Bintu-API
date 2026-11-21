@@ -24,6 +24,7 @@ class FakeDocsRetrievalRepository:
         limit: int,
         access_labels: tuple[str, ...],
         owner_identity: str | None,
+        document_id: str | None = None,
     ) -> list[RetrievedChunk]:
         self.calls.append(
             {

@@ -20,6 +20,7 @@ class SupabaseRetrievalRepository:
         limit: int,
         access_labels: tuple[str, ...],
         owner_identity: str | None,
+        document_id: str | None = None,
     ) -> list[RetrievedChunk]:
         response = await self._supabase_client.rpc(
             "search_rag_chunks",
@@ -28,6 +29,7 @@ class SupabaseRetrievalRepository:
                 "p_limit": limit,
                 "p_access_labels": list(access_labels),
                 "p_owner_identity": owner_identity,
+                "p_document_id": document_id,
             },
         ).execute()
 

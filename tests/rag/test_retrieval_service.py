@@ -88,6 +88,7 @@ class FakeRetrievalRepository:
         limit: int,
         access_labels: tuple[str, ...],
         owner_identity: str | None,
+        document_id: str | None = None,
     ) -> list[RetrievedChunk]:
         candidates = [
             RetrievedChunk(

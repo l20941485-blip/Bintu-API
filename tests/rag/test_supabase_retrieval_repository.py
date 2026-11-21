@@ -40,6 +40,7 @@ class SupabaseRetrievalRepositoryTests(unittest.IsolatedAsyncioTestCase):
             limit=5,
             access_labels=("public",),
             owner_identity=None,
+            document_id="document-1",
         )
 
         supabase.rpc.assert_called_once_with(
@@ -49,6 +50,7 @@ class SupabaseRetrievalRepositoryTests(unittest.IsolatedAsyncioTestCase):
                 "p_limit": 5,
                 "p_access_labels": ["public"],
                 "p_owner_identity": None,
+                "p_document_id": "document-1",
             },
         )
 

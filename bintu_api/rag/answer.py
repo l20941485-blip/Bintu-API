@@ -76,6 +76,7 @@ class RagAnswerService:
         limit: int = 5,
         access_labels: tuple[str, ...] = (),
         owner_identity: str | None = None,
+        document_id: str | None = None,
     ) -> RagAnswer:
         started_at = time.perf_counter()
         query_terms = self._query_terms(query)
@@ -85,6 +86,7 @@ class RagAnswerService:
             limit=limit,
             access_labels=access_labels,
             owner_identity=owner_identity,
+            document_id=document_id,
         )
 
         if not chunks:

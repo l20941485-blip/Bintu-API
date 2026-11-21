@@ -189,6 +189,7 @@ def test_mobile_answer_uses_authenticated_owner_identity(
             "p_limit": 5,
             "p_access_labels": [],
             "p_owner_identity": "user-1",
+            "p_document_id": None,
         },
     )
 
@@ -302,5 +303,6 @@ def test_api_key_answer_does_not_request_owner_knowledge(client):
             "p_limit": 5,
             "p_access_labels": ["public"],
             "p_owner_identity": None,
+            "p_document_id": None,
         },
     )

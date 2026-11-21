@@ -147,6 +147,7 @@ async def mobile_answer_question(
         limit=payload.limit,
         access_labels=tuple(payload.access_labels),
         owner_identity=user_id,
+        document_id=payload.document_id,
     )
 
     return RagAnswerResponse(
