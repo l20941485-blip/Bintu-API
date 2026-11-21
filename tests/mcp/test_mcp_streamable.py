@@ -117,11 +117,17 @@ class McpStreamableTests(unittest.TestCase):
         response = self.rpc("tools/list")
 
         tools = response.json()["result"]["tools"]
-        self.assertEqual(len(tools), 1)
-        self.assertEqual(tools[0]["name"], TOOL_NAME)
-        self.assertEqual(tools[0]["inputSchema"], TOOL_INPUT_SCHEMA)
-        self.assertEqual(tools[0]["outputSchema"], TOOL_OUTPUT_SCHEMA)
-        self.assertEqual(tools[0]["annotations"], TOOL_ANNOTATIONS)
+        self.assertEqual(len(tools), 2)
+        self.assertEqual(
+            {tool["name"] for tool in tools},
+            {TOOL_NAME, "bintu_assistant"},
+        )
+        scrape_tool = next(
+            tool for tool in tools if tool["name"] == TOOL_NAME
+        )
+        self.assertEqual(scrape_tool["inputSchema"], TOOL_INPUT_SCHEMA)
+        self.assertEqual(scrape_tool["outputSchema"], TOOL_OUTPUT_SCHEMA)
+        self.assertEqual(scrape_tool["annotations"], TOOL_ANNOTATIONS)
         self.assertTrue(tools[0]["annotations"]["readOnlyHint"])
         self.assertTrue(tools[0]["description"])
         self.assertIn("url", tools[0]["inputSchema"]["properties"])
@@ -620,7 +626,10 @@ class McpStreamableTests(unittest.TestCase):
         response = self.client.get("/mcp/tools")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["tools"][0]["name"], TOOL_NAME)
+        self.assertEqual(
+            {tool["name"] for tool in response.json()["tools"]},
+            {TOOL_NAME, "bintu_assistant"},
+        )
 
 
 class McpScopedApiKeyTests(unittest.TestCase):
@@ -641,7 +650,10 @@ class McpScopedApiKeyTests(unittest.TestCase):
         response = self.rpc("tools/list", headers={"X-API-Key": "claude-key"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["result"]["tools"][0]["name"], TOOL_NAME)
+        self.assertEqual(
+            {tool["name"] for tool in response.json()["result"]["tools"]},
+            {TOOL_NAME, "bintu_assistant"},
+        )
 
     def test_scoped_key_is_accepted_on_legacy_helpers(self) -> None:
         response = self.client.get("/mcp/tools", headers={"X-API-Key": "claude-key"})

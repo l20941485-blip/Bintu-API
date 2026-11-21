@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
 from bintu_api.api import mcp_adapter
+from bintu_api.mcp.assistant import assistant_tool_definition
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -74,7 +75,8 @@ async def list_tools(request: Request) -> dict[str, Any]:
                 "inputSchema": TOOL_INPUT_SCHEMA,
                 "outputSchema": TOOL_OUTPUT_SCHEMA,
                 "annotations": TOOL_ANNOTATIONS,
-            }
+            },
+            assistant_tool_definition(),
         ]
     }
 

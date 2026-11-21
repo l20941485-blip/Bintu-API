@@ -55,6 +55,7 @@ from pydantic import ValidationError
 from bintu_api.api import mcp_adapter
 from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
+from bintu_api.mcp.assistant import ASSISTANT_TOOL_NAME, call_assistant_tool
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,
@@ -416,11 +417,21 @@ async def _tools_call_result(
     request_id: Any,
     params: dict[str, Any],
 ) -> dict[str, Any]:
-    if params.get("name") != TOOL_NAME:
+    tool_name = params.get("name")
+
+    if tool_name == ASSISTANT_TOOL_NAME:
+        return await call_assistant_tool(
+            request=request,
+            settings=settings,
+            request_id=request_id,
+            params=params,
+        )
+
+    if tool_name != TOOL_NAME:
         return _rpc_error(
             request_id,
             INVALID_PARAMS,
-            f"Unknown tool: {params.get('name')}",
+            f"Unknown tool: {tool_name}",
         )
 
     raw_arguments = params.get("arguments") or {}
