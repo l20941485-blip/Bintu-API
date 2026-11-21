@@ -53,9 +53,9 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from bintu_api.api import mcp_adapter
-from bintu_api.mcp.assistant import ASSISTANT_TOOL_NAME, call_assistant_tool
 from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
+from bintu_api.mcp.assistant import ASSISTANT_TOOL_NAME, call_assistant_tool
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
     INVALID_PARAMS,

@@ -54,7 +54,7 @@ class AssistantArguments(BaseModel):
     limit: int = Field(default=5, ge=1, le=20)
 
     @model_validator(mode="after")
-    def _validate_action(self) -> "AssistantArguments":
+    def _validate_action(self) -> AssistantArguments:
         if self.domain == "extraction":
             if self.action != "scrape":
                 raise ValueError("extraction supports only action=scrape")
