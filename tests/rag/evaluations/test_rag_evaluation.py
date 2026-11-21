@@ -169,6 +169,20 @@ class RagEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 heading_path=("Onboarding",),
                 access_labels=(),
             ),
+            make_chunk(
+                "chunk-docs-auth",
+                "## Authentication\n\nUse an API key.",
+                1.0,
+                heading_path=("Documentation", "Authentication"),
+                access_labels=("docs",),
+            ),
+            make_chunk(
+                "chunk-docs-rate-limits",
+                "## Rate limits\n\nRequests are limited to 100 per minute.",
+                0.9,
+                heading_path=("Documentation", "Rate limits"),
+                access_labels=("docs",),
+            ),
         ]
         self.retrieval = RagRetrievalService(
             EvaluationRepository(self.chunks)

@@ -1,42 +1,71 @@
 [
   {
     "question": "How do I use authentication?",
-    "expected_chunk_ids": ["chunk-auth"],
-    "expected_answer_contains": ["API key"],
-    "access_labels": ["public"],
+    "expected_chunk_ids": [
+      "chunk-auth"
+    ],
+    "expected_answer_contains": [
+      "API key"
+    ],
+    "access_labels": [
+      "public"
+    ],
     "owner_identity": null
   },
   {
     "question": "What is the guide introduction?",
-    "expected_chunk_ids": ["chunk-guide"],
-    "expected_answer_contains": ["Introduction"],
-    "access_labels": ["public"],
+    "expected_chunk_ids": [
+      "chunk-guide"
+    ],
+    "expected_answer_contains": [
+      "Introduction"
+    ],
+    "access_labels": [
+      "public"
+    ],
     "owner_identity": null
   },
   {
     "question": "authentication setup",
-    "expected_chunk_ids": ["chunk-auth"],
-    "expected_answer_contains": ["API key"],
-    "access_labels": ["public"],
+    "expected_chunk_ids": [
+      "chunk-auth"
+    ],
+    "expected_answer_contains": [
+      "API key"
+    ],
+    "access_labels": [
+      "public"
+    ],
     "owner_identity": null
   },
   {
     "question": "How do I use authentication and what are the rate limits?",
-    "expected_chunk_ids": ["chunk-auth", "chunk-rate-limits"],
+    "expected_chunk_ids": [
+      "chunk-auth",
+      "chunk-rate-limits"
+    ],
     "expected_answer_contains": [],
-    "access_labels": ["public"],
+    "access_labels": [
+      "public"
+    ],
     "owner_identity": null
   },
   {
     "question": "Where can I find the API key documentation?",
-    "expected_chunk_ids": ["chunk-auth"],
+    "expected_chunk_ids": [
+      "chunk-auth"
+    ],
     "expected_answer_contains": [],
-    "access_labels": ["public"],
+    "access_labels": [
+      "public"
+    ],
     "owner_identity": null
   },
   {
     "question": "What are the private onboarding steps?",
-    "expected_chunk_ids": ["chunk-private-onboarding"],
+    "expected_chunk_ids": [
+      "chunk-private-onboarding"
+    ],
     "expected_answer_contains": [],
     "access_labels": [],
     "owner_identity": "user-1"
@@ -59,7 +88,47 @@
     "question": "How do I configure webhooks?",
     "expected_chunk_ids": [],
     "expected_answer_contains": [],
-    "access_labels": ["public"],
+    "access_labels": [
+      "public"
+    ],
+    "owner_identity": null
+  },
+  {
+    "question": "How do I use authentication?",
+    "expected_chunk_ids": [
+      "chunk-docs-auth"
+    ],
+    "expected_answer_contains": [
+      "API key"
+    ],
+    "access_labels": [
+      "docs"
+    ],
+    "owner_identity": null
+  },
+  {
+    "question": "What are the documentation rate limits?",
+    "expected_chunk_ids": [
+      "chunk-docs-rate-limits"
+    ],
+    "expected_answer_contains": [
+      "100 per minute"
+    ],
+    "access_labels": [
+      "docs"
+    ],
+    "owner_identity": null
+  },
+  {
+    "question": "How do I use authentication and what are the rate limits?",
+    "expected_chunk_ids": [
+      "chunk-docs-auth",
+      "chunk-docs-rate-limits"
+    ],
+    "expected_answer_contains": [],
+    "access_labels": [
+      "docs"
+    ],
     "owner_identity": null
   }
 ]
