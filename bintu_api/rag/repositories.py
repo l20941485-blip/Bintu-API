@@ -87,7 +87,7 @@ class InMemoryChunkRepository:
         chunk: RagChunk,
     ) -> RagChunk:
         chunk_sha256 = hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()
-        chunk_id = make_chunk_id(
+        chunk_id = chunk.chunk_id or make_chunk_id(
             source_url=revision.source_url,
             content_sha256=revision.content_sha256,
             chunk_strategy=chunk.chunk_strategy,
