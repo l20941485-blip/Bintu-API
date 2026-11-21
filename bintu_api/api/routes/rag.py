@@ -16,6 +16,7 @@ from bintu_api.api.schemas import (
     MobileRagIngestedChunk,
     RagAnswerCitation,
     RagDocsAnswerRequest,
+    RagDocsIngestRequest,
     RagAnswerRequest,
     RagAnswerResponse,
 )
@@ -337,5 +338,114 @@ async def answer_documentation_question(
                 heading_path=list(citation.heading_path),
             )
             for citation in answer.citations
+        ],
+    )
+
+
+@router.post(
+    "/api/v1/rag/docs/ingest",
+    response_model=MobileRagIngestResponse,
+    summary="Ingest a public documentation page into the docs collection",
+    description=(
+        "Fetches a public documentation page, extracts readable content, "
+        "creates semantic chunks, and persists an immutable revision in the "
+        "docs knowledge collection."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (400, 401, 403, 422, 429, 502, 503, 504)
+    },
+    dependencies=[Security(api_key_scheme, scopes=[])],
+)
+async def ingest_documentation(
+    request: Request,
+    payload: RagDocsIngestRequest,
+) -> MobileRagIngestResponse:
+    settings = request.app.state.settings
+    routes_common.verify_api_access(request, settings)
+
+    supabase_client = getattr(request.app.state, "supabase_client", None)
+    if supabase_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "knowledge_core_unavailable",
+                "message": "The knowledge core is not configured.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
+
+    document, result, _cache_layer, _revalidated = await fetch_and_extract(
+        request,
+        payload.url,
+        include_nav=False,
+        include_header=False,
+        include_footer=False,
+        render_js=False,
+        links="inline",
+        skip_cache=False,
+        persist=True,
+        mode="chunk",
+        max_tokens=payload.max_tokens,
+        main_content_only=False,
+    )
+
+    source_url = sanitize_url(payload.url)
+    final_url = document.final_url if document else source_url
+    chunks = split_semantic_chunks(
+        result.markdown,
+        max_tokens=payload.max_tokens,
+        overlap_tokens=payload.overlap_tokens,
+        source_url=source_url,
+        final_url=final_url,
+        content_sha256=result.content_hash,
+        extracted_at=result.extracted_at,
+    )
+
+    if not chunks:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "no_ingestable_content",
+                "message": "The page did not contain ingestable readable content.",
+            },
+        )
+
+    repository = SupabaseChunkRepository(supabase_client)
+    ingestion = RagIngestionService(repository)
+    ingested = await ingestion.ingest(
+        ExtractionIngestionRequest(
+            canonical_url=source_url,
+            title=result.page_title,
+            source_type="web",
+            owner_identity=None,
+            source_url=source_url,
+            final_url=final_url,
+            content_sha256=result.content_hash,
+            content_fingerprint=result.content_fingerprint,
+            extracted_at=result.extracted_at,
+            language=None,
+            status="active",
+            chunks=chunks,
+            access_labels=("docs",),
+        )
+    )
+
+    return MobileRagIngestResponse(
+        document_id=ingested.document.document_id,
+        revision_id=ingested.revision_id,
+        chunk_count=len(ingested.chunks),
+        chunks=[
+            MobileRagIngestedChunk(
+                chunk_id=chunk.chunk_id or "",
+                chunk_index=chunk.chunk_index,
+                chunk_sha256=chunk.chunk_sha256 or "",
+            )
+            for chunk in ingested.chunks
         ],
     )

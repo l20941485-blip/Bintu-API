@@ -189,3 +189,11 @@ class RagDocsAnswerRequest(BaseModel):
         if not query:
             raise ValueError("query must not be blank")
         return query
+
+
+class RagDocsIngestRequest(BaseModel):
+    """Request to ingest a public documentation page into the docs collection."""
+
+    url: str
+    max_tokens: int = Field(default=1000, ge=100, le=50000)
+    overlap_tokens: int = Field(default=0, ge=0, le=1000)
