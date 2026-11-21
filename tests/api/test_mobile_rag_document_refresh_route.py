@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
 from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi import FastAPI
@@ -50,7 +51,7 @@ class FakeIngestion:
         class Result:
             document = Document()
             revision_id = "revision-2"
-            chunks = [Chunk()]
+            chunks: ClassVar[list[Chunk]] = [Chunk()]
 
         return Result()
 

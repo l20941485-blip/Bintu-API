@@ -10,7 +10,7 @@ from bintu_api.rag.ingestion import (
     ExtractionIngestionRequest,
     RagIngestionService,
 )
-from bintu_api.rag.models import Document, DocumentRevision, IngestedRevision
+from bintu_api.rag.models import IngestedRevision
 from bintu_api.rag.repositories import InMemoryChunkRepository
 
 
@@ -61,7 +61,7 @@ class RagIngestionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.revision.content_sha256, "sha256:content")
         self.assertEqual(len(result.chunks), len(request.chunks))
 
-        for source, persisted in zip(request.chunks, result.chunks):
+        for source, persisted in zip(request.chunks, result.chunks, strict=True):
             self.assertEqual(persisted.chunk_id, source.chunk_id)
             self.assertEqual(persisted.chunk_index, source.index)
             self.assertEqual(persisted.chunk_strategy, source.chunk_strategy)
