@@ -22,6 +22,20 @@ class CacheInfo(BaseModel):
             "known age is within the cache TTL."
         ),
     )
+    stale_reason: str | None = Field(
+        default=None,
+        description=(
+            "Why a cached entry was considered stale: 'ttl_expired', "
+            "'extractor_version_changed', 'missing_timestamp', or "
+            "'invalid_timestamp'. None when fresh or when no cache was used."
+        ),
+    )
+    revalidated: bool = Field(
+        default=False,
+        description=(
+            "True when a stale cache entry was refreshed during this request."
+        ),
+    )
 
 
 class Provenance(BaseModel):

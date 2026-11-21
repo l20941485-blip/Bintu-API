@@ -67,6 +67,8 @@ def build_provenance(
     settings: Settings,
     *,
     extracted_at: str | None = None,
+    stale_reason: str | None = None,
+    revalidated: bool = False,
 ) -> Provenance:
     """Build provenance using real values only; inapplicable fields stay None."""
     fetched = document is not None and cache_layer == "none"
@@ -95,6 +97,8 @@ def build_provenance(
             layer=cache_layer,
             age_seconds=cache_age_seconds,
             fresh=cache_fresh,
+            stale_reason=stale_reason,
+            revalidated=revalidated,
         ),
         extractor_version=getattr(settings, "service_version", "unknown"),
         status=getattr(document, "status", None) if fetched else None,
@@ -128,6 +132,25 @@ def _count_markdown_sections(text: str) -> tuple[int, int]:
     return len(headings), complete
 
 
+def _evaluate_cache_freshness(
+    extracted_at: str | None,
+    cache_layer: str,
+) -> tuple[str | None, bool]:
+    """Return (stale_reason, revalidated) for a cache-layer response."""
+    if cache_layer == "none":
+        return None, False
+    if cache_layer == "persistent":
+        # Persistent entries are not TTL-expired; extractor-version changes
+        # are the only staleness signal (handled elsewhere).
+        return None, False
+    age = _cache_age_seconds(extracted_at, datetime.now(UTC))
+    if age is None:
+        return "missing_timestamp", True
+    if age > CACHE_TTL.total_seconds():
+        return "ttl_expired", True
+    return None, False
+
+
 def build_scrape_response(
     url: str,
     result: CachedMarkdown,
@@ -135,6 +158,7 @@ def build_scrape_response(
     cache_layer: str,
     request_id: str,
     settings: Settings,
+    revalidated: bool | None = None,
 ) -> ScrapeTextResponse:
     """Build the shared scrape response while preserving cache economics."""
     approx_tokens = compute_approx_tokens(result.markdown)
@@ -162,6 +186,13 @@ def build_scrape_response(
         complete_sections=complete_section_count,
     )
 
+    stale_reason, inferred_revalidated = _evaluate_cache_freshness(
+        result.extracted_at,
+        cache_layer,
+    )
+    if revalidated is None:
+        revalidated = inferred_revalidated
+
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -185,6 +216,8 @@ def build_scrape_response(
             request_id,
             settings,
             extracted_at=result.extracted_at,
+            stale_reason=stale_reason,
+            revalidated=revalidated,
         ),
     )
 

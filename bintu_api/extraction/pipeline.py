@@ -45,6 +45,7 @@ async def run_extraction(
     html_source_text: str | None = None,
     cache_hit: bool = False,
     cache_layer: str = "none",
+    revalidated: bool = False,
     document: Any | None = None,
     settings: Settings | None = None,
     cache_economics: Any | None = None,

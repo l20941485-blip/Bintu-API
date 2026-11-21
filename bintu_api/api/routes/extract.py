@@ -217,7 +217,7 @@ async def _scrape_text(
             identity,
         )
 
-        document, result, cache_layer = await routes_common.fetch_and_extract(
+        document, result, cache_layer, revalidated = await routes_common.fetch_and_extract(
             request,
             url,
             include_nav=include_nav,
@@ -241,6 +241,7 @@ async def _scrape_text(
             cache_layer,
             request_id,
             settings,
+            revalidated=revalidated,
         )
 
         if sections is not None:

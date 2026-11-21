@@ -145,6 +145,14 @@ Only `upstream_rate_limited` is retryable (`retryable=true`, `retry_with="retry_
 
 Results may be served from memory or persistent cache (`cache_hit`, `cache_layer`). Set `cache=false` to bypass cache reads; set `persist=false` to skip the persistent write. URLs with credential-like query parameters are never stored. `robots.txt` is honored.
 
+#### Cache freshness
+
+Memory-cache entries older than the configured TTL are considered stale. If a
+stale entry’s upstream fetch fails, Bintu falls back to the cached content and
+sets `revalidated: true` in the response provenance, with
+`stale_reason: "ttl_expired"`. Fresh memory hits, persistent-cache hits, and
+cache bypasses report `revalidated: false`.
+
 #### Token economics
 
 `approx_tokens` is `ceil(characters / 4)`, an estimate, not a tokenizer count. `tokens_saved_estimate` is the source-HTML estimate minus the returned-text estimate. `html_tokens` reports the source size the same way. Use these fields to budget LLM context before and after extraction.

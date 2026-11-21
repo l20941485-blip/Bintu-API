@@ -65,7 +65,7 @@ class SemanticChunkEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "bintu_api.api.routes.chunk._scrape_chunks",
-                new=AsyncMock(return_value=(None, result, "none")),
+                new=AsyncMock(return_value=(None, result, "none", False)),
             ),
         ):
             response = await scrape_chunks(
@@ -97,7 +97,7 @@ class SemanticChunkEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "bintu_api.api.routes.chunk._scrape_chunks",
-                new=AsyncMock(return_value=(None, result, "none")),
+                new=AsyncMock(return_value=(None, result, "none", False)),
             ),
         ):
             response = await scrape_chunks(
@@ -136,7 +136,7 @@ class SemanticChunkEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "bintu_api.api.routes.chunk._scrape_chunks",
-                new=AsyncMock(return_value=(None, result, "none")),
+                new=AsyncMock(return_value=(None, result, "none", False)),
             ),
         ):
             response = await scrape_chunks(

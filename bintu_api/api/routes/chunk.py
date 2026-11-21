@@ -91,7 +91,7 @@ async def scrape_chunks(
             },
         )
 
-    document, result, cache_layer = await _scrape_chunks(
+    document, result, cache_layer, revalidated = await _scrape_chunks(
         request,
         payload.url,
         payload.include_nav,
@@ -198,6 +198,7 @@ async def scrape_chunks(
         chunk_count=len(chunks),
         cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
+        revalidated=revalidated,
         source_url=document.final_url if document else payload.url,
         extracted_at=result.extracted_at,
         tokens_saved_estimate=max(
@@ -223,7 +224,7 @@ async def _scrape_chunks(
     persist: bool = True,
     max_tokens: int = 6000,
     main_content_only: bool = False,
-) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
+) -> tuple[FetchedHTML | None, CachedMarkdown, str, bool]:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
 
@@ -233,7 +234,7 @@ async def _scrape_chunks(
             identity,
         )
 
-        document, result, cache_layer = await routes_common.fetch_and_extract(
+        document, result, cache_layer, revalidated = await routes_common.fetch_and_extract(
             request,
             url,
             include_nav=include_nav,
@@ -261,7 +262,7 @@ async def _scrape_chunks(
             limiting_factor=result.limiting_factor,
         )
 
-        return document, result, cache_layer
+        return document, result, cache_layer, revalidated
 
     except HTTPException:
         raise

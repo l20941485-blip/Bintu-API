@@ -77,6 +77,7 @@ class ScrapeChunksResponse(BaseModel):
     chunk_count: int
     cache_hit: bool
     cache_layer: Literal["none", "memory", "persistent"]
+    revalidated: bool = False
     source_url: str
     extracted_at: str
     tokens_saved_estimate: int

@@ -20,6 +20,8 @@ class MemoryCacheEntry:
 
     document: FetchedHTML
     extracted_at: str = ""
+    extractor_version: str = ""
+    content_hash: str = ""
 
 
 # Concurrent misses for the same key may each fetch independently and write
@@ -98,3 +100,47 @@ def write_memory_cache(
             ),
         )
 
+
+
+def evaluate_cache_freshness(
+    entry: MemoryCacheEntry,
+    *,
+    now: datetime,
+    extractor_version: str,
+) -> tuple[bool, str | None]:
+    """Return (is_fresh, stale_reason) for a memory-cache entry.
+
+    Freshness is policy-level, not proof that upstream content is unchanged:
+    - Missing extracted_at -> stale (missing_timestamp).
+    - Invalid extracted_at -> stale (invalid_timestamp).
+    - Age beyond CACHE_TTL -> stale (ttl_expired).
+    - Extractor version mismatch -> stale (extractor_version_changed).
+    - Future timestamp -> treated as fresh (clock-skew tolerance).
+    """
+    if not entry.extracted_at:
+        return False, "missing_timestamp"
+
+    try:
+        extracted_time = datetime.fromisoformat(
+            entry.extracted_at.replace("Z", "+00:00")
+        )
+    except (ValueError, TypeError):
+        return False, "invalid_timestamp"
+
+    if extracted_time.tzinfo is None:
+        return False, "invalid_timestamp"
+
+    age = (now - extracted_time).total_seconds()
+    if age < 0:
+        return True, None
+
+    if age > CACHE_TTL.total_seconds():
+        return False, "ttl_expired"
+
+    if (
+        getattr(entry, "extractor_version", "")
+        and entry.extractor_version != extractor_version
+    ):
+        return False, "extractor_version_changed"
+
+    return True, None
