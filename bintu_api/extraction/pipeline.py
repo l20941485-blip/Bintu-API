@@ -10,7 +10,7 @@ formatting.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from bintu_api.extraction.context import ContextResult, extract_context
 from bintu_api.settings import Settings
