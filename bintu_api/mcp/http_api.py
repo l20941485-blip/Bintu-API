@@ -68,7 +68,6 @@ def _mcp_error_response(
 async def list_tools(request: Request) -> dict[str, Any]:
     return {
         "tools": [
-            assistant_tool_definition(),
             {
                 "name": TOOL_NAME,
                 "title": TOOL_TITLE,
@@ -76,7 +75,8 @@ async def list_tools(request: Request) -> dict[str, Any]:
                 "inputSchema": TOOL_INPUT_SCHEMA,
                 "outputSchema": TOOL_OUTPUT_SCHEMA,
                 "annotations": TOOL_ANNOTATIONS,
-            }
+            },
+            assistant_tool_definition(),
         ]
     }
 

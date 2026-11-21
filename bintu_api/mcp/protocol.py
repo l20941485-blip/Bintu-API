@@ -226,7 +226,6 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
         request_id,
         {
             "tools": [
-                assistant_tool_definition(),
                 {
                     "name": TOOL_NAME,
                     "title": TOOL_TITLE,
@@ -234,7 +233,8 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
                     "inputSchema": TOOL_INPUT_SCHEMA,
                     "outputSchema": TOOL_OUTPUT_SCHEMA,
                     "annotations": TOOL_ANNOTATIONS,
-                }
+                },
+                assistant_tool_definition(),
             ]
         },
     )
