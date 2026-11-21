@@ -8,10 +8,10 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Document:
     document_id: str
-    tenant_id: str
     canonical_url: str
     title: str | None = None
     source_type: str = "web"
+    owner_identity: str | None = None
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class RagChunk:
     chunk_id: str | None
     revision_id: str | None
     document_id: str | None
-    tenant_id: str
+    owner_identity: str | None
     chunk_index: int
     chunk_strategy: str
     text: str

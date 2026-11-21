@@ -16,9 +16,9 @@ def sha256(text: str) -> str:
 def make_document() -> Document:
     return Document(
         document_id="doc_1",
-        tenant_id="tenant_1",
         canonical_url="https://example.com/docs",
         title="Example Documentation",
+        owner_identity=None,
     )
 
 
@@ -41,7 +41,7 @@ def make_chunks(content_sha256: str) -> list[RagChunk]:
             chunk_id=None,
             revision_id=None,
             document_id=None,
-            tenant_id="tenant_1",
+            owner_identity=None,
             chunk_index=index,
             chunk_strategy="semantic",
             text=text,
@@ -86,7 +86,7 @@ class ChunkRepositoryContractTests(unittest.TestCase):
         for index, chunk in enumerate(result.chunks):
             self.assertEqual(chunk.document_id, "doc_1")
             self.assertEqual(chunk.revision_id, result.revision_id)
-            self.assertEqual(chunk.tenant_id, "tenant_1")
+            self.assertIsNone(chunk.owner_identity)
             self.assertEqual(chunk.chunk_index, index)
             self.assertEqual(chunk.source_url, "https://example.com/original")
             self.assertEqual(chunk.final_url, "https://example.com/final")

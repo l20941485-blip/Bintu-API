@@ -98,7 +98,7 @@ class InMemoryChunkRepository:
             chunk_id=chunk_id,
             revision_id=revision.revision_id,
             document_id=document.document_id,
-            tenant_id=document.tenant_id,
+            owner_identity=document.owner_identity,
             chunk_index=chunk.chunk_index,
             chunk_strategy=chunk.chunk_strategy,
             text=chunk.text,
