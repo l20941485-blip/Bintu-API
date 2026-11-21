@@ -7,22 +7,16 @@ operations are scoped to the authenticated Supabase user.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any, Literal
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from bintu_api.api import scrape_adapter as routes_common
-from bintu_api.api.scrape_adapter import fetch_and_extract
-from bintu_api.extraction.output import sanitize_url
-from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.mcp.schemas import TOOL_NAME
 from bintu_api.rag.answer import RagAnswerService
-from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
+from bintu_api.rag.ingestion_workflow import ingest_public_knowledge
 from bintu_api.rag.retrieval import RagRetrievalService
-from bintu_api.rag.supabase import SupabaseChunkRepository
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import verify_supabase_user
 from bintu_api.settings import Settings
@@ -78,10 +72,7 @@ class AssistantArguments(BaseModel):
                 return self
 
             if self.action != "ask_knowledge":
-                raise ValueError(
-                    "knowledge supports only action=add_knowledge or "
-                    "action=ask_knowledge"
-                )
+                raise ValueError("knowledge supports only action=add_knowledge or action=ask_knowledge")
             if not self.query:
                 raise ValueError("ask_knowledge requires query")
             if not self.document_id:
@@ -110,8 +101,7 @@ ASSISTANT_INPUT_SCHEMA = {
         "url": {
             "type": "string",
             "description": (
-                "Required for extraction/scrape and knowledge/add_knowledge: "
-                "an absolute public HTTP or HTTPS URL."
+                "Required for extraction/scrape and knowledge/add_knowledge: an absolute public HTTP or HTTPS URL."
             ),
         },
         "query": {
@@ -219,64 +209,13 @@ async def call_assistant_tool(
                 str(detail.get("message", "A valid sign-in session is required.")),
             )
 
-        identity = routes_common.rate_limit_identity(request, settings)
-        await asyncio.to_thread(
-            request.app.state.rate_limiter.check,
-            identity,
-        )
-
         try:
-            document, result, _cache_layer, _revalidated = await fetch_and_extract(
-                request,
-                arguments.url,
-                include_nav=False,
-                include_header=False,
-                include_footer=False,
-                render_js=False,
-                links="inline",
-                skip_cache=False,
-                persist=True,
-                mode="chunk",
+            ingested = await ingest_public_knowledge(
+                request=request,
+                settings=settings,
+                user_id=user_id,
+                url=arguments.url or "",
                 max_tokens=arguments.max_tokens,
-                main_content_only=False,
-            )
-
-            source_url = sanitize_url(arguments.url)
-            final_url = document.final_url if document else source_url
-            chunks = split_semantic_chunks(
-                result.markdown,
-                max_tokens=arguments.max_tokens,
-                overlap_tokens=1200,
-                source_url=source_url,
-                final_url=final_url,
-                content_sha256=result.content_hash,
-                extracted_at=result.extracted_at,
-            )
-
-            if not chunks:
-                return _tool_error(
-                    "no_ingestable_content",
-                    "The page did not contain ingestable readable content.",
-                )
-
-            repository = SupabaseChunkRepository(supabase_client)
-            ingestion = RagIngestionService(repository)
-            ingested = await ingestion.ingest(
-                ExtractionIngestionRequest(
-                    canonical_url=source_url,
-                    title=result.page_title,
-                    source_type="web",
-                    owner_identity=user_id,
-                    source_url=source_url,
-                    final_url=final_url,
-                    content_sha256=result.content_hash,
-                    content_fingerprint=result.content_fingerprint,
-                    extracted_at=result.extracted_at,
-                    language=None,
-                    status="active",
-                    chunks=chunks,
-                    access_labels=(),
-                )
             )
         except HTTPException as error:
             detail = error.detail if isinstance(error.detail, dict) else {}
@@ -292,7 +231,7 @@ async def call_assistant_tool(
                 "document_id": ingested.document.document_id,
                 "revision_id": ingested.revision_id,
                 "title": ingested.document.title,
-                "source_url": source_url,
+                "source_url": ingested.revision.source_url,
                 "chunk_count": len(ingested.chunks),
             }
         )
