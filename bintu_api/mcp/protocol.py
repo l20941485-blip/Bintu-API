@@ -12,6 +12,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
 from bintu_api.api import mcp_adapter
+from bintu_api.mcp.assistant import assistant_tool_definition
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -225,6 +226,7 @@ def _tools_list_result(request_id: Any) -> dict[str, Any]:
         request_id,
         {
             "tools": [
+                assistant_tool_definition(),
                 {
                     "name": TOOL_NAME,
                     "title": TOOL_TITLE,
