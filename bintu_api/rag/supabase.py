@@ -192,3 +192,26 @@ class SupabaseDocumentRepository:
         total = int(rows[0]["total"]) if rows else 0
 
         return documents, total
+
+
+class SupabaseDocumentDeletionRepository:
+    """Deletes user-owned RAG documents through a Supabase RPC."""
+
+    def __init__(self, supabase_client: Any) -> None:
+        self._supabase_client = supabase_client
+
+    async def delete_document(
+        self,
+        *,
+        owner_identity: str,
+        document_id: str,
+    ) -> bool:
+        response = await self._supabase_client.rpc(
+            "delete_rag_document",
+            {
+                "p_owner_identity": owner_identity,
+                "p_document_id": document_id,
+            },
+        ).execute()
+
+        return bool(response.data)

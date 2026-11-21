@@ -219,3 +219,10 @@ class MobileRagDocumentsResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class MobileRagDocumentDeleteResponse(BaseModel):
+    """Result of deleting a user-owned knowledge document."""
+
+    document_id: str
+    deleted: bool

@@ -14,6 +14,7 @@ from bintu_api.api.schemas import (
     MobileRagIngestRequest,
     MobileRagIngestResponse,
     MobileRagDocument,
+    MobileRagDocumentDeleteResponse,
     MobileRagDocumentsResponse,
     MobileRagIngestedChunk,
     RagAnswerCitation,
@@ -26,7 +27,7 @@ from bintu_api.extraction.output import sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
-from bintu_api.rag.supabase import SupabaseChunkRepository, SupabaseDocumentRepository
+from bintu_api.rag.supabase import SupabaseChunkRepository, SupabaseDocumentDeletionRepository, SupabaseDocumentRepository
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import api_key_scheme, bearer_scheme, verify_supabase_user
@@ -537,4 +538,66 @@ async def list_mobile_rag_documents(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.delete(
+    "/api/v1/mobile/rag/documents/{document_id}",
+    response_model=MobileRagDocumentDeleteResponse,
+    summary="Delete a signed-in user's knowledge document",
+    description=(
+        "Deletes a knowledge document owned by the authenticated Supabase "
+        "user, including its revisions and chunks."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (401, 403, 404, 429, 503)
+    },
+    dependencies=[Security(bearer_scheme, scopes=[])],
+)
+async def delete_mobile_rag_document(
+    request: Request,
+    document_id: str,
+) -> MobileRagDocumentDeleteResponse:
+    settings = request.app.state.settings
+    user_id = await asyncio.to_thread(
+        verify_supabase_user,
+        request,
+        settings,
+    )
+
+    supabase_client = getattr(request.app.state, "supabase_client", None)
+    if supabase_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "knowledge_core_unavailable",
+                "message": "The knowledge core is not configured.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
+
+    repository = SupabaseDocumentDeletionRepository(supabase_client)
+    deleted = await repository.delete_document(
+        owner_identity=user_id,
+        document_id=document_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "document_not_found",
+                "message": "The requested knowledge document was not found.",
+            },
+        )
+
+    return MobileRagDocumentDeleteResponse(
+        document_id=document_id,
+        deleted=True,
     )
