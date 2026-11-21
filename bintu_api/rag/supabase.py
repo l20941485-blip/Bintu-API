@@ -215,3 +215,26 @@ class SupabaseDocumentDeletionRepository:
         ).execute()
 
         return bool(response.data)
+
+
+class SupabaseDocumentDetailRepository:
+    """Fetches detailed metadata for a user-owned RAG document."""
+
+    def __init__(self, supabase_client: Any) -> None:
+        self._supabase_client = supabase_client
+
+    async def get_document_details(
+        self,
+        *,
+        owner_identity: str,
+        document_id: str,
+    ) -> dict[str, Any] | None:
+        response = await self._supabase_client.rpc(
+            "get_rag_document_details",
+            {
+                "p_owner_identity": owner_identity,
+                "p_document_id": document_id,
+            },
+        ).execute()
+
+        return response.data

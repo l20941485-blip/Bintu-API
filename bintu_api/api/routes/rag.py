@@ -14,7 +14,11 @@ from bintu_api.api.schemas import (
     MobileRagIngestRequest,
     MobileRagIngestResponse,
     MobileRagDocument,
+    MobileRagChunkPreview,
     MobileRagDocumentDeleteResponse,
+    MobileRagDocumentDetailResponse,
+    MobileRagDocumentMetadata,
+    MobileRagRevisionMetadata,
     MobileRagDocumentsResponse,
     MobileRagIngestedChunk,
     RagAnswerCitation,
@@ -27,7 +31,7 @@ from bintu_api.extraction.output import sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
-from bintu_api.rag.supabase import SupabaseChunkRepository, SupabaseDocumentDeletionRepository, SupabaseDocumentRepository
+from bintu_api.rag.supabase import SupabaseChunkRepository, SupabaseDocumentDeletionRepository, SupabaseDocumentDetailRepository, SupabaseDocumentRepository
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import api_key_scheme, bearer_scheme, verify_supabase_user
@@ -600,4 +604,93 @@ async def delete_mobile_rag_document(
     return MobileRagDocumentDeleteResponse(
         document_id=document_id,
         deleted=True,
+    )
+
+
+@router.get(
+    "/api/v1/mobile/rag/documents/{document_id}",
+    response_model=MobileRagDocumentDetailResponse,
+    summary="Get a signed-in user's knowledge document",
+    description=(
+        "Returns metadata and bounded chunk previews for a knowledge "
+        "document owned by the authenticated Supabase user."
+    ),
+    responses={
+        status_code: {"model": ErrorResponse}
+        for status_code in (401, 403, 404, 429, 503)
+    },
+    dependencies=[Security(bearer_scheme, scopes=[])],
+)
+async def get_mobile_rag_document(
+    request: Request,
+    document_id: str,
+) -> MobileRagDocumentDetailResponse:
+    settings = request.app.state.settings
+    user_id = await asyncio.to_thread(
+        verify_supabase_user,
+        request,
+        settings,
+    )
+
+    supabase_client = getattr(request.app.state, "supabase_client", None)
+    if supabase_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "knowledge_core_unavailable",
+                "message": "The knowledge core is not configured.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
+
+    repository = SupabaseDocumentDetailRepository(supabase_client)
+    details = await repository.get_document_details(
+        owner_identity=user_id,
+        document_id=document_id,
+    )
+
+    if not details:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "document_not_found",
+                "message": "The requested knowledge document was not found.",
+            },
+        )
+
+    document = details["document"]
+    revision = details["revision"]
+    chunks = details.get("chunks", [])
+
+    return MobileRagDocumentDetailResponse(
+        document=MobileRagDocumentMetadata(
+            document_id=document["document_id"],
+            canonical_url=document["canonical_url"],
+            title=document.get("title"),
+            source_type=document["source_type"],
+            created_at=document["created_at"],
+            updated_at=document["updated_at"],
+        ),
+        revision=MobileRagRevisionMetadata(
+            revision_id=revision["revision_id"],
+            source_url=revision["source_url"],
+            final_url=revision.get("final_url"),
+            extracted_at=revision["extracted_at"],
+            status=revision["status"],
+        ),
+        chunk_count=len(chunks),
+        chunks=[
+            MobileRagChunkPreview(
+                chunk_id=chunk["chunk_id"],
+                chunk_index=chunk["chunk_index"],
+                heading_path=chunk.get("heading_path") or [],
+                preview=chunk["preview"],
+            )
+            for chunk in chunks
+        ],
     )

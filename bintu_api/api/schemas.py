@@ -226,3 +226,42 @@ class MobileRagDocumentDeleteResponse(BaseModel):
 
     document_id: str
     deleted: bool
+
+
+class MobileRagDocumentMetadata(BaseModel):
+    """Metadata for a user-owned knowledge document."""
+
+    document_id: str
+    canonical_url: str
+    title: str | None = None
+    source_type: str
+    created_at: str
+    updated_at: str
+
+
+class MobileRagRevisionMetadata(BaseModel):
+    """Metadata for the latest revision of a knowledge document."""
+
+    revision_id: str
+    source_url: str
+    final_url: str | None = None
+    extracted_at: str
+    status: str
+
+
+class MobileRagChunkPreview(BaseModel):
+    """A bounded preview of a retrievable knowledge chunk."""
+
+    chunk_id: str
+    chunk_index: int
+    heading_path: list[str] = Field(default_factory=list)
+    preview: str
+
+
+class MobileRagDocumentDetailResponse(BaseModel):
+    """Detailed metadata and chunk previews for a user-owned document."""
+
+    document: MobileRagDocumentMetadata
+    revision: MobileRagRevisionMetadata
+    chunk_count: int
+    chunks: list[MobileRagChunkPreview]
