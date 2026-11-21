@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bintu_api.mcp.schemas import TOOL_NAME
 from bintu_api.rag.answer import RagAnswerService
+from bintu_api.rag.ingestion_workflow import ingest_public_knowledge
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import verify_supabase_user
@@ -24,15 +25,17 @@ ASSISTANT_TOOL_NAME = "bintu_assistant"
 ASSISTANT_TOOL_TITLE = "Bintu Assistant"
 
 ASSISTANT_TOOL_DESCRIPTION = (
-    "Use Bintu to scrape a public web page or ask a question against a "
-    "document in the signed-in user's knowledge base. Use domain=extraction "
-    "for public scraping. Use domain=knowledge with action=ask_knowledge to "
-    "answer a question from one user-owned document."
+    "Use Bintu to scrape a public web page, add a public web page to the "
+    "signed-in user's knowledge base, or ask a question against a document "
+    "in that knowledge base. Use domain=extraction for public scraping. Use "
+    "domain=knowledge with action=add_knowledge to ingest a public URL. Use "
+    "domain=knowledge with action=ask_knowledge to answer a question from "
+    "one user-owned document."
 )
 
 ASSISTANT_TOOL_ANNOTATIONS = {
     "title": ASSISTANT_TOOL_TITLE,
-    "readOnlyHint": True,
+    "readOnlyHint": False,
     "destructiveHint": False,
     "idempotentHint": False,
     "openWorldHint": True,
@@ -45,6 +48,7 @@ class AssistantArguments(BaseModel):
     domain: Literal["extraction", "knowledge"]
     action: Literal[
         "scrape",
+        "add_knowledge",
         "ask_knowledge",
     ]
     url: str | None = None
@@ -62,10 +66,13 @@ class AssistantArguments(BaseModel):
                 raise ValueError("extraction/scrape requires url")
 
         if self.domain == "knowledge":
+            if self.action == "add_knowledge":
+                if not self.url:
+                    raise ValueError("add_knowledge requires url")
+                return self
+
             if self.action != "ask_knowledge":
-                raise ValueError(
-                    "knowledge currently supports only action=ask_knowledge"
-                )
+                raise ValueError("knowledge supports only action=add_knowledge or action=ask_knowledge")
             if not self.query:
                 raise ValueError("ask_knowledge requires query")
             if not self.document_id:
@@ -84,14 +91,18 @@ ASSISTANT_INPUT_SCHEMA = {
         },
         "action": {
             "type": "string",
-            "enum": ["scrape", "ask_knowledge"],
+            "enum": ["scrape", "add_knowledge", "ask_knowledge"],
             "description": (
-                "For extraction, use scrape. For knowledge, use ask_knowledge."
+                "For extraction, use scrape. For knowledge, use "
+                "add_knowledge to ingest a public URL or ask_knowledge to "
+                "answer from a user-owned document."
             ),
         },
         "url": {
             "type": "string",
-            "description": "Required for extraction/scrape: an absolute public HTTP or HTTPS URL.",
+            "description": (
+                "Required for extraction/scrape and knowledge/add_knowledge: an absolute public HTTP or HTTPS URL."
+            ),
         },
         "query": {
             "type": "string",
@@ -179,6 +190,50 @@ async def call_assistant_tool(
             "invalid_arguments",
             str(error),
             "Check the bintu_assistant input schema and retry.",
+        )
+
+    if arguments.domain == "knowledge" and arguments.action == "add_knowledge":
+        supabase_client = getattr(request.app.state, "supabase_client", None)
+        if supabase_client is None:
+            return _tool_error(
+                "knowledge_core_unavailable",
+                "The knowledge core is not configured.",
+            )
+
+        try:
+            user_id = await verify_supabase_user(request, settings)
+        except HTTPException as error:
+            detail = error.detail if isinstance(error.detail, dict) else {}
+            return _tool_error(
+                str(detail.get("code", "invalid_session")),
+                str(detail.get("message", "A valid sign-in session is required.")),
+            )
+
+        try:
+            ingested = await ingest_public_knowledge(
+                request=request,
+                settings=settings,
+                user_id=user_id,
+                url=arguments.url or "",
+                max_tokens=arguments.max_tokens,
+            )
+        except HTTPException as error:
+            detail = error.detail if isinstance(error.detail, dict) else {}
+            return _tool_error(
+                str(detail.get("code", "ingestion_failed")),
+                str(detail.get("message", "Unable to ingest the requested page.")),
+            )
+
+        return _tool_result(
+            {
+                "domain": "knowledge",
+                "action": "add_knowledge",
+                "document_id": ingested.document.document_id,
+                "revision_id": ingested.revision_id,
+                "title": ingested.document.title,
+                "source_url": ingested.revision.source_url,
+                "chunk_count": len(ingested.chunks),
+            }
         )
 
     if arguments.domain == "extraction":
