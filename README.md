@@ -148,7 +148,7 @@ Results may be served from memory or persistent cache (`cache_hit`, `cache_layer
 #### Cache freshness
 
 Memory-cache entries older than the configured TTL are considered stale. If a
-stale entry’s upstream fetch fails, Bintu falls back to the cached content and
+stale entryâ€™s upstream fetch fails, Bintu falls back to the cached content and
 sets `revalidated: true` in the response provenance, with
 `stale_reason: "ttl_expired"`. Fresh memory hits, persistent-cache hits, and
 cache bypasses report `revalidated: false`.
