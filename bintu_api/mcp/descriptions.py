@@ -97,6 +97,14 @@ MAIN_CONTENT_ONLY_DESCRIPTION = (
     "Cleaned requests use memory caching only."
 )
 
+EXCLUDE_TERMINAL_SECTIONS_DESCRIPTION = (
+    "Remove recognized terminal non-body sections, such as References, "
+    "See also, External links, and Further reading, after main-content "
+    "extraction. Requires main_content_only and does not apply when "
+    "explicit sections are requested. Default false preserves references "
+    "and other terminal sections."
+)
+
 CONTENT_CLEANING_DESCRIPTION = (
     "Reports whether stronger main-content extraction was applied to the "
     "source page. strategy is main_content when cleaning succeeded and "

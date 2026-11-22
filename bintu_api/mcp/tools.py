@@ -53,6 +53,7 @@ class ToolArguments(BaseModel):
     persist: bool = True
     sections: str | list[str] | None = None
     main_content_only: bool = False
+    exclude_terminal_sections: bool = False
 
     @model_validator(mode="before")
     @classmethod

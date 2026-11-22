@@ -170,3 +170,22 @@ def test_main_content_only_is_forwarded_to_fetch_boundary(client: TestClient):
 
     assert fetch_mock.call_args.kwargs["main_content_only"] is True
     assert fetch_mock.call_args.kwargs["links"] == "false"
+
+
+def test_exclude_terminal_sections_is_forwarded_to_fetch_boundary(client: TestClient):
+    with patch_fetch() as fetch_mock:
+        result = call_tool(
+            client,
+            {
+                "url": "https://example.com",
+                "main_content_only": True,
+                "exclude_terminal_sections": True,
+                "links": "false",
+                "cache": False,
+                "persist": False,
+            },
+        )
+
+    assert result.get("isError") is not True, result
+    assert fetch_mock.call_args.kwargs["main_content_only"] is True
+    assert fetch_mock.call_args.kwargs["exclude_terminal_sections"] is True

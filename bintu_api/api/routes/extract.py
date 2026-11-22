@@ -72,6 +72,7 @@ async def scrape_text(
     max_tokens: int = 6000,
     sections: Annotated[list[str] | None, Query()] = None,
     main_content_only: bool = False,
+    exclude_terminal_sections: bool = False,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     routes_common.verify_api_access(request, settings)
@@ -138,6 +139,7 @@ async def scrape_text(
         footnote_url_policy=footnote_url_policy,
         max_footnote_url_length=max_footnote_url_length,
         sections=sections,
+        exclude_terminal_sections=exclude_terminal_sections,
     )
 
 
@@ -188,6 +190,7 @@ async def mobile_scrape_text(
         links,
         skip_cache,
         persist,
+        exclude_terminal_sections=payload.exclude_terminal_sections,
     )
 
 
@@ -207,6 +210,7 @@ async def _scrape_text(
     footnote_url_policy: Literal["full", "truncated"] = "truncated",
     max_footnote_url_length: int = 100,
     sections: list[str] | None = None,
+    exclude_terminal_sections: bool = False,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -224,6 +228,7 @@ async def _scrape_text(
             include_header=include_header,
             include_footer=include_footer,
             main_content_only=main_content_only,
+            exclude_terminal_sections=exclude_terminal_sections,
             render_js=render_js,
             links=links,
             skip_cache=skip_cache,
