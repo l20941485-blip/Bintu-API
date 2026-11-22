@@ -139,3 +139,34 @@ def test_mcp_tool_input_schema_declares_summary_options():
     assert properties["summary_mode"]["default"] == "none"
     assert properties["summary_sentence_count"]["minimum"] == 1
     assert properties["summary_sentence_count"]["maximum"] == 10
+
+
+def test_rest_scrape_text_returns_summary_metadata(client: TestClient):
+    with patch_fetch("leading"):
+        response = client.get(
+            "/api/v1/scrape/text",
+            params={
+                "url": "https://example.com/page",
+                "main_content_only": True,
+                "summary_mode": "leading",
+                "summary_sentence_count": 2,
+            },
+            headers={"X-API-Key": TEST_API_KEY},
+        )
+
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    summary = payload["content_cleaning"]["extractive_summary"]
+
+    assert summary["applied"] is True
+    assert summary["mode"] == "leading"
+    assert summary["requested_sentence_count"] == 2
+    assert summary["returned_sentence_count"] == 2
+    assert summary["truncated"] is False
+    assert summary["sentences"] == []
+
+    assert payload["provenance"]["request_id"]
+    assert payload["content_cleaning"]["applied"] is True
+
+
