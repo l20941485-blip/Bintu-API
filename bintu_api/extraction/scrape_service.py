@@ -47,6 +47,9 @@ from bintu_api.extraction.request_policy import (
     validate_link_mode,
 )
 from bintu_api.extraction.scrape_options import ScrapeOptions
+from bintu_api.extraction.summary_cache import (
+    validate_cached_extractive_summary,
+)
 from bintu_api.extraction.summarizer import build_extractive_summary
 
 logger = logging.getLogger("bintu_api.scrape")
@@ -164,6 +167,22 @@ class ScrapeService:
         )
 
         if result is not None:
+            summary_payload = (
+                result.content_cleaning.get("extractive_summary")
+                if result.content_cleaning
+                else None
+            )
+            summary_validation = validate_cached_extractive_summary(
+                result.markdown,
+                summary_payload,
+            )
+
+            if (
+                summary_validation.status != "valid"
+                and summary_payload is not None
+            ):
+                result.content_cleaning.pop("extractive_summary", None)
+
             cache_layer = "persistent"
             self.cache_event_logger(
                 event="cache_hit",

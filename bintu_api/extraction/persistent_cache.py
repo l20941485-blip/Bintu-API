@@ -78,6 +78,7 @@ async def write_persistent_cache(
                 extracted_at=result.extracted_at,
                 page_title=result.page_title,
                 content_fingerprint=result.content_fingerprint,
+                content_cleaning=result.content_cleaning,
             ),
             timeout=timeout_seconds,
         )
