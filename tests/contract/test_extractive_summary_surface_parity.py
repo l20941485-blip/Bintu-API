@@ -171,7 +171,6 @@ def test_rest_scrape_text_returns_summary_metadata(client: TestClient):
 
 
 
-
 def test_mcp_tool_call_returns_summary_metadata(client: TestClient):
     with patch_fetch("leading"):
         response = client.post(
