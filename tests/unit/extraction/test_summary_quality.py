@@ -56,3 +56,58 @@ def test_quality_report_includes_review_fields():
     assert report["review_status"] == "unreviewed"
     assert report["reviewer"] is None
     assert report["notes"] == ""
+
+
+def test_quality_report_validates_exact_source_grounding():
+    markdown = (
+        "# Guide\n\n"
+        "Bintu extracts clean Markdown for retrieval.\n\n"
+        "It preserves headings and source context."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+    report = evaluate_extractive_summary(markdown, summary)
+
+    assert report["grounding_valid"] is True
+    assert report["provenance_valid"] is True
+    assert report["faithful"] is True
+
+    for sentence in summary.sentences:
+        assert markdown[sentence.char_start:sentence.char_end] == sentence.text
+
+
+def test_quality_report_detects_invalid_source_span():
+    markdown = "Bintu extracts clean Markdown and preserves source context."
+    summary = build_extractive_summary(
+        markdown,
+        mode="leading",
+        sentence_count=1,
+    )
+
+    altered = summary.sentences[0]
+    object.__setattr__(altered, "char_end", altered.char_end - 1)
+
+    report = evaluate_extractive_summary(markdown, summary)
+
+    assert report["grounding_valid"] is False
+    assert report["faithful"] is False
+
+
+def test_quality_report_detects_invalid_provenance():
+    markdown = "Bintu extracts clean Markdown and preserves source context."
+    summary = build_extractive_summary(
+        markdown,
+        mode="leading",
+        sentence_count=1,
+    )
+
+    object.__setattr__(summary, "source_fingerprint", "invalid")
+
+    report = evaluate_extractive_summary(markdown, summary)
+
+    assert report["provenance_valid"] is False
+    assert report["faithful"] is False

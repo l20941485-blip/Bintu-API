@@ -6,10 +6,14 @@ source document. It does not use a language model or network service.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Iterable
 
-from bintu_api.extraction.summarizer import ExtractiveSummary
+from bintu_api.extraction.summarizer import (
+    EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
+    ExtractiveSummary,
+)
 
 _WORD_RE = re.compile(r"[\w]+", re.UNICODE)
 
@@ -45,6 +49,10 @@ _STOPWORDS = frozenset(
         "with",
     }
 )
+
+
+def _source_fingerprint(markdown: str) -> str:
+    return hashlib.sha256(markdown.encode("utf-8")).hexdigest()
 
 
 def _content_tokens(text: str) -> set[str]:
@@ -92,7 +100,20 @@ def evaluate_extractive_summary(
         else 1.0
     )
 
-    faithful = all(text in markdown for text in texts)
+    grounding_valid = all(
+        markdown[sentence.char_start:sentence.char_end] == sentence.text
+        for sentence in summary.sentences
+    )
+    provenance_valid = (
+        summary.source_fingerprint == _source_fingerprint(markdown)
+        and summary.algorithm_version == EXTRACTIVE_SUMMARY_ALGORITHM_VERSION
+    )
+
+    faithful = (
+        grounding_valid
+        and provenance_valid
+        and all(text in markdown for text in texts)
+    )
 
     source_order_preserved = all(
         summary.sentences[index].char_start
@@ -121,6 +142,8 @@ def evaluate_extractive_summary(
 
     return {
         "faithful": faithful,
+        "grounding_valid": grounding_valid,
+        "provenance_valid": provenance_valid,
         "coverage": coverage,
         "redundancy": redundancy,
         "coherence": coherence,
