@@ -168,6 +168,8 @@ def evaluate_extractive_summary(
         "summary_token_count": len(summary_tokens),
         "redundancy": redundancy,
         "coherence": coherence,
+        "candidate_count": diagnostics.candidate_count,
+        "selected_count": len(diagnostics.selected_indices),
         "selection_ratio": selection_ratio,
         "mean_selected_score": mean_selected_score,
         "selection_diversity": selection_diversity,
