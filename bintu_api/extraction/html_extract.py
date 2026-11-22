@@ -435,7 +435,10 @@ def extract_main_content(
     if len(cleaned) < 200:
         return "", False
 
-    return cleaned[:max_characters], True
+    truncated = cleaned[:max_characters]
+    truncated = close_open_fence(truncated)
+
+    return truncated, True
 
 
 def _ensure_space_before(node) -> None:

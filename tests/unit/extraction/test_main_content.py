@@ -79,3 +79,20 @@ def test_main_content_extraction_respects_character_cap() -> None:
 
     assert applied is True
     assert len(text) == 250
+
+
+def test_main_content_truncation_closes_open_code_fence() -> None:
+    markdown = "```python\n" + ("print('hello')\n" * 20) + "```"
+
+    with patch("trafilatura.extract", return_value=markdown):
+        text, applied = extract_main_content(
+            b"<html><body><article>Example</article></body></html>",
+            50,
+            "utf-8",
+            "https://example.com/docs",
+        )
+
+    assert applied is True
+    assert len(text) <= 54
+    assert text.count("```") % 2 == 0
+    assert text.endswith("```")
