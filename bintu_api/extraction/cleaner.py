@@ -257,6 +257,9 @@ _TERMINAL_SECTION_HEADINGS = frozenset(
         "bibliography",
         "notes",
         "citations",
+        "notes and references",
+        "references and further reading",
+        "external resources",
     }
 )
 
