@@ -369,6 +369,27 @@ TOOL_INPUT_SCHEMA = {
             "default": False,
             "description": EXCLUDE_TERMINAL_SECTIONS_DESCRIPTION,
         },
+        "summary_mode": {
+            "type": "string",
+            "enum": ["none", "leading", "key_sentences"],
+            "default": "none",
+            "description": (
+                "Opt-in deterministic extractive summary. none preserves the "
+                "existing response; leading selects the first eligible source "
+                "sentences; key_sentences selects longer eligible sentences "
+                "and restores source order."
+            ),
+        },
+        "summary_sentence_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 3,
+            "description": (
+                "Maximum number of verbatim source sentences included in the "
+                "opt-in extractive summary."
+            ),
+        },
         "chunk_strategy": {
             "type": "string",
             "enum": ["sequential", "semantic"],

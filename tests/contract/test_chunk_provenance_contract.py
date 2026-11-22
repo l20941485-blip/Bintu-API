@@ -117,6 +117,41 @@ def test_chunk_location_marks_unlocatable_chunk_reassembled():
     assert annotated[0]["char_end"] is None
 
 
+def test_chunk_ids_are_stable_for_unchanged_content():
+    source_text = (
+        "# Heading\n\nFirst paragraph.\n\n"
+        "## Subheading\n\nSecond paragraph."
+    )
+
+    def build_chunks():
+        semantic_chunks = split_semantic_chunks(
+            source_text,
+            max_tokens=20,
+            source_url=PROVENANCE["source_url"],
+            final_url=PROVENANCE["final_url"],
+            content_sha256=PROVENANCE["content_sha256"],
+            extracted_at=PROVENANCE["extracted_at"],
+        )
+        chunks = [asdict(chunk) for chunk in semantic_chunks]
+        chunks = annotate_chunk_locations(
+            chunks,
+            source_text=source_text,
+        )
+        return attach_chunk_provenance(chunks, **PROVENANCE)
+
+    first = build_chunks()
+    second = build_chunks()
+
+    assert len(first) == len(second)
+
+    for left, right in zip(first, second, strict=True):
+        assert left["text"] == right["text"]
+        assert left["chunk_id"] == right["chunk_id"]
+        assert left["chunk_sha256"] == right["chunk_sha256"]
+        assert left["char_start"] == right["char_start"]
+        assert left["char_end"] == right["char_end"]
+
+
 def test_chunk_provenance_includes_content_fingerprint():
     from bintu_api.extraction.fingerprint import compute_content_fingerprint
 

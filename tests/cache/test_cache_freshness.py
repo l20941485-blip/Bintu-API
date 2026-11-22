@@ -220,11 +220,6 @@ def test_evaluate_freshness_fresh_within_ttl() -> None:
     now = datetime.now(UTC)
     entry = _freshness_entry(extracted_at=(now - timedelta(minutes=10)).isoformat())
 
-    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
-
-    assert is_fresh is True
-    assert stale_reason is None
-
 
 def test_evaluate_freshness_ttl_expired() -> None:
     now = datetime.now(UTC)
@@ -261,12 +256,32 @@ def test_evaluate_freshness_missing_timestamp() -> None:
 
 def test_evaluate_freshness_future_timestamp_is_fresh() -> None:
     now = datetime.now(UTC)
-    entry = _freshness_entry(extracted_at=(now + timedelta(minutes=5)).isoformat())
+    entry = _freshness_entry(extracted_at=(now + timedelta(minutes=1)).isoformat())
 
-    is_fresh, stale_reason = evaluate_cache_freshness(entry, now=now, extractor_version="1.0.0")
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry,
+        now=now,
+        extractor_version="1.0.0",
+    )
 
     assert is_fresh is True
     assert stale_reason is None
+
+
+def test_evaluate_freshness_invalid_timestamp_requires_refresh() -> None:
+    now = datetime.now(UTC)
+    entry = _freshness_entry(extracted_at="not-a-date")
+
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry,
+        now=now,
+        extractor_version="1.0.0",
+    )
+
+    assert is_fresh is False
+    assert stale_reason == "invalid_timestamp"
+
+
 
 
 def test_stale_fallback_reports_revalidated() -> None:

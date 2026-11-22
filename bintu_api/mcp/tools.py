@@ -54,6 +54,8 @@ class ToolArguments(BaseModel):
     sections: str | list[str] | None = None
     main_content_only: bool = False
     exclude_terminal_sections: bool = False
+    summary_mode: Literal["none", "leading", "key_sentences"] = "none"
+    summary_sentence_count: int = Field(default=3, ge=1, le=10)
 
     @model_validator(mode="before")
     @classmethod

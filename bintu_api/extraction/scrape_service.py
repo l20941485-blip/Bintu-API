@@ -47,6 +47,11 @@ from bintu_api.extraction.request_policy import (
     validate_link_mode,
 )
 from bintu_api.extraction.scrape_options import ScrapeOptions
+from bintu_api.extraction.summarizer import build_extractive_summary
+from bintu_api.extraction.summary_cache import (
+    log_summary_cache_validation,
+    validate_cached_extractive_summary,
+)
 
 logger = logging.getLogger("bintu_api.scrape")
 
@@ -163,6 +168,23 @@ class ScrapeService:
         )
 
         if result is not None:
+            summary_payload = (
+                result.content_cleaning.get("extractive_summary")
+                if result.content_cleaning
+                else None
+            )
+            summary_validation = validate_cached_extractive_summary(
+                result.markdown,
+                summary_payload,
+            )
+            log_summary_cache_validation(summary_validation)
+
+            if (
+                summary_validation.status != "valid"
+                and summary_payload is not None
+            ):
+                result.content_cleaning.pop("extractive_summary", None)
+
             cache_layer = "persistent"
             self.cache_event_logger(
                 event="cache_hit",
@@ -301,6 +323,30 @@ class ScrapeService:
             "terminal_sections_removed": terminal_sections_removed,
             "deduplicated_count": deduplicated_count,
         }
+
+        if options.summary_mode != "none":
+            summary = build_extractive_summary(
+                cleaned_text,
+                mode=options.summary_mode,
+                sentence_count=options.summary_sentence_count,
+            )
+            content_cleaning["extractive_summary"] = {
+                "applied": True,
+                "mode": summary.mode,
+                "requested_sentence_count": summary.requested_sentence_count,
+                "returned_sentence_count": summary.returned_sentence_count,
+                "truncated": summary.truncated,
+                "sentences": [
+                    {
+                        "text": sentence.text,
+                        "heading_path": list(sentence.heading_path),
+                        "char_start": sentence.char_start,
+                        "char_end": sentence.char_end,
+                        "score": sentence.score,
+                    }
+                    for sentence in summary.sentences
+                ],
+            }
 
         extracted = ExtractedText(
             text=cleaned_text,

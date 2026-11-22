@@ -84,6 +84,8 @@ class McpToolMetadataContractTests(unittest.TestCase):
             "max_tokens",
             "main_content_only",
             "exclude_terminal_sections",
+            "summary_mode",
+            "summary_sentence_count",
             "chunk_strategy",
             "overlap_tokens",
             "return_metadata",

@@ -153,6 +153,26 @@ sets `revalidated: true` in the response provenance, with
 `stale_reason: "ttl_expired"`. Fresh memory hits, persistent-cache hits, and
 cache bypasses report `revalidated: false`.
 
+### Cached summary validation
+
+Persistent cache entries containing an extractive summary are validated
+before reuse.
+
+A cached summary is retained only when all of the following remain true:
+
+- The summary algorithm version matches the current implementation.
+- The SHA-256 source fingerprint matches the cached Markdown.
+- Every selected summary sentence is exactly present in the cached Markdown.
+- The cached summary metadata is structurally valid.
+
+If validation fails, Bintu discards the cached summary metadata and
+regenerates the summary from the cached Markdown. Legacy cache entries
+without summary metadata remain supported.
+
+Cache validation emits a privacy-safe `cached_summary_validation` log event
+containing only the validation status. It does not log URLs, Markdown,
+summary text, source fingerprints, or algorithm versions.
+
 #### Token economics
 
 `approx_tokens` is `ceil(characters / 4)`, an estimate, not a tokenizer count. `tokens_saved_estimate` is the source-HTML estimate minus the returned-text estimate. `html_tokens` reports the source size the same way. Use these fields to budget LLM context before and after extraction.

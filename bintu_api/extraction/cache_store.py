@@ -69,7 +69,8 @@ async def get_cached_markdown(
         .select(
             "markdown,truncated,html_tokens,tokens_saved_estimate,"
             "limiting_factor,extracted_at,content_hash,"
-            "page_title,page_title_source,content_fingerprint"
+            "page_title,page_title_source,content_fingerprint,"
+            "content_cleaning"
         )
         .eq("url", url)
         .eq("render_js", render_js)
@@ -101,6 +102,7 @@ async def get_cached_markdown(
     page_title = row.get("page_title")
     page_title_source = row.get("page_title_source")
     content_fingerprint = row.get("content_fingerprint")
+    content_cleaning = row.get("content_cleaning")
 
     return CachedMarkdown(
         markdown=markdown,
@@ -119,6 +121,11 @@ async def get_cached_markdown(
         content_fingerprint=(
             content_fingerprint
             if isinstance(content_fingerprint, str)
+            else None
+        ),
+        content_cleaning=(
+            content_cleaning
+            if isinstance(content_cleaning, dict)
             else None
         ),
     )
@@ -140,6 +147,7 @@ async def upsert_cached_markdown(
     page_title: str | None = None,
     page_title_source: str = "none",
     content_fingerprint: str | None = None,
+    content_cleaning: dict[str, Any] | None = None,
 ) -> None:
     """Store extracted text plus the economics needed to rehydrate cache hits.
 
@@ -178,6 +186,7 @@ async def upsert_cached_markdown(
                 "page_title": page_title,
                 "page_title_source": page_title_source,
                 "content_fingerprint": content_fingerprint,
+                "content_cleaning": content_cleaning,
                 "created_at": datetime.now(UTC).isoformat(),
             },
             on_conflict="url,render_js,include_nav,include_header,include_footer",
