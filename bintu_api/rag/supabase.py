@@ -50,12 +50,21 @@ class SupabaseChunkRepository:
         ).execute()
 
         data = response.data
+        document_id = data["document_id"]
         revision_id = data["revision_id"]
         chunk_results = data.get("chunks", [])
 
+        persisted_document = Document(
+            document_id=document_id,
+            canonical_url=document.canonical_url,
+            title=document.title,
+            source_type=document.source_type,
+            owner_identity=document.owner_identity,
+        )
+
         persisted_revision = DocumentRevision(
             revision_id=revision_id,
-            document_id=document.document_id,
+            document_id=document_id,
             source_url=revision.source_url,
             final_url=revision.final_url,
             content_sha256=revision.content_sha256,
@@ -67,7 +76,7 @@ class SupabaseChunkRepository:
 
         persisted_chunks = tuple(
             self._persist_chunk(
-                document=document,
+                document=persisted_document,
                 revision=persisted_revision,
                 chunk=chunk,
                 result=chunk_results[index],
@@ -77,7 +86,7 @@ class SupabaseChunkRepository:
 
         return IngestedRevision(
             revision_id=revision_id,
-            document=document,
+            document=persisted_document,
             revision=persisted_revision,
             chunks=persisted_chunks,
         )
