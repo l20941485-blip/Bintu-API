@@ -99,7 +99,19 @@ class ExtractiveSummary:
 
 _EXTRACTIVE_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _FENCE_RE = re.compile(r"^```")
-_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
+_LATIN_SENTENCE_BOUNDARY_RE = re.compile(
+    r"(?<=[.!?\u2026])"
+    r"(?=[\"')\]]*\s+(?=[^\s])|$)"
+)
+
+_CJK_SENTENCE_BOUNDARY_RE = re.compile(
+    r"(?<=[。！？])"
+    r"(?=[\"')\]]*|$)"
+)
+
+_SENTENCE_BOUNDARY_RE = re.compile(
+    rf"(?:{_LATIN_SENTENCE_BOUNDARY_RE.pattern}|{_CJK_SENTENCE_BOUNDARY_RE.pattern})"
+)
 
 
 def _is_inside_fence(lines: list[str], index: int) -> bool:
@@ -144,7 +156,7 @@ def _split_extractive_sentences(
         heading_path = _active_heading(lines, line_index)
         cursor = 0
 
-        for sentence in _SENTENCE_RE.split(stripped):
+        for sentence in _SENTENCE_BOUNDARY_RE.split(stripped):
             start = markdown.find(sentence, cursor)
             if start == -1:
                 continue
@@ -163,8 +175,16 @@ def _split_extractive_sentences(
     return candidates
 
 
+_CJK_CHARACTER_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+
+
 def _is_eligible_summary_sentence(sentence: str) -> bool:
-    return len(sentence) >= 30
+    if len(sentence) >= 30:
+        return True
+
+    # CJK sentences convey substantially more information per character than
+    # whitespace-delimited scripts, so use a lower character threshold.
+    return len(sentence) >= 12 and bool(_CJK_CHARACTER_RE.search(sentence))
 
 
 _STOPWORDS = frozenset(

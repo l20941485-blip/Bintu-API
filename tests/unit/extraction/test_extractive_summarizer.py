@@ -147,3 +147,51 @@ def test_key_sentences_prefers_informative_sentences():
         "The extraction service supports deterministic caching."
         in texts
     )
+
+
+def test_key_sentences_supports_cjk_sentence_boundaries():
+    markdown = (
+        "# 指南\n\n"
+        "这是第一个完整的句子，说明提取服务如何工作。\n"
+        "这是第二个完整的句子，解释来源偏移量。\n\n"
+        "第三个句子介绍确定性缓存。"
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="leading",
+        sentence_count=3,
+    )
+
+    texts = [sentence.text for sentence in summary.sentences]
+
+    assert texts == [
+        "这是第一个完整的句子，说明提取服务如何工作。",
+        "这是第二个完整的句子，解释来源偏移量。",
+        "第三个句子介绍确定性缓存。",
+    ]
+    assert summary.sentences[0].char_start < summary.sentences[1].char_start
+    assert summary.sentences[1].char_start < summary.sentences[2].char_start
+
+
+def test_key_sentences_supports_unicode_uppercase_boundaries():
+    markdown = (
+        "# Guide\n\n"
+        "Ceci est la première phrase de l’exemple.\n"
+        "Également, cette phrase doit être séparée correctement.\n\n"
+        "Cette dernière phrase explique les décalages source."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="leading",
+        sentence_count=3,
+    )
+
+    texts = [sentence.text for sentence in summary.sentences]
+
+    assert texts == [
+        "Ceci est la première phrase de l’exemple.",
+        "Également, cette phrase doit être séparée correctement.",
+        "Cette dernière phrase explique les décalages source.",
+    ]
