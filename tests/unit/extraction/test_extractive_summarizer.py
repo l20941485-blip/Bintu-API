@@ -18,7 +18,7 @@ def test_leading_mode_returns_first_eligible_sentences_in_order():
 
     assert summary.mode == "leading"
     assert summary.text == (
-        "Bintu extracts clean Markdown for retrieval. "
+        "Bintu extracts clean Markdown for retrieval.\n\n"
         "It preserves headings and source context."
     )
     assert [sentence.text for sentence in summary.sentences] == [

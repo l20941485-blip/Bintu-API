@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -95,6 +96,15 @@ class ExtractiveSummary:
     requested_sentence_count: int
     returned_sentence_count: int
     truncated: bool
+    algorithm_version: str
+    source_fingerprint: str
+
+
+EXTRACTIVE_SUMMARY_ALGORITHM_VERSION = "v1-grounded-mmr"
+
+
+def _source_fingerprint(markdown: str) -> str:
+    return hashlib.sha256(markdown.encode("utf-8")).hexdigest()
 
 
 _EXTRACTIVE_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -162,9 +172,10 @@ def _split_extractive_sentences(
                 continue
 
             end = start + len(sentence)
+            exact_sentence = markdown[start:end]
             candidates.append(
                 (
-                    sentence.strip(),
+                    exact_sentence,
                     start,
                     end,
                     heading_path,
@@ -350,6 +361,8 @@ def build_extractive_summary(
             requested_sentence_count=sentence_count,
             returned_sentence_count=0,
             truncated=False,
+            algorithm_version=EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
+            source_fingerprint=_source_fingerprint(markdown),
         )
 
     if mode == "leading":
@@ -376,9 +389,11 @@ def build_extractive_summary(
 
     return ExtractiveSummary(
         mode=mode,
-        text=" ".join(sentence.text for sentence in sentences),
+        text="\n\n".join(sentence.text for sentence in sentences),
         sentences=sentences,
         requested_sentence_count=sentence_count,
         returned_sentence_count=len(sentences),
         truncated=len(sentences) < sentence_count,
+        algorithm_version=EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
+        source_fingerprint=_source_fingerprint(markdown),
     )
