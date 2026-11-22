@@ -89,6 +89,15 @@ class SummarySentence:
 
 
 @dataclass(frozen=True)
+class SelectionDiagnostics:
+    candidate_count: int
+    selected_indices: tuple[int, ...]
+    scores: tuple[float, ...]
+    heading_paths: tuple[tuple[str, ...], ...]
+    redundancy_threshold: float
+
+
+@dataclass(frozen=True)
 class ExtractiveSummary:
     mode: Literal["leading", "key_sentences"]
     text: str
@@ -98,6 +107,7 @@ class ExtractiveSummary:
     truncated: bool
     algorithm_version: str
     source_fingerprint: str
+    diagnostics: SelectionDiagnostics
 
 
 EXTRACTIVE_SUMMARY_ALGORITHM_VERSION = "v1-grounded-mmr"
@@ -363,6 +373,13 @@ def build_extractive_summary(
             truncated=False,
             algorithm_version=EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
             source_fingerprint=_source_fingerprint(markdown),
+            diagnostics=SelectionDiagnostics(
+                candidate_count=0,
+                selected_indices=(),
+                scores=(),
+                heading_paths=(),
+                redundancy_threshold=0.85,
+            ),
         )
 
     if mode == "leading":
@@ -387,6 +404,12 @@ def build_extractive_summary(
         if (text, start, end, heading_path) in selected
     )
 
+    selected_indices = tuple(
+        index
+        for index, candidate in enumerate(candidates)
+        if candidate in selected
+    )
+
     return ExtractiveSummary(
         mode=mode,
         text="\n\n".join(sentence.text for sentence in sentences),
@@ -396,4 +419,13 @@ def build_extractive_summary(
         truncated=len(sentences) < sentence_count,
         algorithm_version=EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
         source_fingerprint=_source_fingerprint(markdown),
+        diagnostics=SelectionDiagnostics(
+            candidate_count=len(candidates),
+            selected_indices=selected_indices,
+            scores=tuple(sentence.score for sentence in sentences),
+            heading_paths=tuple(
+                sentence.heading_path for sentence in sentences
+            ),
+            redundancy_threshold=0.85,
+        ),
     )
