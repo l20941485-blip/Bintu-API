@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from bintu_api.extraction.summarizer import (
     EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
 )
+
+
+logger = logging.getLogger("bintu_api.scrape")
 
 
 SummaryCacheStatus = Literal[
@@ -119,4 +123,17 @@ def validate_cached_extractive_summary(
     return SummaryCacheValidation(
         status="valid",
         summary_payload=summary_payload,
+    )
+
+def log_summary_cache_validation(
+    validation: SummaryCacheValidation,
+) -> None:
+    """Emit a privacy-safe validation outcome for a cached summary.
+
+    The event deliberately omits URL material, Markdown, summary text,
+    fingerprints, and algorithm versions.
+    """
+    logger.info(
+        "cached_summary_validation",
+        extra={"status": validation.status},
     )
