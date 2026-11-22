@@ -10,7 +10,6 @@ from typing import Literal
 
 from bintu_api.extraction.quality import ContentQualityAssessment
 
-
 QUALITY_POLICY_VERSION = "v1"
 
 QualityPolicyMode = Literal["observe", "warn", "enforce"]

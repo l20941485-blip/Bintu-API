@@ -1,6 +1,5 @@
 from bintu_api.extraction.summary_cache import validate_cached_extractive_summary
 
-
 MARKDOWN = """# Example
 
 First useful sentence.

@@ -6,7 +6,6 @@ from bintu_api.extraction.cache_store import (
     upsert_cached_markdown,
 )
 
-
 MARKDOWN = """# Example
 
 First useful sentence.

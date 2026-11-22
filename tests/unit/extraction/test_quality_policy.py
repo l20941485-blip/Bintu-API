@@ -7,7 +7,6 @@ from bintu_api.extraction.quality_policy import (
     evaluate_quality_policy,
 )
 
-
 HIGH_QUALITY = ContentQualityAssessment(
     score=0.95,
     boilerplate_ratio=0.01,

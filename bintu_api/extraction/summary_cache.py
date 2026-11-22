@@ -11,7 +11,6 @@ from bintu_api.extraction.summarizer import (
     EXTRACTIVE_SUMMARY_ALGORITHM_VERSION,
 )
 
-
 logger = logging.getLogger("bintu_api.scrape")
 
 

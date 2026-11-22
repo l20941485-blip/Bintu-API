@@ -47,11 +47,11 @@ from bintu_api.extraction.request_policy import (
     validate_link_mode,
 )
 from bintu_api.extraction.scrape_options import ScrapeOptions
+from bintu_api.extraction.summarizer import build_extractive_summary
 from bintu_api.extraction.summary_cache import (
     log_summary_cache_validation,
     validate_cached_extractive_summary,
 )
-from bintu_api.extraction.summarizer import build_extractive_summary
 
 logger = logging.getLogger("bintu_api.scrape")
 
