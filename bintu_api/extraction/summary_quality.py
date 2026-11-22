@@ -100,6 +100,12 @@ def evaluate_extractive_summary(
         else 1.0
     )
 
+    summary_precision = (
+        len(source_tokens & summary_tokens) / len(summary_tokens)
+        if summary_tokens
+        else 1.0
+    )
+
     grounding_valid = all(
         markdown[sentence.char_start:sentence.char_end] == sentence.text
         for sentence in summary.sentences
@@ -145,6 +151,8 @@ def evaluate_extractive_summary(
         "grounding_valid": grounding_valid,
         "provenance_valid": provenance_valid,
         "coverage": coverage,
+        "summary_precision": summary_precision,
+        "summary_token_count": len(summary_tokens),
         "redundancy": redundancy,
         "coherence": coherence,
         "source_order_preserved": source_order_preserved,

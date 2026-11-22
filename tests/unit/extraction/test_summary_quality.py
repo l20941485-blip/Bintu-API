@@ -111,3 +111,39 @@ def test_quality_report_detects_invalid_provenance():
 
     assert report["provenance_valid"] is False
     assert report["faithful"] is False
+
+
+def test_quality_report_measures_summary_precision_and_tokens():
+    markdown = (
+        "Bintu extracts clean Markdown and preserves source context.\n\n"
+        "The extraction service supports deterministic caching."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+    report = evaluate_extractive_summary(markdown, summary)
+
+    assert report["summary_precision"] == 1.0
+    assert report["summary_token_count"] > 0
+    assert report["coverage"] > 0.0
+
+
+def test_quality_report_handles_empty_summary_tokens():
+    markdown = "Bintu extracts clean Markdown."
+    summary = build_extractive_summary(
+        markdown,
+        mode="leading",
+        sentence_count=1,
+    )
+
+    report = evaluate_extractive_summary(
+        markdown,
+        summary,
+        summary_texts=[""],
+    )
+
+    assert report["summary_precision"] == 1.0
+    assert report["summary_token_count"] == 0
