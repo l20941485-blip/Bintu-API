@@ -348,6 +348,7 @@ async def call_assistant_tool(
                     "title": ingested.document.title,
                     "source_url": ingested.revision.source_url,
                     "chunk_count": len(ingested.chunks),
+                    "status": "ready",
                 }
             )
 
@@ -432,6 +433,7 @@ async def call_assistant_tool(
                 "title": ingested.document.title,
                 "source_url": ingested.revision.source_url,
                 "chunk_count": len(ingested.chunks),
+                "status": "ready",
             }
         )
 
