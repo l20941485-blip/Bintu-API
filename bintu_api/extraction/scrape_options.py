@@ -24,3 +24,5 @@ class ScrapeOptions:
     sections: list[str] | None = None
     main_content_only: bool = False
     exclude_terminal_sections: bool = False
+    summary_mode: Literal["none", "leading", "key_sentences"] = "none"
+    summary_sentence_count: int = 3

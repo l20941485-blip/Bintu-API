@@ -47,6 +47,7 @@ from bintu_api.extraction.request_policy import (
     validate_link_mode,
 )
 from bintu_api.extraction.scrape_options import ScrapeOptions
+from bintu_api.extraction.summarizer import build_extractive_summary
 
 logger = logging.getLogger("bintu_api.scrape")
 
@@ -301,6 +302,30 @@ class ScrapeService:
             "terminal_sections_removed": terminal_sections_removed,
             "deduplicated_count": deduplicated_count,
         }
+
+        if options.summary_mode != "none":
+            summary = build_extractive_summary(
+                cleaned_text,
+                mode=options.summary_mode,
+                sentence_count=options.summary_sentence_count,
+            )
+            content_cleaning["extractive_summary"] = {
+                "applied": True,
+                "mode": summary.mode,
+                "requested_sentence_count": summary.requested_sentence_count,
+                "returned_sentence_count": summary.returned_sentence_count,
+                "truncated": summary.truncated,
+                "sentences": [
+                    {
+                        "text": sentence.text,
+                        "heading_path": list(sentence.heading_path),
+                        "char_start": sentence.char_start,
+                        "char_end": sentence.char_end,
+                        "score": sentence.score,
+                    }
+                    for sentence in summary.sentences
+                ],
+            }
 
         extracted = ExtractedText(
             text=cleaned_text,
