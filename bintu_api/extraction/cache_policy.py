@@ -55,11 +55,12 @@ def compute_cache_key(
     include_header: bool = False,
     include_footer: bool = False,
     main_content_only: bool = False,
+    exclude_terminal_sections: bool = False,
 ) -> str:
     """Compute the canonical memory-cache key for an extraction request."""
     payload = (
         f"{int(render_js)}:{links}:{url}:"
         f"{int(include_nav)}:{int(include_header)}:{int(include_footer)}:"
-        f"{int(main_content_only)}"
+        f"{int(main_content_only)}:{int(exclude_terminal_sections)}"
     )
     return hashlib.sha256(payload.encode()).hexdigest()

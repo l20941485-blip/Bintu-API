@@ -96,6 +96,7 @@ class MobileScrapeTextRequest(BaseModel):
     include_header: bool = False
     include_footer: bool = False
     main_content_only: bool = False
+    exclude_terminal_sections: bool = False
     render_js: bool = False
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     overlap_tokens: int = Field(default=0, ge=0, le=1000)

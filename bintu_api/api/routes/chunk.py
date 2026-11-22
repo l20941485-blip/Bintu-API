@@ -105,6 +105,7 @@ async def scrape_chunks(
         persist,
         max_tokens,
         payload.main_content_only,
+        exclude_terminal_sections=payload.exclude_terminal_sections,
     )
 
     if chunk_strategy == "semantic":
@@ -230,6 +231,7 @@ async def _scrape_chunks(
     persist: bool = True,
     max_tokens: int = 6000,
     main_content_only: bool = False,
+    exclude_terminal_sections: bool = False,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str, bool]:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -253,6 +255,7 @@ async def _scrape_chunks(
             mode="chunk",
             max_tokens=max_tokens,
             main_content_only=main_content_only,
+            exclude_terminal_sections=exclude_terminal_sections,
         )
 
         log_extraction_completed(

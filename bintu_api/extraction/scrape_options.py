@@ -23,3 +23,4 @@ class ScrapeOptions:
     max_footnote_url_length: int = 100
     sections: list[str] | None = None
     main_content_only: bool = False
+    exclude_terminal_sections: bool = False

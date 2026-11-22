@@ -26,6 +26,7 @@ from bintu_api.extraction.cacheaccess import (
 )
 from bintu_api.extraction.cleaner import (
     normalize_markdown,
+    remove_terminal_sections,
     strip_noise_lines,
     suppress_boilerplate_lines,
 )
@@ -113,6 +114,7 @@ class ScrapeService:
         max_footnote_url_length = options.max_footnote_url_length
         sections = options.sections
         main_content_only = options.main_content_only
+        exclude_terminal_sections = options.exclude_terminal_sections
 
         validate_link_mode(links)
 
@@ -157,6 +159,7 @@ class ScrapeService:
             include_header=include_header,
             include_footer=include_footer,
             main_content_only=main_content_only,
+            exclude_terminal_sections=exclude_terminal_sections,
         )
 
         if result is not None:
@@ -235,6 +238,7 @@ class ScrapeService:
 
         cleaned_text = ""
         cleaning_applied = False
+        terminal_sections_removed = 0
         if main_content_only:
             cleaned_text, cleaning_applied = extract_main_content(
                 document.body,
@@ -243,6 +247,15 @@ class ScrapeService:
                 document.final_url or url,
                 links=links,
             )
+
+            if (
+                cleaning_applied
+                and exclude_terminal_sections
+                and not sections
+            ):
+                cleaned_text, terminal_sections_removed = (
+                    remove_terminal_sections(cleaned_text)
+                )
 
         if cleaning_applied:
             extracted = ExtractedText(
@@ -270,7 +283,11 @@ class ScrapeService:
         cleaned_text, deduplicated_count = dedupe_blocks(cleaned_text)
         cleaned_text, boilerplate_lines_removed = suppress_boilerplate_lines(cleaned_text)
 
-        cleaning_applied = cleaning_applied or boilerplate_lines_removed > 0
+        cleaning_applied = (
+            cleaning_applied
+            or terminal_sections_removed > 0
+            or boilerplate_lines_removed > 0
+        )
         content_cleaning = {
             "applied": cleaning_applied,
             "strategy": (
@@ -281,6 +298,7 @@ class ScrapeService:
                 else "standard"
             ),
             "boilerplate_lines_removed": boilerplate_lines_removed,
+            "terminal_sections_removed": terminal_sections_removed,
             "deduplicated_count": deduplicated_count,
         }
 

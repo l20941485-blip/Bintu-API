@@ -146,6 +146,7 @@ async def call_tool(
             max_footnote_url_length=arguments.max_footnote_url_length,
             sections=sections,
             main_content_only=arguments.main_content_only,
+            exclude_terminal_sections=arguments.exclude_terminal_sections,
         )
 
     except mcp_adapter.TargetURLRejected as error:

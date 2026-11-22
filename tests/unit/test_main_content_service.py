@@ -129,6 +129,7 @@ async def test_main_content_only_skips_persistent_cache():
         "applied": True,
         "strategy": "main_content",
         "boilerplate_lines_removed": 0,
+        "terminal_sections_removed": 0,
         "deduplicated_count": 0,
     }
     assert cache.data[cleaned_key] is not None
@@ -168,6 +169,7 @@ async def test_main_content_only_memory_hit_skips_persistent_cache():
         "applied": True,
         "strategy": "main_content",
         "boilerplate_lines_removed": 0,
+        "terminal_sections_removed": 0,
         "deduplicated_count": 0,
     }
     service.persistent_cache_reader.assert_not_awaited()
@@ -192,6 +194,7 @@ async def test_standard_extraction_writes_persistent_cache():
         "applied": False,
         "strategy": "standard",
         "boilerplate_lines_removed": 0,
+        "terminal_sections_removed": 0,
         "deduplicated_count": 0,
     }
     service.persistent_cache_reader.assert_awaited_once()
@@ -227,5 +230,83 @@ async def test_main_content_only_applies_with_links_false():
         "applied": True,
         "strategy": "main_content",
         "boilerplate_lines_removed": 0,
+        "terminal_sections_removed": 0,
         "deduplicated_count": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_main_content_only_can_exclude_terminal_sections():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+    markdown = (
+        "# Article\n\n"
+        "Meaningful body content.\n\n"
+        "## References\n\n"
+        "[1] Example reference.\n\n"
+        "## See also\n\n"
+        "Related pages."
+    )
+
+    with patch(
+        "bintu_api.extraction.scrape_service.extract_main_content",
+        return_value=(markdown, True),
+    ):
+        _, result, _, _revalidated = await call_service(
+            service,
+            request,
+            main_content_only=True,
+            exclude_terminal_sections=True,
+        )
+
+    assert "Meaningful body content." in result.markdown
+    assert "## References" not in result.markdown
+    assert "## See also" not in result.markdown
+    assert result.content_cleaning["terminal_sections_removed"] == 2
+
+
+@pytest.mark.asyncio
+async def test_terminal_section_exclusion_preserves_explicit_sections():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+    markdown = (
+        "# Article\n\n"
+        "Meaningful body content.\n\n"
+        "## References\n\n"
+        "[1] Example reference."
+    )
+
+    with patch(
+        "bintu_api.extraction.scrape_service.extract_main_content",
+        return_value=(markdown, True),
+    ):
+        _, result, _, _revalidated = await call_service(
+            service,
+            request,
+            main_content_only=True,
+            exclude_terminal_sections=True,
+            sections=["References"],
+        )
+
+    assert "## References" in result.markdown
+    assert result.content_cleaning["terminal_sections_removed"] == 0
+
+
+def test_cache_key_distinguishes_terminal_section_exclusion():
+    base_key = compute_cache_key(
+        render_js=False,
+        links="inline",
+        url="https://example.com/page",
+        main_content_only=True,
+    )
+    excluded_key = compute_cache_key(
+        render_js=False,
+        links="inline",
+        url="https://example.com/page",
+        main_content_only=True,
+        exclude_terminal_sections=True,
+    )
+
+    assert base_key != excluded_key

@@ -9,6 +9,7 @@ from bintu_api.mcp.descriptions import (
     CACHE_DESCRIPTION,
     CHUNK_TOKEN_BUDGET_DESCRIPTION,
     CONTENT_CLEANING_DESCRIPTION,
+    EXCLUDE_TERMINAL_SECTIONS_DESCRIPTION,
     FOOTNOTE_URL_POLICY_DESCRIPTION,
     LINKS_DESCRIPTION,
     MAIN_CONTENT_ONLY_DESCRIPTION,
@@ -363,6 +364,11 @@ TOOL_INPUT_SCHEMA = {
             "default": False,
             "description": MAIN_CONTENT_ONLY_DESCRIPTION,
         },
+        "exclude_terminal_sections": {
+            "type": "boolean",
+            "default": False,
+            "description": EXCLUDE_TERMINAL_SECTIONS_DESCRIPTION,
+        },
         "chunk_strategy": {
             "type": "string",
             "enum": ["sequential", "semantic"],
@@ -432,6 +438,7 @@ TOOL_INPUT_SCHEMA["properties"]["mode"]["description"] = MODE_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["max_tokens"]["description"] = MAX_TOKENS_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["chunk_token_budget"]["description"] = CHUNK_TOKEN_BUDGET_DESCRIPTION
 TOOL_INPUT_SCHEMA["properties"]["main_content_only"]["description"] = MAIN_CONTENT_ONLY_DESCRIPTION
+TOOL_INPUT_SCHEMA["properties"]["exclude_terminal_sections"]["description"] = EXCLUDE_TERMINAL_SECTIONS_DESCRIPTION
 TOOL_OUTPUT_SCHEMA["properties"]["content_cleaning"] = {
     "type": "object",
     "properties": {
@@ -443,6 +450,14 @@ TOOL_OUTPUT_SCHEMA["properties"]["content_cleaning"] = {
             "type": "string",
             "enum": ["main_content", "standard"],
             "description": CONTENT_CLEANING_DESCRIPTION,
+        },
+        "terminal_sections_removed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": (
+                "Number of recognized terminal non-body sections removed "
+                "after main-content extraction."
+            ),
         },
     },
 }
