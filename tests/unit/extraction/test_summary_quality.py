@@ -147,3 +147,41 @@ def test_quality_report_handles_empty_summary_tokens():
 
     assert report["summary_precision"] == 1.0
     assert report["summary_token_count"] == 0
+
+
+def test_quality_report_includes_selection_diagnostics():
+    markdown = (
+        "# Guide\n\n"
+        "Bintu extracts clean Markdown and returns source offsets.\n\n"
+        "The extraction service supports deterministic caching.\n\n"
+        "## Usage\n\n"
+        "Call the extraction endpoint with a public URL."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+    report = evaluate_extractive_summary(markdown, summary)
+
+    assert report["candidate_count"] == summary.diagnostics.candidate_count
+    assert report["selected_count"] == 2
+    assert 0.0 < report["selection_ratio"] <= 1.0
+    assert report["mean_selected_score"] > 0.0
+    assert 0.0 <= report["selection_diversity"] <= 1.0
+
+
+def test_quality_report_handles_empty_selection_diagnostics():
+    summary = build_extractive_summary(
+        "",
+        mode="leading",
+        sentence_count=2,
+    )
+    report = evaluate_extractive_summary("", summary)
+
+    assert report["candidate_count"] == 0
+    assert report["selected_count"] == 0
+    assert report["selection_ratio"] == 0.0
+    assert report["mean_selected_score"] == 0.0
+    assert report["selection_diversity"] == 1.0

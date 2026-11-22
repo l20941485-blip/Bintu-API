@@ -146,6 +146,19 @@ def evaluate_extractive_summary(
         else 0.0
     )
 
+    diagnostics = summary.diagnostics
+    selection_ratio = (
+        len(diagnostics.selected_indices) / diagnostics.candidate_count
+        if diagnostics.candidate_count
+        else 0.0
+    )
+    mean_selected_score = (
+        sum(diagnostics.scores) / len(diagnostics.scores)
+        if diagnostics.scores
+        else 0.0
+    )
+    selection_diversity = 1.0 - redundancy
+
     return {
         "faithful": faithful,
         "grounding_valid": grounding_valid,
@@ -155,6 +168,9 @@ def evaluate_extractive_summary(
         "summary_token_count": len(summary_tokens),
         "redundancy": redundancy,
         "coherence": coherence,
+        "selection_ratio": selection_ratio,
+        "mean_selected_score": mean_selected_score,
+        "selection_diversity": selection_diversity,
         "source_order_preserved": source_order_preserved,
         "sentence_count": len(texts),
         "review_status": "unreviewed",
