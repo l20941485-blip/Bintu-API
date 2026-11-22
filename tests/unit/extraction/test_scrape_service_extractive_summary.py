@@ -189,3 +189,38 @@ async def test_key_sentences_are_returned_in_source_order():
         == sentence["text"]
         for sentence in summary["sentences"]
     )
+
+
+@pytest.mark.asyncio
+async def test_summary_preserves_nested_heading_path():
+    cache = FakeCache()
+    request = make_request(cache)
+    service = make_service(cache)
+    markdown = (
+        "# Guide\n\n"
+        "## Usage\n\n"
+        "Call the extraction endpoint with a public URL."
+    )
+
+    with patch(
+        "bintu_api.extraction.scrape_service.extract_main_content",
+        return_value=(markdown, True),
+    ):
+        _, result, _, _ = await call_service(
+            service,
+            request,
+            main_content_only=True,
+            summary_mode="leading",
+            summary_sentence_count=1,
+        )
+
+    summary = result.content_cleaning["extractive_summary"]
+    sentence = summary["sentences"][0]
+
+    assert sentence["text"] == (
+        "Call the extraction endpoint with a public URL."
+    )
+    assert sentence["heading_path"] == ["Guide", "Usage"]
+    assert markdown[sentence["char_start"]:sentence["char_end"]] == (
+        sentence["text"]
+    )

@@ -90,3 +90,60 @@ def test_empty_markdown_returns_empty_summary():
     assert summary.text == ""
     assert summary.sentences == ()
     assert summary.truncated is False
+
+
+def test_key_sentences_avoid_near_duplicate_sentences():
+    markdown = (
+        "# Guide\n\n"
+        "Bintu extracts clean Markdown and preserves source context.\n\n"
+        "Bintu extracts clean Markdown and preserves source context.\n\n"
+        "The extraction service supports deterministic caching.\n\n"
+        "It also returns source offsets for selected sentences."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+
+    texts = [sentence.text for sentence in summary.sentences]
+
+    assert len(texts) == 2
+    assert len(set(texts)) == 2
+    assert (
+        "Bintu extracts clean Markdown and preserves source context."
+        in texts
+    )
+    assert (
+        "The extraction service supports deterministic caching."
+        in texts
+        or "It also returns source offsets for selected sentences."
+        in texts
+    )
+
+
+def test_key_sentences_prefers_informative_sentences():
+    markdown = (
+        "# Guide\n\n"
+        "This page explains Bintu.\n\n"
+        "Bintu extracts clean Markdown and returns source offsets.\n\n"
+        "The extraction service supports deterministic caching."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+
+    texts = [sentence.text for sentence in summary.sentences]
+
+    assert (
+        "Bintu extracts clean Markdown and returns source offsets."
+        in texts
+    )
+    assert (
+        "The extraction service supports deterministic caching."
+        in texts
+    )
