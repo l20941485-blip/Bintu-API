@@ -257,36 +257,45 @@ _TERMINAL_SECTION_HEADINGS = frozenset(
         "bibliography",
         "notes",
         "citations",
+        "notes and references",
+        "references and further reading",
+        "external resources",
     }
 )
 
 def remove_terminal_sections(text: str) -> tuple[str, int]:
-    """Remove recognized terminal non-body sections from Markdown.
+    """Remove a trailing cluster of recognized terminal non-body sections.
 
-    Removal begins at the first recognized terminal heading and continues to
-    the end of the document. Explicit section selection is handled by callers,
+    A terminal region begins at the first recognized terminal heading only
+    when every subsequent heading is also recognized as terminal. This avoids
+    removing a legitimate mid-document References section followed by
+    substantive content. Explicit section selection is handled by callers,
     which must not invoke this function when the user requested sections.
     """
     lines = text.split("\n")
     heading_re = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 
+    headings: list[tuple[int, str]] = []
     for index, line in enumerate(lines):
         match = heading_re.match(line.strip())
         if match is None:
             continue
 
         heading = re.sub(r"\s+", " ", match.group(1)).strip().lower()
+        headings.append((index, heading))
+
+    for position, (index, heading) in enumerate(headings):
         if heading not in _TERMINAL_SECTION_HEADINGS:
             continue
 
-        removed = sum(
-            1
-            for tail_line in lines[index:]
-            if (tail_match := heading_re.match(tail_line.strip())) is not None
-            and re.sub(r"\s+", " ", tail_match.group(1)).strip().lower()
-            in _TERMINAL_SECTION_HEADINGS
-        )
+        following = headings[position + 1 :]
+        if any(
+            following_heading not in _TERMINAL_SECTION_HEADINGS
+            for _, following_heading in following
+        ):
+            continue
 
+        removed = 1 + len(following)
         cleaned = "\n".join(lines[:index]).rstrip()
         if not cleaned:
             return text, 0
