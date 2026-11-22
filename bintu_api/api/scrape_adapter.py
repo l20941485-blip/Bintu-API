@@ -111,6 +111,8 @@ async def _fetch_and_extract(
     sections: list[str] | None = None,
     main_content_only: bool = False,
     exclude_terminal_sections: bool = False,
+    summary_mode: Literal["none", "leading", "key_sentences"] = "none",
+    summary_sentence_count: int = 3,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Compatibility boundary preserving the established scrape patch seams."""
     context = build_scrape_request_context(request)
@@ -130,6 +132,8 @@ async def _fetch_and_extract(
         sections=sections,
         main_content_only=main_content_only,
         exclude_terminal_sections=exclude_terminal_sections,
+        summary_mode=summary_mode,
+        summary_sentence_count=summary_sentence_count,
     )
     return await service.fetch_and_extract(
         context,
@@ -155,6 +159,8 @@ async def fetch_and_extract(
     sections: list[str] | None = None,
     main_content_only: bool = False,
     exclude_terminal_sections: bool = False,
+    summary_mode: Literal["none", "leading", "key_sentences"] = "none",
+    summary_sentence_count: int = 3,
 ) -> tuple[FetchedHTML | None, CachedMarkdown, str]:
     """Public shared fetch -> robots -> cache -> extract boundary."""
     return await _fetch_and_extract(
@@ -174,4 +180,6 @@ async def fetch_and_extract(
         sections=sections,
         main_content_only=main_content_only,
         exclude_terminal_sections=exclude_terminal_sections,
+        summary_mode=summary_mode,
+        summary_sentence_count=summary_sentence_count,
     )

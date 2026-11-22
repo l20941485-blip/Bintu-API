@@ -147,6 +147,8 @@ async def call_tool(
             sections=sections,
             main_content_only=arguments.main_content_only,
             exclude_terminal_sections=arguments.exclude_terminal_sections,
+            summary_mode=arguments.summary_mode,
+            summary_sentence_count=arguments.summary_sentence_count,
         )
 
     except mcp_adapter.TargetURLRejected as error:

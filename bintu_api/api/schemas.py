@@ -97,6 +97,8 @@ class MobileScrapeTextRequest(BaseModel):
     include_footer: bool = False
     main_content_only: bool = False
     exclude_terminal_sections: bool = False
+    summary_mode: Literal["none", "leading", "key_sentences"] = "none"
+    summary_sentence_count: int = Field(default=3, ge=1, le=10)
     render_js: bool = False
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     overlap_tokens: int = Field(default=0, ge=0, le=1000)
