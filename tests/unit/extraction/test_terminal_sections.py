@@ -42,3 +42,46 @@ def test_preserves_content_when_removal_would_empty_document():
 
     assert cleaned == text
     assert removed == 0
+
+
+def test_preserves_mid_document_references_followed_by_body_section():
+    text = (
+        "# Guide\n\n"
+        "Meaningful body content.\n\n"
+        "## References\n\n"
+        "[1] Example reference.\n\n"
+        "## Related work\n\n"
+        "More meaningful content."
+    )
+
+    cleaned, removed = remove_terminal_sections(text)
+
+    assert cleaned == text
+    assert removed == 0
+
+
+def test_removes_trailing_terminal_cluster():
+    text = (
+        "# Guide\n\n"
+        "Meaningful body content.\n\n"
+        "## See also\n\n"
+        "Related pages.\n\n"
+        "## External links\n\n"
+        "- Example\n\n"
+        "## References\n\n"
+        "[1] Example reference."
+    )
+
+    cleaned, removed = remove_terminal_sections(text)
+
+    assert cleaned == "# Guide\n\nMeaningful body content."
+    assert removed == 3
+
+
+def test_preserves_when_terminal_heading_is_only_heading():
+    text = "## References\n\n[1] Example reference."
+
+    cleaned, removed = remove_terminal_sections(text)
+
+    assert cleaned == text
+    assert removed == 0
