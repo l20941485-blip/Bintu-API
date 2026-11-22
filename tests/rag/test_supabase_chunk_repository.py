@@ -99,6 +99,7 @@ class SupabaseChunkRepositoryTests(unittest.IsolatedAsyncioTestCase):
     async def test_ingest_revision_calls_ingest_rpc(self) -> None:
         chunks = make_chunks()
         response_data = {
+            "document_id": "document_1",
             "revision_id": "revision_1",
             "chunks": [
                 {
@@ -158,7 +159,7 @@ class SupabaseChunkRepositoryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(chunk.chunk_id, expected["chunk_id"])
             self.assertEqual(chunk.chunk_sha256, expected["chunk_sha256"])
             self.assertEqual(chunk.revision_id, "revision_1")
-            self.assertEqual(chunk.document_id, "doc_1")
+            self.assertEqual(chunk.document_id, "document_1")
             self.assertIsNone(chunk.owner_identity)
 
 

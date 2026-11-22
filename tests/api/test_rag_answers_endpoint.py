@@ -215,6 +215,7 @@ def ingestion_client():
             execute=AsyncMock(
                 return_value=Mock(
                     data={
+                        "document_id": "document-1",
                         "revision_id": "revision-1",
                         "chunks": [
                             {
