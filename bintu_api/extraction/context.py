@@ -740,7 +740,11 @@ async def extract_context(
         tokens_saved_estimate=tokens_saved_estimate,
         truncated=resolved_truncated,
         split=split,
-        request_id=None,
+        request_id=getattr(
+            getattr(request, "state", None),
+            "request_id",
+            None,
+        ),
         fetched_at=None,
         requested_url=None,
         final_url=None,

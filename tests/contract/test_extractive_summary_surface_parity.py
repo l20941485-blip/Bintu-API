@@ -170,3 +170,38 @@ def test_rest_scrape_text_returns_summary_metadata(client: TestClient):
     assert payload["content_cleaning"]["applied"] is True
 
 
+
+
+def test_mcp_tool_call_returns_summary_metadata(client: TestClient):
+    with patch_fetch("leading"):
+        response = client.post(
+            "/mcp/tools/call",
+            json={
+                "name": "bintu_scrape_text",
+                "arguments": {
+                    "url": "https://example.com/page",
+                    "main_content_only": True,
+                    "summary_mode": "leading",
+                    "summary_sentence_count": 2,
+                },
+            },
+            headers={"X-API-Key": TEST_API_KEY},
+        )
+
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["isError"] is False
+
+    envelope = payload["structuredContent"]
+    summary = envelope["content_cleaning"]["extractive_summary"]
+
+    assert summary["applied"] is True
+    assert summary["mode"] == "leading"
+    assert summary["requested_sentence_count"] == 2
+    assert summary["returned_sentence_count"] == 2
+    assert summary["truncated"] is False
+    assert summary["sentences"] == []
+
+    assert envelope["content_cleaning"]["applied"] is True
+    assert envelope["request_id"]
