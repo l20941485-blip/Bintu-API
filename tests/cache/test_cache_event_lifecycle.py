@@ -1,6 +1,7 @@
 """Cache lifecycle events must distinguish hits, refreshes, and fallbacks."""
 
 import unittest
+from types import SimpleNamespace
 from datetime import UTC, datetime, timedelta
 from unittest import mock
 
@@ -22,7 +23,7 @@ def fetch_document(*args, **kwargs):
 
 def make_lifecycle_request(cache, db_client=None):
     request = make_request(cache, db_client=db_client)
-    request.state.request_id = "test-id"
+    request.state = SimpleNamespace(request_id="test-id")
     return request
 
 
