@@ -220,6 +220,15 @@ def test_evaluate_freshness_fresh_within_ttl() -> None:
     now = datetime.now(UTC)
     entry = _freshness_entry(extracted_at=(now - timedelta(minutes=10)).isoformat())
 
+    is_fresh, stale_reason = evaluate_cache_freshness(
+        entry,
+        now=now,
+        extractor_version="1.0.0",
+    )
+
+    assert is_fresh is True
+    assert stale_reason is None
+
 
 def test_evaluate_freshness_ttl_expired() -> None:
     now = datetime.now(UTC)
@@ -312,3 +321,22 @@ def test_fresh_and_persistent_hits_report_not_revalidated() -> None:
     assert fresh.cache.revalidated is False
     assert persistent.cache.revalidated is False
     assert bypass.cache.revalidated is False
+
+
+def test_persistent_hit_older_than_ttl_remains_fresh() -> None:
+    now = datetime.now(UTC)
+    extracted_at = (
+        now - timedelta(seconds=3600 + 1)
+    ).isoformat()
+
+    provenance = _provenance(
+        cache_layer="persistent",
+        extracted_at=extracted_at,
+    )
+
+    assert provenance.cache.hit is True
+    assert provenance.cache.layer == "persistent"
+    assert provenance.cache.age_seconds == 3601
+    assert provenance.cache.fresh is True
+    assert provenance.cache.stale_reason is None
+    assert provenance.cache.revalidated is False

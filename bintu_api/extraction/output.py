@@ -77,14 +77,17 @@ def build_provenance(
         if cache_layer != "none"
         else None
     )
-    cache_fresh = (
-        True
-        if cache_layer == "none"
-        else (
+    if cache_layer == "none":
+        cache_fresh = True
+    elif cache_layer == "persistent":
+        # Persistent entries are not TTL-expired; extractor-version changes
+        # are handled by the persistent-cache validation boundary.
+        cache_fresh = True
+    else:
+        cache_fresh = (
             cache_age_seconds is not None
             and cache_age_seconds <= int(CACHE_TTL.total_seconds())
         )
-    )
     return Provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
