@@ -23,7 +23,7 @@ from urllib.parse import quote, urljoin, urlsplit
 
 import idna
 
-from bintu_api.common.fetch import FetchedHTML
+from bintu_api.common.fetch import FetchedHTML, RedirectHop
 from bintu_api.extraction.html_extract import extract_html_metadata
 from bintu_api.settings import Settings
 
@@ -515,7 +515,7 @@ def fetch_html_document(
     current_url = url
     current_scheme = urlsplit(url).scheme
     is_redirect_hop = False
-    redirect_count = 0
+    redirects: tuple[RedirectHop, ...] = ()
 
     for _ in range(settings.max_redirects + 1):
         _raise_if_unsafe_numeric_ip(current_url, settings)
@@ -620,12 +620,18 @@ def fetch_html_document(
                         status,
                         "redirect without a Location header",
                     )
+                redirects = (
+                    *redirects,
+                    RedirectHop(
+                        url=current_url,
+                        status=status,
+                    ),
+                )
                 current_url = urljoin(
                     current_url,
                     location,
                 )
                 is_redirect_hop = True
-                redirect_count += 1
                 continue
 
             if not 200 <= status < 300:
@@ -653,7 +659,8 @@ def fetch_html_document(
                 charset=_content_charset(content_type),
                 final_url=current_url,
                 status=status,
-                redirect_count=redirect_count,
+                redirect_count=len(redirects),
+                redirects=redirects,
                 content_type=content_type,
                 canonical_url=canonical_url,
                 language=language,
