@@ -217,7 +217,10 @@ class ScrapeService:
 
         memory_cache_fresh = (
             memory_entry is not None
-            and is_memory_cache_fresh(memory_entry.extracted_at)
+            and is_memory_cache_fresh(
+                memory_entry.extracted_at,
+                ttl_seconds=settings.cache_ttl_seconds,
+            )
         )
 
         if memory_entry is not None and memory_cache_fresh:

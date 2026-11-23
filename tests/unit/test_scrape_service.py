@@ -34,7 +34,10 @@ class FakeCache:
 
 
 def make_request(cache, database_client=None):
-    settings = SimpleNamespace(max_text_characters=DEFAULT_MAX_TEXT_CHARACTERS)
+    settings = SimpleNamespace(
+        max_text_characters=DEFAULT_MAX_TEXT_CHARACTERS,
+        cache_ttl_seconds=86400,
+    )
     app_state = SimpleNamespace(
         settings=settings,
         supabase_client=database_client,

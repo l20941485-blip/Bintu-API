@@ -14,6 +14,13 @@ class CacheInfo(BaseModel):
         default=None,
         description="Age of the cached entry in seconds, when known.",
     )
+    ttl_seconds: int | None = Field(
+        default=None,
+        description=(
+            "Configured TTL in seconds that governed this freshness decision. "
+            "Present for memory-cache hits; None for fresh and persistent results."
+        ),
+    )
     fresh: bool = Field(
         default=True,
         description=(

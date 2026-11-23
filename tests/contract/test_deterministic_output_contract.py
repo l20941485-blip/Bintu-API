@@ -432,7 +432,16 @@ class ProvenanceContractTests(unittest.TestCase):
         self.assertEqual(provenance["bytes_fetched"], 100)
         self.assertEqual(provenance["content_sha256"], "abc")
         self.assertEqual(
-            provenance["cache"], {"hit": False, "layer": "none", "age_seconds": None}
+            provenance["cache"],
+            {
+                "hit": False,
+                "layer": "none",
+                "age_seconds": None,
+                "ttl_seconds": None,
+                "fresh": True,
+                "stale_reason": None,
+                "revalidated": False,
+            },
         )
         self.assertEqual(provenance["extractor_version"], "v1")
         self.assertNotIn("final_url", provenance)

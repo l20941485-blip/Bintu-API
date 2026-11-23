@@ -27,6 +27,7 @@ class FakeMemoryCache:
 
 def _settings() -> MagicMock:
     settings = MagicMock()
+    settings.cache_ttl_seconds = 86400
     settings.service_version = "test"
     return settings
 

@@ -19,7 +19,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger("bintu_api.settings")
 
 
-DEFAULT_CACHE_TTL_SECONDS = 300
+DEFAULT_CACHE_TTL_SECONDS = 86400
 ROBOTS_MODES = ("enforce", "warn", "off")
 
 
