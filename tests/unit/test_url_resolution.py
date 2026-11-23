@@ -299,3 +299,77 @@ def test_prepare_fetch_target_rejects_disallowed_port():
             "http://example.com:8080/",
             _settings(),
         )
+
+
+def test_refresh_resolved_target_uses_fetch_metadata():
+    from bintu_api.common.fetch import FetchedHTML
+    from bintu_api.common.resolution import prepare_fetch_target, refresh_resolved_target
+
+    target = prepare_fetch_target(
+        "https://example.com/start",
+        _settings(),
+    )
+    document = FetchedHTML(
+        body=b"<html><body>ok</body></html>",
+        charset="utf-8",
+        final_url="https://example.com/final",
+        status=200,
+        redirect_count=1,
+        content_type="text/html; charset=utf-8",
+        canonical_url="https://example.com/canonical",
+    )
+
+    refreshed = refresh_resolved_target(target, document)
+
+    assert refreshed.requested_url == "https://example.com/start"
+    assert refreshed.normalized_url == "https://example.com/start"
+    assert refreshed.final_url == "https://example.com/final"
+    assert refreshed.canonical_url == "https://example.com/canonical"
+    assert refreshed.content_type == "text/html; charset=utf-8"
+    assert refreshed.content_class == "html"
+    assert refreshed.redirect_count == 1
+    assert refreshed.fetch_strategy == "unsupported"
+
+
+def test_refresh_resolved_target_tolerates_partial_document():
+    from bintu_api.common.resolution import prepare_fetch_target, refresh_resolved_target
+
+    target = prepare_fetch_target(
+        "https://example.com/",
+        _settings(),
+    )
+
+    class PartialDocument:
+        final_url = "https://example.com/final"
+
+    refreshed = refresh_resolved_target(target, PartialDocument())
+
+    assert refreshed.final_url == "https://example.com/final"
+    assert refreshed.canonical_url is None
+    assert refreshed.content_type is None
+    assert refreshed.content_class == "unsupported"
+    assert refreshed.redirect_count == 0
+
+
+def test_refresh_resolved_target_preserves_original_identity():
+    from bintu_api.common.fetch import FetchedHTML
+    from bintu_api.common.resolution import prepare_fetch_target, refresh_resolved_target
+
+    target = prepare_fetch_target(
+        "HTTPS://EXAMPLE.COM:443/page#section",
+        _settings(),
+    )
+    document = FetchedHTML(
+        body=b"<html></html>",
+        charset="utf-8",
+        final_url="https://example.com/redirected",
+        status=200,
+        redirect_count=1,
+        content_type="text/html",
+    )
+
+    refreshed = refresh_resolved_target(target, document)
+
+    assert refreshed.requested_url == "HTTPS://EXAMPLE.COM:443/page#section"
+    assert refreshed.normalized_url == "https://example.com/page"
+    assert refreshed.final_url == "https://example.com/redirected"
