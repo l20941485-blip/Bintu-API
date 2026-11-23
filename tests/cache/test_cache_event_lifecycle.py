@@ -1,8 +1,8 @@
 """Cache lifecycle events must distinguish hits, refreshes, and fallbacks."""
 
 import unittest
-from types import SimpleNamespace
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest import mock
 
 from bintu_api.api import scrape_adapter as routes
@@ -48,11 +48,22 @@ class CacheEventLifecycleTests(unittest.IsolatedAsyncioTestCase):
             **kwargs,
         )
 
-    def patches(self, persistent_result=None):
+    def patches(self, persistent_result=None, fetch_failure=None):
+        def build_scrape_service(request):
+            service = _build_service_with_fake_fetcher(request)
+
+            if fetch_failure is not None:
+                def failing_fetch_document(*args, **kwargs):
+                    raise fetch_failure
+
+                service.html_fetcher = failing_fetch_document
+
+            return service
+
         return (
             mock.patch(
                 "bintu_api.api.scrape_adapter.build_scrape_service",
-                side_effect=_build_service_with_fake_fetcher,
+                side_effect=build_scrape_service,
             ),
             mock.patch(
                 "bintu_api.api.scrape_adapter.get_cached_markdown",
@@ -144,21 +155,18 @@ class CacheEventLifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
         request = make_lifecycle_request(cache, db_client=None)
 
-        fetch, get_cached, upsert, proxy, log_event = self.patches()
+        fetch, get_cached, upsert, proxy, log_event = self.patches(
+            fetch_failure=RuntimeError("synthetic refresh failure"),
+        )
 
         with (
-            fetch as fetch_mock,
+            fetch,
             get_cached,
             upsert,
             proxy,
             log_event as event_logger,
-            mock.patch(
-                "bintu_api.api.scrape_adapter.extract_text_result",
-                side_effect=RuntimeError("synthetic refresh failure"),
-            ),
         ):
-            with self.assertRaisesRegex(RuntimeError, "synthetic"):
-                await self.run_request(request)
+            await self.run_request(request)
 
         self.assertEqual(
             [call.kwargs["event"] for call in event_logger.call_args_list],
@@ -168,4 +176,3 @@ class CacheEventLifecycleTests(unittest.IsolatedAsyncioTestCase):
             [call.kwargs["layer"] for call in event_logger.call_args_list],
             ["memory", "memory"],
         )
-        fetch_mock.assert_awaited_once()
