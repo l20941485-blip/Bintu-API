@@ -7,12 +7,21 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class RedirectHop:
+    """One observed redirect hop, retained for diagnostics."""
+
+    url: str
+    status: int | None = None
+
+
+@dataclass(frozen=True)
 class FetchedHTML:
     body: bytes
     charset: str | None
     final_url: str | None = None
     status: int | None = None
     redirect_count: int | None = None
+    redirects: tuple[RedirectHop, ...] = ()
     content_type: str | None = None
     canonical_url: str | None = None
     language: str | None = None
