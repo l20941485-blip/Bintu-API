@@ -104,6 +104,7 @@ def build_provenance(
         status=getattr(document, "status", None) if fetched else None,
         redirect_count=getattr(document, "redirect_count", None) if fetched else None,
         content_type=getattr(document, "content_type", None) if fetched else None,
+        language=getattr(document, "language", None) if fetched else None,
     )
 
 
