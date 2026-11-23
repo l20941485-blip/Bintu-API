@@ -141,6 +141,49 @@ async def test_memory_cache_hit_returns_document_without_fetching():
 
 
 @pytest.mark.asyncio
+async def test_memory_cache_hit_does_not_write_persistent_cache():
+    document = fake_document()
+    cache_key = compute_cache_key(
+        render_js=False,
+        links="inline",
+        url="https://example.com/page",
+    )
+    cache = FakeCache({cache_key: document})
+    request = make_request(cache, database_client=object())
+    service = make_service(cache)
+
+    returned_document, _result, layer, _revalidated = await call_service(service, request)
+
+    assert returned_document is document
+    assert layer == "memory"
+    service.persistent_cache_writer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_persistent_cache_hit_does_not_write_persistent_cache():
+    cache = FakeCache()
+    request = make_request(cache, database_client=object())
+    cached = CachedMarkdown(
+        markdown="from-persistent",
+        truncated=False,
+        html_tokens=10,
+        tokens_saved_estimate=5,
+        limiting_factor="none",
+        extracted_at="2026-01-01T00:00:00+00:00",
+    )
+    service = make_service(
+        cache,
+        persistent_cache_reader=AsyncMock(return_value=cached),
+    )
+
+    _, result, layer, _revalidated = await call_service(service, request)
+
+    assert layer == "persistent"
+    assert result is cached
+    service.persistent_cache_writer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_fresh_fetch_enforces_robots_and_writes_memory_cache():
     cache = FakeCache()
     request = make_request(cache)

@@ -223,7 +223,12 @@ class ScrapeService:
             )
         )
 
-        if memory_entry is not None and memory_cache_fresh:
+        fresh_memory_hit = (
+            memory_entry is not None
+            and memory_cache_fresh
+        )
+
+        if fresh_memory_hit:
             document = memory_entry.document
             cache_layer = "memory"
             self.cache_event_logger(
@@ -389,11 +394,14 @@ class ScrapeService:
             pre_cleaning_characters=pre_cleaning_characters,
         )
 
-        if should_write_persistent_cache(
-            database_client,
-            persistent_cache_enabled,
-            cacheable,
-            persist,
+        if (
+            not fresh_memory_hit
+            and should_write_persistent_cache(
+                database_client,
+                persistent_cache_enabled,
+                cacheable,
+                persist,
+            )
         ):
             from bintu_api.extraction.output import redact_cache_url
 
