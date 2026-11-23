@@ -33,6 +33,7 @@ class UsageEvent:
     mode: str | None = None
     legacy_rpc: bool = False
     source: Literal["mcp", "rest", "reader"] = "mcp"
+    quality_rejected: bool = False
     billing: BillingDecision | None = None
 
 
