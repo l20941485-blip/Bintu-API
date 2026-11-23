@@ -15,6 +15,21 @@ from bintu_api.observability import log_cache_event
 
 logger = logging.getLogger("bintu_api.scrape")
 
+def _safe_error_details(error: Exception) -> tuple[str, str]:
+    """Extract non-sensitive diagnostic fields from a cache integration error."""
+    error_code = getattr(error, "code", None)
+    error_message = getattr(error, "message", None)
+
+    if not isinstance(error_code, str) or not error_code:
+        error_code = ""
+
+    if not isinstance(error_message, str) or not error_message:
+        error_message = str(error)
+
+    return error_code, error_message
+
+
+
 
 async def read_persistent_cache(
     database_client,
@@ -41,9 +56,14 @@ async def read_persistent_cache(
             timeout=timeout_seconds,
         )
     except Exception as error:
+        error_code, error_message = _safe_error_details(error)
         logger.warning(
-            "supabase_cache_lookup_failed error_type=%s",
+            "supabase_cache_lookup_failed error_type=%s error_code=%s "
+            "error_message=%s request_id=%s",
             type(error).__name__,
+            error_code,
+            error_message,
+            request_id,
         )
         return None
 
@@ -89,7 +109,12 @@ async def write_persistent_cache(
             layer="persistent",
         )
     except Exception as error:
+        error_code, error_message = _safe_error_details(error)
         logger.warning(
-            "supabase_cache_upsert_failed error_type=%s",
+            "supabase_cache_upsert_failed error_type=%s error_code=%s "
+            "error_message=%s request_id=%s",
             type(error).__name__,
+            error_code,
+            error_message,
+            request_id,
         )

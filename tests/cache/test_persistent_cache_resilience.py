@@ -112,5 +112,60 @@ class PersistentCacheResilienceTests(unittest.IsolatedAsyncioTestCase):
         writer.assert_awaited_once()
 
 
+    async def test_read_failure_logs_safe_error_details(self):
+        reader = AsyncMock(
+            side_effect=RuntimeError("supabase error: permission denied")
+        )
+
+        with self.assertLogs("bintu_api.scrape", level="WARNING") as captured:
+            result = await read_persistent_cache(
+                object(),
+                "https://example.com",
+                False,
+                False,
+                False,
+                False,
+                reader,
+                request_id="req-read-diagnostic",
+            )
+
+        self.assertIsNone(result)
+        self.assertTrue(
+            any(
+                "supabase_cache_lookup_failed" in message
+                and "RuntimeError" in message
+                and "permission denied" in message
+                for message in captured.output
+            )
+        )
+
+    async def test_write_failure_logs_safe_error_details(self):
+        writer = AsyncMock(
+            side_effect=RuntimeError("supabase error: permission denied")
+        )
+
+        with self.assertLogs("bintu_api.scrape", level="WARNING") as captured:
+            await write_persistent_cache(
+                object(),
+                "https://example.com",
+                False,
+                False,
+                False,
+                False,
+                self._result(),
+                writer,
+                request_id="req-write-diagnostic",
+            )
+
+        self.assertTrue(
+            any(
+                "supabase_cache_upsert_failed" in message
+                and "RuntimeError" in message
+                and "permission denied" in message
+                for message in captured.output
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
