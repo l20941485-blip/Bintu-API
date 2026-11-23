@@ -62,6 +62,10 @@ class Provenance(BaseModel):
         default=None,
         description="Content type of the fetched response.",
     )
+    language: str | None = Field(
+        default=None,
+        description="Best-known content language, when the source provides it.",
+    )
     bytes_fetched: int | None = Field(
         default=None,
         description="Bytes fetched from the upstream source.",

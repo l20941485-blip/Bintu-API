@@ -57,3 +57,58 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(cache.age_seconds, 0)
 
 
+
+
+def test_build_provenance_includes_language_when_available():
+    from unittest.mock import MagicMock
+
+    from bintu_api.common.fetch import FetchedHTML
+    from bintu_api.extraction.output import build_provenance
+
+    document = FetchedHTML(
+        body=b"<html lang=\"en\"><body>Example</body></html>",
+        charset="utf-8",
+        final_url="https://example.com/",
+        status=200,
+        redirect_count=0,
+        content_type="text/html; charset=utf-8",
+        language="en",
+    )
+
+    provenance = build_provenance(
+        "https://example.com/",
+        "Example",
+        document,
+        "none",
+        "request-1",
+        MagicMock(service_version="test"),
+    )
+
+    assert provenance.language == "en"
+
+
+def test_build_provenance_omits_language_when_unavailable():
+    from unittest.mock import MagicMock
+
+    from bintu_api.common.fetch import FetchedHTML
+    from bintu_api.extraction.output import build_provenance
+
+    document = FetchedHTML(
+        body=b"<html><body>Example</body></html>",
+        charset="utf-8",
+        final_url="https://example.com/",
+        status=200,
+        redirect_count=0,
+        content_type="text/html; charset=utf-8",
+    )
+
+    provenance = build_provenance(
+        "https://example.com/",
+        "Example",
+        document,
+        "none",
+        "request-1",
+        MagicMock(service_version="test"),
+    )
+
+    assert provenance.language is None
