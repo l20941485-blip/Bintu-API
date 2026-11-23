@@ -143,3 +143,43 @@ def resolve_target(
             render_js=render_js,
         ),
     )
+
+
+def prepare_fetch_target(
+    url: str,
+    settings: object,
+    *,
+    render_js: bool = False,
+) -> ResolvedTarget:
+    """Validate a requested URL before robots enforcement or fetching.
+
+    The returned target is informational for this slice. The original URL
+    remains the value passed to robots, cache, and fetch collaborators so
+    existing behavior and cache identity are unchanged.
+    """
+    return resolve_target(
+        url,
+        settings,
+        content_type=None,
+        render_js=render_js,
+    )
+
+
+def prepare_fetch_target(
+    url: str,
+    settings: object,
+    *,
+    render_js: bool = False,
+) -> ResolvedTarget:
+    """Validate a requested URL before robots enforcement or fetching.
+
+    The returned target is informational for this slice. The original URL
+    remains the value passed to robots, cache, and fetch collaborators so
+    existing behavior and cache identity are unchanged.
+    """
+    return resolve_target(
+        url,
+        settings,
+        content_type=None,
+        render_js=render_js,
+    )

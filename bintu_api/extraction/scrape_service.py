@@ -12,6 +12,7 @@ import logging
 from datetime import UTC, datetime
 
 from bintu_api.common.fetch import FetchedHTML
+from bintu_api.common.resolution import prepare_fetch_target
 from bintu_api.extraction.builder import build_cached_markdown
 from bintu_api.extraction.cache_policy import (
     compute_cache_key,
@@ -90,6 +91,12 @@ class ScrapeService:
         render_js: bool,
     ) -> FetchedHTML:
         """Enforce robots and obtain the document using the configured strategy."""
+        prepare_fetch_target(
+            url,
+            settings,
+            render_js=render_js,
+        )
+
         await self.robots_enforcer(url, settings, cache_key[:12])
 
         strategy = resolve_fetch_strategy(render_js)

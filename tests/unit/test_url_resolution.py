@@ -274,3 +274,28 @@ def test_resolve_target_defaults_to_unsupported():
 
     assert target.content_class == "unsupported"
     assert target.fetch_strategy == "unsupported"
+
+
+def test_prepare_fetch_target_validates_before_fetch():
+    from bintu_api.common.resolution import prepare_fetch_target
+
+    target = prepare_fetch_target(
+        "HTTPS://EXAMPLE.COM:443/page#section",
+        _settings(),
+        render_js=False,
+    )
+
+    assert target.normalized_url == "https://example.com/page"
+    assert target.fetch_strategy == "unsupported"
+
+
+def test_prepare_fetch_target_rejects_disallowed_port():
+    import pytest
+    from bintu_api.common.resolution import prepare_fetch_target
+    from bintu_api.scraper.fetcher import TargetURLRejected
+
+    with pytest.raises(TargetURLRejected):
+        prepare_fetch_target(
+            "http://example.com:8080/",
+            _settings(),
+        )
