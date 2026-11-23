@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from bintu_api.extraction.persistent_cache import (
+    PersistentCacheCircuitBreaker,
     read_persistent_cache,
     write_persistent_cache,
 )
@@ -138,6 +139,126 @@ class PersistentCacheResilienceTests(unittest.IsolatedAsyncioTestCase):
                 for message in captured.output
             )
         )
+
+    async def test_circuit_breaker_opens_after_repeated_failures(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=2,
+            cooldown_seconds=60,
+        )
+
+        breaker.record_failure()
+        self.assertFalse(breaker.is_open())
+
+        breaker.record_failure()
+        self.assertTrue(breaker.is_open())
+
+    async def test_circuit_breaker_blocks_calls_while_open(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=1,
+            cooldown_seconds=60,
+        )
+        breaker.record_failure()
+
+        self.assertFalse(breaker.should_allow())
+
+    async def test_circuit_breaker_resets_after_success(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=2,
+            cooldown_seconds=60,
+        )
+
+        breaker.record_failure()
+        breaker.record_success()
+
+        self.assertFalse(breaker.is_open())
+
+    async def test_read_failure_records_circuit_breaker_failure(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=1,
+            cooldown_seconds=60,
+        )
+        reader = AsyncMock(side_effect=RuntimeError("database unavailable"))
+
+        result = await read_persistent_cache(
+            object(),
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+            reader,
+            request_id="req-read-breaker",
+            circuit_breaker=breaker,
+        )
+
+        self.assertIsNone(result)
+        self.assertTrue(breaker.is_open())
+
+    async def test_write_failure_records_circuit_breaker_failure(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=1,
+            cooldown_seconds=60,
+        )
+        writer = AsyncMock(side_effect=RuntimeError("database unavailable"))
+
+        await write_persistent_cache(
+            object(),
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+            self._result(),
+            writer,
+            request_id="req-write-breaker",
+            circuit_breaker=breaker,
+        )
+
+        self.assertTrue(breaker.is_open())
+
+    async def test_successful_read_resets_circuit_breaker(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=1,
+            cooldown_seconds=60,
+        )
+        reader = AsyncMock(return_value=self._result())
+
+        result = await read_persistent_cache(
+            object(),
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+            reader,
+            request_id="req-read-success-breaker",
+            circuit_breaker=breaker,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertFalse(breaker.is_open())
+
+    async def test_successful_write_resets_circuit_breaker(self):
+        breaker = PersistentCacheCircuitBreaker(
+            failure_threshold=1,
+            cooldown_seconds=60,
+        )
+        writer = AsyncMock(return_value=None)
+
+        await write_persistent_cache(
+            object(),
+            "https://example.com",
+            False,
+            False,
+            False,
+            False,
+            self._result(),
+            writer,
+            request_id="req-write-success-breaker",
+            circuit_breaker=breaker,
+        )
+
+        self.assertFalse(breaker.is_open())
 
     async def test_write_failure_logs_safe_error_details(self):
         writer = AsyncMock(
