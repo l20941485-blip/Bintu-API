@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from bintu_api.common.fetch import FetchedHTML
-from bintu_api.extraction.cache_store import CACHE_TTL
+from bintu_api.settings import DEFAULT_CACHE_TTL_SECONDS
 
 
 @dataclass(frozen=True)
@@ -53,12 +53,14 @@ def memory_cache_age_seconds(
 def is_memory_cache_fresh(
     extracted_at: str,
     now: datetime | None = None,
+    *,
+    ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
 ) -> bool:
     """Return whether a memory-cache timestamp is within the declared TTL."""
     age = memory_cache_age_seconds(extracted_at, now)
     # Legacy in-process entries created before timestamp preservation have no
     # timestamp. Treat them as fresh so a memory hit still avoids a fetch.
-    return age is None or age <= int(CACHE_TTL.total_seconds())
+    return age is None or age <= ttl_seconds
 
 
 async def read_memory_cache(
@@ -107,6 +109,7 @@ def evaluate_cache_freshness(
     *,
     now: datetime,
     extractor_version: str,
+    ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
 ) -> tuple[bool, str | None]:
     """Return (is_fresh, stale_reason) for a memory-cache entry.
 
@@ -134,7 +137,7 @@ def evaluate_cache_freshness(
     if age < 0:
         return True, None
 
-    if age > CACHE_TTL.total_seconds():
+    if age > ttl_seconds:
         return False, "ttl_expired"
 
     if (

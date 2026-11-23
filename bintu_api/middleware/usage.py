@@ -10,6 +10,7 @@ import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from bintu_api.metering.billing import classify_usage
 from bintu_api.metering.identity import resolve_metering_identity
 from bintu_api.metering.service import UsageEvent, record_usage_event
 from bintu_api.settings import Settings
@@ -70,14 +71,26 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
                 except ValueError:
                     tokens = 0
 
-                # Cache hits reuse a prior extraction, so do not bill token
-                # usage twice. The caller still receives one scrape event.
-                if response.headers.get("X-Cache-Hit", "").lower() == "true":
-                    tokens = 0
+                cache_hit = (
+                    response.headers.get("X-Cache-Hit", "").lower() == "true"
+                )
+                mode = (
+                    response.headers.get("x-mode")
+                    or request.headers.get("x-mode")
+                    or "unspecified"
+                )
 
-                # Cache hits reuse a prior extraction, so do not bill token
-                # usage twice. The caller still receives one scrape event.
-                if response.headers.get("X-Cache-Hit", "").lower() == "true":
+                # Classify using the returned-token value before applying the
+                # legacy cache-hit token rule. This preserves the commercial
+                # billing signal while the existing RPC continues to bill a
+                # cache hit as zero tokens.
+                billing = classify_usage(
+                    tokens=tokens,
+                    mode=mode,
+                    cache_hit=cache_hit,
+                )
+
+                if cache_hit:
                     tokens = 0
 
                 await record_usage_event(
@@ -87,11 +100,8 @@ class UsageMeteringMiddleware(BaseHTTPMiddleware):
                         gateway=identity[1],
                         scrapes=1,
                         tokens=tokens,
-                        mode=(
-                            response.headers.get("x-mode")
-                            or request.headers.get("x-mode")
-                            or "unspecified"
-                        ),
+                        mode=mode,
+                        billing=billing,
                     ),
                 )
 

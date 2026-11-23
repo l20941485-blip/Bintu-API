@@ -41,6 +41,10 @@ def build_response_provenance(context: ContextResult) -> dict[str, Any]:
             "hit": context.cache.hit,
             "layer": context.cache.layer,
             "age_seconds": context.cache.age_seconds,
+            "ttl_seconds": context.cache.ttl_seconds,
+            "fresh": context.cache.fresh,
+            "stale_reason": context.cache.stale_reason,
+            "revalidated": context.cache.revalidated,
         }
     if context.extractor_version is not None:
         provenance["extractor_version"] = context.extractor_version

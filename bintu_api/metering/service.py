@@ -13,6 +13,7 @@ from typing import Literal
 from starlette.requests import Request
 
 from bintu_api.integrations.supabase import DATABASE_TIMEOUT_SECONDS
+from bintu_api.metering.billing import BillingDecision
 from bintu_api.metering.supabase import (
     increment_developer_usage,
 )
@@ -32,6 +33,8 @@ class UsageEvent:
     mode: str | None = None
     legacy_rpc: bool = False
     source: Literal["mcp", "rest", "reader"] = "mcp"
+    quality_rejected: bool = False
+    billing: BillingDecision | None = None
 
 
 def queue_usage_event(request: Request, event: UsageEvent) -> None:

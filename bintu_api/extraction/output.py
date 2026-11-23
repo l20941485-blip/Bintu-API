@@ -13,7 +13,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from bintu_api.common.fetch import FetchedHTML, compute_approx_tokens
 from bintu_api.extraction.cache import compute_saved_tokens
-from bintu_api.extraction.cache_store import CACHE_TTL, CachedMarkdown
+from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.models import CacheInfo, Provenance, ScrapeTextResponse
 from bintu_api.extraction.quality import (
     assess_content_quality,
@@ -77,14 +77,18 @@ def build_provenance(
         if cache_layer != "none"
         else None
     )
-    cache_fresh = (
-        True
-        if cache_layer == "none"
-        else (
+    if cache_layer == "none":
+        cache_fresh = True
+    elif cache_layer == "persistent":
+        # Persistent entries are not TTL-expired; extractor-version changes
+        # are handled by the persistent-cache validation boundary.
+        cache_fresh = True
+    else:
+        cache_ttl_seconds = settings.cache_ttl_seconds
+        cache_fresh = (
             cache_age_seconds is not None
-            and cache_age_seconds <= int(CACHE_TTL.total_seconds())
+            and cache_age_seconds <= cache_ttl_seconds
         )
-    )
     return Provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
@@ -96,6 +100,11 @@ def build_provenance(
             hit=cache_layer != "none",
             layer=cache_layer,
             age_seconds=cache_age_seconds,
+            ttl_seconds=(
+                cache_ttl_seconds
+                if cache_layer == "memory"
+                else None
+            ),
             fresh=cache_fresh,
             stale_reason=stale_reason,
             revalidated=revalidated,
@@ -136,6 +145,7 @@ def _count_markdown_sections(text: str) -> tuple[int, int]:
 def _evaluate_cache_freshness(
     extracted_at: str | None,
     cache_layer: str,
+    ttl_seconds: int,
 ) -> tuple[str | None, bool]:
     """Return (stale_reason, revalidated) for a cache-layer response."""
     if cache_layer == "none":
@@ -147,7 +157,7 @@ def _evaluate_cache_freshness(
     age = _cache_age_seconds(extracted_at, datetime.now(UTC))
     if age is None:
         return "missing_timestamp", True
-    if age > CACHE_TTL.total_seconds():
+    if age > ttl_seconds:
         return "ttl_expired", True
     return None, False
 
@@ -190,6 +200,7 @@ def build_scrape_response(
     stale_reason, inferred_revalidated = _evaluate_cache_freshness(
         result.extracted_at,
         cache_layer,
+        settings.cache_ttl_seconds,
     )
     if revalidated is None:
         revalidated = inferred_revalidated

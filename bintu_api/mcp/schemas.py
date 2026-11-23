@@ -83,6 +83,65 @@ TOOL_OUTPUT_SCHEMA = {
             "type": "string",
             "description": "Which cache served the response: none, memory, or persistent.",
         },
+        "cache": {
+            "type": "object",
+            "description": (
+                "Canonical cache-freshness metadata. fresh means the result is within "
+                "Bintu's declared cache policy; it does not prove that upstream content "
+                "is unchanged."
+            ),
+            "properties": {
+                "hit": {
+                    "type": "boolean",
+                    "description": "Whether the response was served from cache.",
+                },
+                "layer": {
+                    "type": "string",
+                    "description": "Cache layer: none, memory, or persistent.",
+                },
+                "age_seconds": {
+                    "type": ["integer", "null"],
+                    "minimum": 0,
+                    "description": "Age of the cached entry in seconds, when known.",
+                },
+                "ttl_seconds": {
+                    "type": ["integer", "null"],
+                    "minimum": 0,
+                    "description": (
+                        "Configured TTL in seconds that governed this freshness decision. "
+                        "Present for memory-cache hits; null for fresh and persistent results."
+                    ),
+                },
+                "fresh": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether the result is fresh under Bintu's declared cache policy."
+                    ),
+                },
+                "stale_reason": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Why a cached entry was considered stale, when applicable."
+                    ),
+                },
+                "revalidated": {
+                    "type": "boolean",
+                    "description": (
+                        "True when a stale cache entry was refreshed during this request."
+                    ),
+                },
+            },
+            "required": [
+                "hit",
+                "layer",
+                "age_seconds",
+                "ttl_seconds",
+                "fresh",
+                "stale_reason",
+                "revalidated",
+            ],
+            "additionalProperties": False,
+        },
         "source_url": {
             "type": "string",
             "description": "The requested URL with sensitive-looking query parameters removed, safe for logs and display.",

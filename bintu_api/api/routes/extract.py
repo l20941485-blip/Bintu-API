@@ -29,8 +29,14 @@ from bintu_api.api.scrape_adapter import (
     _build_response,
 )
 from bintu_api.errors.upstream import translate_upstream_error
+from bintu_api.extraction.quality import ContentQualityAssessment
+from bintu_api.extraction.quality_policy import (
+    QualityPolicy,
+    evaluate_quality_policy,
+)
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.token_budget import truncate_to_token_budget
+from bintu_api.metering.billing import classify_usage
 from bintu_api.metering.service import UsageEvent, queue_usage_event
 from bintu_api.observability import log_extraction_completed
 from bintu_api.scraper.fetcher import _compute_approx_tokens
@@ -75,6 +81,8 @@ async def scrape_text(
     exclude_terminal_sections: bool = False,
     summary_mode: Literal["none", "leading", "key_sentences"] = "none",
     summary_sentence_count: int = Query(default=3, ge=1, le=10),
+    quality_policy_mode: Literal["observe", "warn", "enforce"] = "observe",
+    quality_minimum_score: float = Query(default=0.0, ge=0.0, le=1.0),
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     routes_common.verify_api_access(request, settings)
@@ -144,6 +152,8 @@ async def scrape_text(
         exclude_terminal_sections=exclude_terminal_sections,
         summary_mode=summary_mode,
         summary_sentence_count=summary_sentence_count,
+        quality_policy_mode=quality_policy_mode,
+        quality_minimum_score=quality_minimum_score,
     )
 
 
@@ -219,6 +229,8 @@ async def _scrape_text(
     exclude_terminal_sections: bool = False,
     summary_mode: Literal["none", "leading", "key_sentences"] = "none",
     summary_sentence_count: int = 3,
+    quality_policy_mode: Literal["observe", "warn", "enforce"] = "observe",
+    quality_minimum_score: float = 0.0,
 ) -> ScrapeTextResponse:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -247,7 +259,7 @@ async def _scrape_text(
             footnote_url_policy=footnote_url_policy,
             max_footnote_url_length=max_footnote_url_length,
             sections=sections,
-        )
+)
 
         response = _build_response(
             url,
@@ -327,6 +339,34 @@ async def _scrape_text(
             if rapidapi_user and len(rapidapi_user) <= 256 and rapidapi_user.isprintable():
                 mode = getattr(response, "mode", "scrape")
 
+                content_quality = response.content_quality
+                if content_quality is not None:
+                    quality = ContentQualityAssessment(
+                        score=content_quality.score,
+                        boilerplate_ratio=content_quality.boilerplate_ratio,
+                        main_content_coverage=content_quality.main_content_coverage,
+                        section_completeness=content_quality.section_completeness,
+                    )
+                    quality_decision = evaluate_quality_policy(
+                        quality=quality,
+                        policy=QualityPolicy(
+                            mode=quality_policy_mode,
+                            minimum_score=quality_minimum_score,
+                        ),
+                    )
+                    quality_rejected = (
+                        quality_policy_mode == "enforce"
+                        and quality_decision.action == "reject"
+                    )
+                else:
+                    quality_rejected = False
+                billing = classify_usage(
+                    tokens=response.tokens,
+                    mode=mode,
+                    cache_hit=cache_layer != "none",
+                    quality_rejected=quality_rejected,
+                )
+
                 queue_usage_event(
                     request,
                     UsageEvent(
@@ -337,6 +377,8 @@ async def _scrape_text(
                         mode=mode,
                         legacy_rpc=True,
                         source="rest",
+                        quality_rejected=quality_rejected,
+                        billing=billing,
                     ),
                 )
 

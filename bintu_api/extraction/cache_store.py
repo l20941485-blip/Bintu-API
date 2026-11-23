@@ -23,7 +23,7 @@ else:
 logger = logging.getLogger("bintu_api.database")
 # Bump when extracted Markdown or its stored metadata changes.
 EXTRACTOR_VERSION = "2026-10-30.1"
-CACHE_TTL = timedelta(hours=24)
+PERSISTENT_CACHE_RETENTION = timedelta(hours=24)
 
 
 class CacheWriteFailed(RuntimeError):
@@ -55,7 +55,7 @@ async def get_cached_markdown(
     include_footer: bool,
 ) -> CachedMarkdown | None:
     """Return a cache entry only if it was successfully extracted in the last 24 hours."""
-    cutoff = (datetime.now(UTC) - CACHE_TTL).isoformat()
+    cutoff = (datetime.now(UTC) - PERSISTENT_CACHE_RETENTION).isoformat()
     # Plain select + limit(1) instead of maybe_single(): maybe_single() sends
     # `Accept: application/vnd.pgrst.object+json`, which PostgREST answers with
     # 406 Not Acceptable whenever zero rows match (observed live 2026-10-17),
