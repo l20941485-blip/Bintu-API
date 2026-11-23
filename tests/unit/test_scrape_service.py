@@ -250,3 +250,64 @@ async def test_persist_false_reads_but_does_not_write():
     assert result.markdown == "extracted"
     service.persistent_cache_reader.assert_awaited_once()
     service.persistent_cache_writer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_document_returns_refreshed_target():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from bintu_api.common.fetch import FetchedHTML
+    from bintu_api.common.resolution import (
+        prepare_fetch_target,
+        refresh_resolved_target,
+    )
+    from bintu_api.extraction.scrape_service import ScrapeService
+
+    document = FetchedHTML(
+        body=b"<html><body>content</body></html>",
+        charset="utf-8",
+        final_url="https://example.com/final",
+        status=200,
+        redirect_count=1,
+        content_type="text/html; charset=utf-8",
+        canonical_url="https://example.com/canonical",
+    )
+
+    settings = MagicMock()
+    settings.allowed_port_set.return_value = {80, 443}
+
+    service = ScrapeService(
+        cache=MagicMock(),
+        persistent_cache_reader=AsyncMock(),
+        persistent_cache_writer=AsyncMock(),
+        robots_enforcer=AsyncMock(),
+        html_fetcher=MagicMock(return_value=document),
+        rendered_html_fetcher=AsyncMock(return_value=document),
+        text_extractor=MagicMock(),
+        source_decoder=MagicMock(),
+        cache_event_logger=MagicMock(),
+    )
+
+    fetched, target = await service._fetch_document(
+        "https://example.com/start",
+        settings,
+        "cache-key",
+        False,
+    )
+
+    expected = refresh_resolved_target(
+        prepare_fetch_target(
+            "https://example.com/start",
+            settings,
+            render_js=False,
+        ),
+        document,
+    )
+
+    assert fetched is document
+    assert target == expected
+    assert target.final_url == "https://example.com/final"
+    assert target.canonical_url == "https://example.com/canonical"
+    assert target.content_type == "text/html; charset=utf-8"
+    assert target.content_class == "html"
+    assert target.redirect_count == 1
