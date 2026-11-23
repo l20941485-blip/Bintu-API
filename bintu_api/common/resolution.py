@@ -76,3 +76,25 @@ def validate_url(url: str, settings: object) -> str:
 
     _parse_target(url, settings)
     return normalize_url(url)
+
+
+def select_fetch_strategy(
+    content_type: str | None,
+    *,
+    render_js: bool = False,
+) -> str:
+    """Select the appropriate fetch strategy for a classified content type.
+
+    HTML may use direct fetching or browser rendering. Other supported types
+    are reported as specialized targets for future extractors. Unknown or
+    unsupported media remains unsupported.
+    """
+    media_class = classify_content_type(content_type)
+
+    if media_class == "html":
+        return "rendered_html" if render_js else "direct_html"
+
+    if media_class in {"pdf", "json", "text"}:
+        return f"specialized_{media_class}"
+
+    return "unsupported"

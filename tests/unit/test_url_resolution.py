@@ -148,3 +148,51 @@ def test_validate_url_rejects_embedded_credentials():
 
     with pytest.raises(TargetURLRejected):
         validate_url("https://user:password@example.com/", settings)
+
+
+def test_html_uses_direct_fetch_by_default():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert (
+        select_fetch_strategy("text/html; charset=utf-8")
+        == "direct_html"
+    )
+
+
+def test_html_uses_rendered_fetch_when_requested():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert (
+        select_fetch_strategy("text/html", render_js=True)
+        == "rendered_html"
+    )
+
+
+def test_pdf_uses_specialized_strategy():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert select_fetch_strategy("application/pdf") == "specialized_pdf"
+
+
+def test_json_uses_specialized_strategy():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert select_fetch_strategy("application/json") == "specialized_json"
+
+
+def test_plain_text_uses_specialized_strategy():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert select_fetch_strategy("text/plain") == "specialized_text"
+
+
+def test_image_is_unsupported():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert select_fetch_strategy("image/png") == "unsupported"
+
+
+def test_missing_content_type_is_unsupported():
+    from bintu_api.common.resolution import select_fetch_strategy
+
+    assert select_fetch_strategy(None) == "unsupported"
