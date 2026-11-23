@@ -673,6 +673,27 @@ def fetch_html_document(
     raise TooManyRedirects("The target exceeded the redirect limit")
 
 
+def _rendered_redirect_hops(request: object) -> tuple[RedirectHop, ...]:
+    """Return redirect-hop URLs known to Playwright, in redirect order.
+
+    Playwright exposes the prior request chain but does not reliably expose
+    every intermediate response status, so statuses remain unknown rather than
+    being invented.
+    """
+    hops: list[RedirectHop] = []
+    redirected_request = getattr(request, "redirected_from", None)
+
+    while redirected_request is not None:
+        hops.append(
+            RedirectHop(
+                url=redirected_request.url,
+            )
+        )
+        redirected_request = getattr(redirected_request, "redirected_from", None)
+
+    return tuple(reversed(hops))
+
+
 async def fetch_rendered_html_document(
     url: str,
     settings: Settings,
@@ -820,11 +841,7 @@ async def fetch_rendered_html_document(
             if len(body) > settings.max_html_bytes:
                 raise PayloadTooLarge("Rendered HTML may not exceed 1 MiB")
 
-            redirect_count = 0
-            redirected_request = response.request.redirected_from
-            while redirected_request is not None:
-                redirect_count += 1
-                redirected_request = redirected_request.redirected_from
+            redirects = _rendered_redirect_hops(response.request)
 
             metadata = extract_html_metadata(body, from_encoding="utf-8")
 
@@ -833,7 +850,8 @@ async def fetch_rendered_html_document(
                 charset="utf-8",
                 final_url=page.url,
                 status=response.status,
-                redirect_count=redirect_count,
+                redirect_count=len(redirects),
+                redirects=redirects,
                 content_type=content_type,
                 canonical_url=metadata[0],
                 language=metadata[1],
