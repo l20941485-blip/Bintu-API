@@ -63,3 +63,16 @@ def normalize_url(url: str) -> str:
     query = f"?{parsed.query}" if parsed.query else ""
 
     return f"{scheme}://{host}{port}{path}{query}"
+
+
+def validate_url(url: str, settings: object) -> str:
+    """Validate a URL using Bintu's established fetcher safety rules.
+
+    This function delegates to the scraper fetcher so URL policy remains in
+    one place. It returns the normalized URL on success and raises the
+    fetcher's existing ``TargetURLRejected`` error on failure.
+    """
+    from bintu_api.scraper.fetcher import _parse_target
+
+    _parse_target(url, settings)
+    return normalize_url(url)

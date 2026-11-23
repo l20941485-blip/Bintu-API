@@ -100,3 +100,51 @@ def test_normalize_url_rejects_missing_host():
 
     with pytest.raises(ValueError):
         normalize_url("https://")
+
+
+def test_validate_url_returns_normalized_url():
+    from bintu_api.common.resolution import validate_url
+    from bintu_api.settings import Settings
+
+    settings = Settings(
+        api_key="",
+        rapidapi_proxy_secret="",
+        render_js_enabled=False,
+    )
+
+    assert (
+        validate_url("HTTPS://EXAMPLE.COM:443/page#section", settings)
+        == "https://example.com/page"
+    )
+
+
+def test_validate_url_rejects_disallowed_port():
+    import pytest
+    from bintu_api.common.resolution import validate_url
+    from bintu_api.scraper.fetcher import TargetURLRejected
+    from bintu_api.settings import Settings
+
+    settings = Settings(
+        api_key="",
+        rapidapi_proxy_secret="",
+        render_js_enabled=False,
+    )
+
+    with pytest.raises(TargetURLRejected):
+        validate_url("http://example.com:8080/", settings)
+
+
+def test_validate_url_rejects_embedded_credentials():
+    import pytest
+    from bintu_api.common.resolution import validate_url
+    from bintu_api.scraper.fetcher import TargetURLRejected
+    from bintu_api.settings import Settings
+
+    settings = Settings(
+        api_key="",
+        rapidapi_proxy_secret="",
+        render_js_enabled=False,
+    )
+
+    with pytest.raises(TargetURLRejected):
+        validate_url("https://user:password@example.com/", settings)
