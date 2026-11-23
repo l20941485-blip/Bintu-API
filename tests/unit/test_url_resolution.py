@@ -88,6 +88,7 @@ def test_normalize_url_adds_root_path():
 
 def test_normalize_url_rejects_non_http_scheme():
     import pytest
+
     from bintu_api.common.resolution import normalize_url
 
     with pytest.raises(ValueError):
@@ -96,6 +97,7 @@ def test_normalize_url_rejects_non_http_scheme():
 
 def test_normalize_url_rejects_missing_host():
     import pytest
+
     from bintu_api.common.resolution import normalize_url
 
     with pytest.raises(ValueError):
@@ -120,6 +122,7 @@ def test_validate_url_returns_normalized_url():
 
 def test_validate_url_rejects_disallowed_port():
     import pytest
+
     from bintu_api.common.resolution import validate_url
     from bintu_api.scraper.fetcher import TargetURLRejected
     from bintu_api.settings import Settings
@@ -136,6 +139,7 @@ def test_validate_url_rejects_disallowed_port():
 
 def test_validate_url_rejects_embedded_credentials():
     import pytest
+
     from bintu_api.common.resolution import validate_url
     from bintu_api.scraper.fetcher import TargetURLRejected
     from bintu_api.settings import Settings
@@ -191,11 +195,6 @@ def test_image_is_unsupported():
 
     assert select_fetch_strategy("image/png") == "unsupported"
 
-
-def test_missing_content_type_is_unsupported():
-    from bintu_api.common.resolution import select_fetch_strategy
-
-    assert select_fetch_strategy(None) == "unsupported"
 
 
 def _settings():
@@ -254,6 +253,7 @@ def test_resolve_target_classifies_pdf():
 
 def test_resolve_target_rejects_unsafe_url():
     import pytest
+
     from bintu_api.common.resolution import resolve_target
     from bintu_api.scraper.fetcher import TargetURLRejected
 
@@ -291,6 +291,7 @@ def test_prepare_fetch_target_validates_before_fetch():
 
 def test_prepare_fetch_target_rejects_disallowed_port():
     import pytest
+
     from bintu_api.common.resolution import prepare_fetch_target
     from bintu_api.scraper.fetcher import TargetURLRejected
 

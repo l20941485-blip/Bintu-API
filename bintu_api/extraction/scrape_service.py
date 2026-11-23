@@ -12,7 +12,11 @@ import logging
 from datetime import UTC, datetime
 
 from bintu_api.common.fetch import FetchedHTML
-from bintu_api.common.resolution import prepare_fetch_target
+from bintu_api.common.resolution import (
+    ResolvedTarget,
+    prepare_fetch_target,
+    refresh_resolved_target,
+)
 from bintu_api.extraction.builder import build_cached_markdown
 from bintu_api.extraction.cache_policy import (
     compute_cache_key,
@@ -89,9 +93,9 @@ class ScrapeService:
         settings: object,
         cache_key: str,
         render_js: bool,
-    ) -> FetchedHTML:
+    ) -> tuple[FetchedHTML, ResolvedTarget]:
         """Enforce robots and obtain the document using the configured strategy."""
-        prepare_fetch_target(
+        resolved_target = prepare_fetch_target(
             url,
             settings,
             render_js=render_js,
@@ -101,12 +105,15 @@ class ScrapeService:
 
         strategy = resolve_fetch_strategy(render_js)
         if strategy == "rendered":
-            return await self.rendered_html_fetcher(url, settings)
-        return await asyncio.to_thread(
-            self.html_fetcher,
-            url,
-            settings,
-        )
+            document = await self.rendered_html_fetcher(url, settings)
+        else:
+            document = await asyncio.to_thread(
+                self.html_fetcher,
+                url,
+                settings,
+            )
+
+        return document, refresh_resolved_target(resolved_target, document)
 
     async def fetch_and_extract(
         self,
@@ -239,7 +246,7 @@ class ScrapeService:
                 )
 
             try:
-                document = await self._fetch_document(
+                document, _resolved_target = await self._fetch_document(
                     url,
                     settings,
                     cache_key,

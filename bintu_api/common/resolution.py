@@ -165,21 +165,27 @@ def prepare_fetch_target(
     )
 
 
-def prepare_fetch_target(
-    url: str,
-    settings: object,
-    *,
-    render_js: bool = False,
-) -> ResolvedTarget:
-    """Validate a requested URL before robots enforcement or fetching.
 
-    The returned target is informational for this slice. The original URL
-    remains the value passed to robots, cache, and fetch collaborators so
-    existing behavior and cache identity are unchanged.
+def refresh_resolved_target(
+    target: ResolvedTarget,
+    document: object,
+) -> ResolvedTarget:
+    """Update a resolved target with metadata from a successfully fetched document.
+
+    The requested and normalized URLs remain unchanged. Fetch-derived fields are
+    populated only when available, so cache-hit documents and test fakes remain
+    compatible.
     """
-    return resolve_target(
-        url,
-        settings,
-        content_type=None,
-        render_js=render_js,
+    content_type = getattr(document, "content_type", None)
+    content_class = classify_content_type(content_type)
+
+    return ResolvedTarget(
+        requested_url=target.requested_url,
+        normalized_url=target.normalized_url,
+        final_url=getattr(document, "final_url", None),
+        canonical_url=getattr(document, "canonical_url", None),
+        content_type=content_type,
+        content_class=content_class,
+        redirect_count=getattr(document, "redirect_count", None) or 0,
+        fetch_strategy=target.fetch_strategy,
     )
