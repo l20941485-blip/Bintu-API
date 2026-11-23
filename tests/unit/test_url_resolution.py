@@ -196,3 +196,81 @@ def test_missing_content_type_is_unsupported():
     from bintu_api.common.resolution import select_fetch_strategy
 
     assert select_fetch_strategy(None) == "unsupported"
+
+
+def _settings():
+    from bintu_api.settings import Settings
+
+    return Settings(
+        api_key="",
+        rapidapi_proxy_secret="",
+        render_js_enabled=False,
+    )
+
+
+def test_resolve_target_normalizes_and_classifies_html():
+    from bintu_api.common.resolution import resolve_target
+
+    target = resolve_target(
+        "HTTPS://EXAMPLE.COM/page#section",
+        _settings(),
+        content_type="text/html; charset=utf-8",
+    )
+
+    assert target.requested_url == "HTTPS://EXAMPLE.COM/page#section"
+    assert target.normalized_url == "https://example.com/page"
+    assert target.content_class == "html"
+    assert target.fetch_strategy == "direct_html"
+    assert target.final_url is None
+    assert target.canonical_url is None
+    assert target.redirect_count == 0
+
+
+def test_resolve_target_selects_rendered_html():
+    from bintu_api.common.resolution import resolve_target
+
+    target = resolve_target(
+        "https://example.com/",
+        _settings(),
+        content_type="text/html",
+        render_js=True,
+    )
+
+    assert target.fetch_strategy == "rendered_html"
+
+
+def test_resolve_target_classifies_pdf():
+    from bintu_api.common.resolution import resolve_target
+
+    target = resolve_target(
+        "https://example.com/document.pdf",
+        _settings(),
+        content_type="application/pdf",
+    )
+
+    assert target.content_class == "pdf"
+    assert target.fetch_strategy == "specialized_pdf"
+
+
+def test_resolve_target_rejects_unsafe_url():
+    import pytest
+    from bintu_api.common.resolution import resolve_target
+    from bintu_api.scraper.fetcher import TargetURLRejected
+
+    with pytest.raises(TargetURLRejected):
+        resolve_target(
+            "http://example.com:8080/",
+            _settings(),
+        )
+
+
+def test_resolve_target_defaults_to_unsupported():
+    from bintu_api.common.resolution import resolve_target
+
+    target = resolve_target(
+        "https://example.com/",
+        _settings(),
+    )
+
+    assert target.content_class == "unsupported"
+    assert target.fetch_strategy == "unsupported"
