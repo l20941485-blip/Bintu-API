@@ -129,6 +129,7 @@ class RagAnswerRequest(BaseModel):
     query: str = Field(min_length=1, max_length=1000)
     limit: int = Field(default=5, ge=1, le=20)
     access_labels: list[str] = Field(default_factory=list)
+    document_id: str | None = Field(default=None, min_length=1, max_length=100)
 
     @field_validator("query")
     @classmethod
