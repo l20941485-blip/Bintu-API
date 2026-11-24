@@ -90,6 +90,7 @@ async def answer_question(
         query=payload.query,
         limit=payload.limit,
         access_labels=tuple(payload.access_labels),
+        document_id=payload.document_id,
     )
 
     return RagAnswerResponse(

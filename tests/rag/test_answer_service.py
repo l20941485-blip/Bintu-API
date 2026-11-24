@@ -168,6 +168,27 @@ class RagAnswerServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.answer, "")
         self.assertEqual(result.citations, ())
 
+
+
+    async def test_marks_insufficient_evidence_when_no_terms_match(self) -> None:
+        repository = FakeAnswerRepository(
+            [
+                make_chunk(
+                    "chunk-unrelated",
+                    "## Billing\n\nInvoices are issued monthly.",
+                    0.7,
+                    heading_path=("Guide", "Billing"),
+                )
+            ]
+        )
+        service = RagAnswerService(RagRetrievalService(repository))
+
+        result = await service.answer(query="How do I rotate webhooks?")
+
+        self.assertTrue(result.insufficient_evidence)
+        self.assertEqual(result.answer, "")
+        self.assertEqual(result.citations, ())
+
     async def test_rejects_blank_query(self) -> None:
         service = RagAnswerService(
             RagRetrievalService(FakeAnswerRepository([]))

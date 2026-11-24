@@ -184,7 +184,7 @@ class RagAnswerService:
         ]
 
         if not matching:
-            matching = candidates
+            return []
 
         matching.sort()
 
@@ -277,11 +277,7 @@ class RagAnswerService:
             RagAnswerObservability(
                 query_length=len(query.strip()),
                 retrieved_chunk_count=len(answer.retrieved_chunks),
-                selected_evidence_count=len(
-                    answer.answer.split(". ")
-                )
-                if answer.answer
-                else 0,
+                selected_evidence_count=len(answer.citations),
                 citation_count=len(answer.citations),
                 insufficient_evidence=answer.insufficient_evidence,
                 latency_ms=latency_ms,

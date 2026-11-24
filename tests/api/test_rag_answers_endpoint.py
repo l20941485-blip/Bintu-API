@@ -307,3 +307,28 @@ def test_api_key_answer_does_not_request_owner_knowledge(client):
             "p_document_id": None,
         },
     )
+
+
+def test_api_key_answer_forwards_optional_document_id(client):
+    response = client.post(
+        "/api/v1/rag/answers",
+        json={
+            "query": "How do I use authentication?",
+            "limit": 5,
+            "access_labels": ["public"],
+            "document_id": "document-1",
+        },
+        headers=AUTH,
+    )
+
+    assert response.status_code == 200, response.text
+    client.app.state.supabase_client.rpc.assert_called_once_with(
+        "search_rag_chunks",
+        {
+            "p_query": "How do I use authentication?",
+            "p_limit": 5,
+            "p_access_labels": ["public"],
+            "p_owner_identity": None,
+            "p_document_id": "document-1",
+        },
+    )
