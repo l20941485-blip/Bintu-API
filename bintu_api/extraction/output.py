@@ -25,6 +25,7 @@ from bintu_api.security.url_safety import (
     SENSITIVE_QUERY_PARAMETER_NAMES,
     sanitize_url,
 )
+from bintu_api.metering.billing import BillingDecision, classify_usage
 from bintu_api.settings import Settings
 
 TOKEN_METHOD = "ceil(characters/4)"
@@ -162,6 +163,7 @@ def _evaluate_cache_freshness(
     return None, False
 
 
+from bintu_api.metering.billing import BillingDecision, classify_usage
 def build_scrape_response(
     url: str,
     result: CachedMarkdown,
@@ -170,6 +172,7 @@ def build_scrape_response(
     request_id: str,
     settings: Settings,
     revalidated: bool | None = None,
+    mode: str = "scrape",
 ) -> ScrapeTextResponse:
     """Build the shared scrape response while preserving cache economics."""
     approx_tokens = compute_approx_tokens(result.markdown)
@@ -205,6 +208,19 @@ def build_scrape_response(
     if revalidated is None:
         revalidated = inferred_revalidated
 
+
+    # Calculate usage billing
+    cache_hit = cache_layer != "none"
+    billing_decision = classify_usage(
+        tokens=approx_tokens,
+        mode=mode,
+        cache_hit=cache_hit,
+    )
+    usage_data = {
+        "billable_units": billing_decision.billable_units,
+        "unit": billing_decision.unit,
+        "cache_credit_applied": billing_decision.cache_credit_applied,
+    }
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
@@ -231,6 +247,7 @@ def build_scrape_response(
             stale_reason=stale_reason,
             revalidated=revalidated,
         ),
+        usage=usage_data,
     )
 
 

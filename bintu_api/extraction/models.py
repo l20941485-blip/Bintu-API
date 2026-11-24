@@ -213,3 +213,7 @@ class ScrapeTextResponse(BaseModel):
         default=None,
         description="Request provenance. May be absent while this feature is rolled out.",
     )
+    usage: dict[str, object] | None = Field(
+        default=None,
+        description="Usage billing details: billable_units, unit, cache_credit_applied.",
+    )
