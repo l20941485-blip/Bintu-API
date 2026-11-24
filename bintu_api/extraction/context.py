@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -43,8 +44,10 @@ from bintu_api.extraction.rag_chunking import make_chunk_id, split_semantic_chun
 from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.summarizer import summarize_text
 from bintu_api.observability import (
+    get_or_create_trace_id,
     log_cache_lookup_completed,
     record_cache_tokens_saved,
+    record_stage_trace,
 )
 from bintu_api.security.auth import rate_limit_identity
 from bintu_api.security.url_safety import sanitize_url
@@ -406,8 +409,17 @@ async def extract_context(
             # Missing, empty, or malformed timestamps yield null
             cache_age_seconds = None
 
+    context_request_id: str | None = getattr(
+        getattr(request, "state", None),
+        "request_id",
+        None,
+    )
+    context_trace_id: str | None = (
+        get_or_create_trace_id(context_request_id) if context_request_id else None
+    )
+
     log_cache_lookup_completed(
-        request_id=getattr(getattr(request, "state", None), "request_id", None),
+        request_id=context_request_id,
         url=url,
         cache_hit=cache_hit,
         cache_layer=cache_layer,
@@ -458,197 +470,244 @@ async def extract_context(
 
     section_selection = None
     if sections:
-        # Scrape clips the combined selection to max_tokens. Chunk and
-        # summarize must receive the complete selected sections so that
-        # chunking and summarizing can apply their own budgets afterward.
-        selection_budget = max_tokens if mode == "scrape" else None
-        section_selection = select_sections(
-            raw_text,
-            sections,
-            selection_budget,
-        )
-        selected_sections = section_selection.sections
-        requested_sections = list(section_selection.requested_sections)
-        unmatched_sections = list(section_selection.unmatched_sections)
-        available_sections = list(section_selection.available_sections)
-        filtered = section_selection.filtered
-        section_match_status = section_selection.match_status
-        section_warnings = list(section_selection.warnings)
-
-    if mode == "scrape":
-        if section_selection is not None:
-            final_text = _retain_referenced_footnotes(
-                section_selection.text,
+        section_started = time.perf_counter()
+        try:
+            # Scrape clips the combined selection to max_tokens. Chunk and
+            # summarize must receive the complete selected sections so that
+            # chunking and summarizing can apply their own budgets afterward.
+            selection_budget = max_tokens if mode == "scrape" else None
+            section_selection = select_sections(
                 raw_text,
+                sections,
+                selection_budget,
             )
-            chunks = []
-            token_truncated = section_selection.truncated
-            scrape_baseline_tokens = count_tokens(raw_text)
-            approx_tokens = count_tokens(final_text)
-            transformation_truncated = content_truncated or section_selection.truncated
-
-            if section_selection.truncated:
-                limiting_factor = "token_budget"
-        else:
-            final_text, token_truncated = truncate_to_token_budget(
-                raw_text,
-                max_tokens,
-            )
-            chunks = [
-                {
-                    "index": 0,
-                    "text": final_text,
-                    "approx_tokens": count_tokens(final_text),
-                    "tokens": count_tokens(final_text),
-                }
-            ]
-            scrape_baseline_tokens = count_tokens(raw_text)
-            approx_tokens = count_tokens(final_text)
-            transformation_truncated = content_truncated or token_truncated
-
-            if token_truncated:
-                limiting_factor = "token_budget"
-
-    elif mode == "chunk":
-        source_text = section_selection.text if section_selection is not None else raw_text
-        policy_text = apply_link_policy(
-            source_text,
-            links=links,
-            base_url=url,
-        )
-        if chunk_strategy == "semantic":
-            semantic_chunks = split_semantic_chunks(
-                policy_text,
-                max_tokens=max_tokens,
-                overlap_tokens=overlap_tokens,
-                source_url=sanitize_url(url),
-                content_sha256=hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
-                extracted_at=resolved_extracted_at,
-            )
-            chunks = [asdict(chunk) for chunk in semantic_chunks]
-            chunk_strings = [chunk.text for chunk in semantic_chunks]
-        else:
-            chunk_strings = split_into_chunks(policy_text, max_tokens)
-            chunks = [
-                {
-                    "index": index,
-                    "text": chunk,
-                    "approx_tokens": count_tokens(chunk),
-                    "tokens": count_tokens(chunk),
-                }
-                for index, chunk in enumerate(chunk_strings)
-            ]
-            chunks = annotate_chunk_locations(
-                chunks,
-                source_text=policy_text,
+            selected_sections = section_selection.sections
+            requested_sections = list(section_selection.requested_sections)
+            unmatched_sections = list(section_selection.unmatched_sections)
+            available_sections = list(section_selection.available_sections)
+            filtered = section_selection.filtered
+            section_match_status = section_selection.match_status
+            section_warnings = list(section_selection.warnings)
+        except Exception:
+            if context_request_id:
+                record_stage_trace(
+                    request_id=context_request_id,
+                    trace_id=context_trace_id,
+                    stage="section_selection",
+                    status="error",
+                    duration_ms=(time.perf_counter() - section_started) * 1000.0,
+                    cache_layer=cache_layer,
+                )
+            raise
+        if context_request_id:
+            record_stage_trace(
+                request_id=context_request_id,
+                trace_id=context_trace_id,
+                stage="section_selection",
+                status="success",
+                duration_ms=(time.perf_counter() - section_started) * 1000.0,
+                cache_layer=cache_layer,
+                tokens_returned=count_tokens(section_selection.text),
             )
 
-        selected_chunks, omitted_chunks = select_chunks_for_budget(
-            chunks,
-            max_tokens=max_tokens,
-            policy=chunk_selection_policy,
-        )
-        chunks = selected_chunks
-        chunk_strings = [chunk["text"] for chunk in chunks]
+    assembly_started = time.perf_counter()
+    try:
+        if mode == "scrape":
+            if section_selection is not None:
+                final_text = _retain_referenced_footnotes(
+                    section_selection.text,
+                    raw_text,
+                )
+                chunks = []
+                token_truncated = section_selection.truncated
+                scrape_baseline_tokens = count_tokens(raw_text)
+                approx_tokens = count_tokens(final_text)
+                transformation_truncated = content_truncated or section_selection.truncated
 
-        final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
-        approx_tokens = sum(chunk["tokens"] for chunk in chunks)
-        split = len(chunk_strings) > 1
-        transformation_truncated = content_truncated or bool(omitted_chunks)
-        if omitted_chunks:
-            limiting_factor = "token_budget"
+                if section_selection.truncated:
+                    limiting_factor = "token_budget"
+            else:
+                final_text, token_truncated = truncate_to_token_budget(
+                    raw_text,
+                    max_tokens,
+                )
+                chunks = [
+                    {
+                        "index": 0,
+                        "text": final_text,
+                        "approx_tokens": count_tokens(final_text),
+                        "tokens": count_tokens(final_text),
+                    }
+                ]
+                scrape_baseline_tokens = count_tokens(raw_text)
+                approx_tokens = count_tokens(final_text)
+                transformation_truncated = content_truncated or token_truncated
 
-    elif mode == "summarize":
-        if section_selection is not None and not section_selection.sections:
-            final_text = ""
-            was_truncated = False
-            chunks = []
-        else:
+                if token_truncated:
+                    limiting_factor = "token_budget"
+
+        elif mode == "chunk":
             source_text = section_selection.text if section_selection is not None else raw_text
-            final_text, was_truncated = summarize_text(source_text, max_tokens)
-            chunks = [
-                {
-                    "index": 0,
-                    "text": final_text,
-                    "approx_tokens": count_tokens(final_text),
-                    "tokens": count_tokens(final_text),
-                }
-            ]
-        approx_tokens = count_tokens(final_text)
-        transformation_truncated = content_truncated or was_truncated
-        if was_truncated:
-            limiting_factor = "token_budget"
-    else:
-        raise ValueError(f"Unknown context mode: {mode}")
-
-    if mode == "chunk" and chunks:
-        chunk_provenance = {
-            "page_title": resolved_page_title,
-            "page_title_source": resolved_page_title_source,
-            "content_fingerprint": compute_content_fingerprint(policy_text),
-            "source_url": sanitize_url(url),
-            "final_url": (
-                document.final_url
-                if document is not None and isinstance(document, FetchedHTML) and document.final_url
-                else sanitize_url(url)
-            ),
-            "content_sha256": hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
-            "extracted_at": resolved_extracted_at,
-        }
-        chunks = attach_chunk_provenance(
-            chunks,
-            **chunk_provenance,
-            max_tokens=max_tokens,
-            overlap_tokens=overlap_tokens,
-        )
-
-        if include_page_context:
-            for chunk in chunks:
-                heading_path = chunk.get("heading_path") or []
-                context_parts = []
-                if resolved_page_title:
-                    context_parts.append(f"Page: {resolved_page_title}")
-                if heading_path:
-                    context_parts.append("Section: " + " > ".join(heading_path))
-                chunk["page_context"] = (
-                    " | ".join(context_parts) if context_parts else "No additional page context available."
+            policy_text = apply_link_policy(
+                source_text,
+                links=links,
+                base_url=url,
+            )
+            if chunk_strategy == "semantic":
+                semantic_chunks = split_semantic_chunks(
+                    policy_text,
+                    max_tokens=max_tokens,
+                    overlap_tokens=overlap_tokens,
+                    source_url=sanitize_url(url),
+                    content_sha256=hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
+                    extracted_at=resolved_extracted_at,
+                )
+                chunks = [asdict(chunk) for chunk in semantic_chunks]
+                chunk_strings = [chunk.text for chunk in semantic_chunks]
+            else:
+                chunk_strings = split_into_chunks(policy_text, max_tokens)
+                chunks = [
+                    {
+                        "index": index,
+                        "text": chunk,
+                        "approx_tokens": count_tokens(chunk),
+                        "tokens": count_tokens(chunk),
+                    }
+                    for index, chunk in enumerate(chunk_strings)
+                ]
+                chunks = annotate_chunk_locations(
+                    chunks,
+                    source_text=policy_text,
                 )
 
-        if not include_heading_path:
-            for chunk in chunks:
-                chunk.pop("heading_path", None)
-
-        if not include_page_context:
-            for chunk in chunks:
-                chunk.pop("page_context", None)
-
-        if not return_metadata:
-            optional_metadata_keys = (
-                "heading_path",
-                "page_context",
-                "contains_code",
-                "contains_table",
-                "contains_links",
-                "link_count",
-                "page_title",
-                "content_fingerprint",
+            selected_chunks, omitted_chunks = select_chunks_for_budget(
+                chunks,
+                max_tokens=max_tokens,
+                policy=chunk_selection_policy,
             )
-            for chunk in chunks:
-                for key in optional_metadata_keys:
-                    chunk.pop(key, None)
+            chunks = selected_chunks
+            chunk_strings = [chunk["text"] for chunk in chunks]
 
-    tokens_saved_estimate = delivered_savings(
-        html_tokens,
-        approx_tokens,
-    )
+            final_text = "\n\n---\n\n".join(chunk_strings) if chunk_strings else ""
+            approx_tokens = sum(chunk["tokens"] for chunk in chunks)
+            split = len(chunk_strings) > 1
+            transformation_truncated = content_truncated or bool(omitted_chunks)
+            if omitted_chunks:
+                limiting_factor = "token_budget"
 
-    record_cache_tokens_saved(
-        mode=mode,
-        cache_hit=cache_hit,
-        cache_layer=cache_layer,
-        approx_tokens=approx_tokens,
-        tokens_saved_estimate=tokens_saved_estimate,
-    )
+        elif mode == "summarize":
+            if section_selection is not None and not section_selection.sections:
+                final_text = ""
+                was_truncated = False
+                chunks = []
+            else:
+                source_text = section_selection.text if section_selection is not None else raw_text
+                final_text, was_truncated = summarize_text(source_text, max_tokens)
+                chunks = [
+                    {
+                        "index": 0,
+                        "text": final_text,
+                        "approx_tokens": count_tokens(final_text),
+                        "tokens": count_tokens(final_text),
+                    }
+                ]
+            approx_tokens = count_tokens(final_text)
+            transformation_truncated = content_truncated or was_truncated
+            if was_truncated:
+                limiting_factor = "token_budget"
+        else:
+            raise ValueError(f"Unknown context mode: {mode}")
+
+        if mode == "chunk" and chunks:
+            chunk_provenance = {
+                "page_title": resolved_page_title,
+                "page_title_source": resolved_page_title_source,
+                "content_fingerprint": compute_content_fingerprint(policy_text),
+                "source_url": sanitize_url(url),
+                "final_url": (
+                    document.final_url
+                    if document is not None and isinstance(document, FetchedHTML) and document.final_url
+                    else sanitize_url(url)
+                ),
+                "content_sha256": hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
+                "extracted_at": resolved_extracted_at,
+            }
+            chunks = attach_chunk_provenance(
+                chunks,
+                **chunk_provenance,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+            )
+
+            if include_page_context:
+                for chunk in chunks:
+                    heading_path = chunk.get("heading_path") or []
+                    context_parts = []
+                    if resolved_page_title:
+                        context_parts.append(f"Page: {resolved_page_title}")
+                    if heading_path:
+                        context_parts.append("Section: " + " > ".join(heading_path))
+                    chunk["page_context"] = (
+                        " | ".join(context_parts) if context_parts else "No additional page context available."
+                    )
+
+            if not include_heading_path:
+                for chunk in chunks:
+                    chunk.pop("heading_path", None)
+
+            if not include_page_context:
+                for chunk in chunks:
+                    chunk.pop("page_context", None)
+
+            if not return_metadata:
+                optional_metadata_keys = (
+                    "heading_path",
+                    "page_context",
+                    "contains_code",
+                    "contains_table",
+                    "contains_links",
+                    "link_count",
+                    "page_title",
+                    "content_fingerprint",
+                )
+                for chunk in chunks:
+                    for key in optional_metadata_keys:
+                        chunk.pop(key, None)
+
+        tokens_saved_estimate = delivered_savings(
+            html_tokens,
+            approx_tokens,
+        )
+
+        record_cache_tokens_saved(
+            mode=mode,
+            cache_hit=cache_hit,
+            cache_layer=cache_layer,
+            approx_tokens=approx_tokens,
+            tokens_saved_estimate=tokens_saved_estimate,
+        )
+    except Exception:
+        if context_request_id:
+            record_stage_trace(
+                request_id=context_request_id,
+                trace_id=context_trace_id,
+                stage="context_assembly",
+                status="error",
+                duration_ms=(time.perf_counter() - assembly_started) * 1000.0,
+                cache_layer=cache_layer,
+            )
+        raise
+
+    if context_request_id:
+        record_stage_trace(
+            request_id=context_request_id,
+            trace_id=context_trace_id,
+            stage="context_assembly",
+            status="success",
+            duration_ms=(time.perf_counter() - assembly_started) * 1000.0,
+            cache_layer=cache_layer,
+            tokens_returned=approx_tokens,
+        )
 
     # Cache economics preserve upstream extraction facts, but they must not
     # erase a mode-specific transformation result. In particular, a cached

@@ -498,3 +498,63 @@ async def test_slice5_extract_route_records_response_delivery_trace(
     assert delivery_events[0]["cache_layer"] == "persistent"
     assert delivery_events[0]["tokens_returned"] == 10
     assert delivery_events[0]["duration_ms"] >= 0.0
+
+
+@pytest.mark.asyncio
+async def test_slice6_extract_context_records_section_selection_and_context_assembly_traces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from bintu_api.extraction import context as context_mod
+    from bintu_api.extraction.cache_store import CachedMarkdown
+    from bintu_api.observability import get_or_create_trace_id, get_stage_traces
+
+    _ = CachedMarkdown
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                settings=SimpleNamespace(
+                    max_text_characters=6000,
+                    rapidapi_proxy_secret="",
+                ),
+                cache={},
+                supabase_client=None,
+            )
+        ),
+        state=SimpleNamespace(request_id="req-slice6-context"),
+        headers={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+
+    result = await context_mod.extract_context(
+        request,
+        "https://example.com/doc",
+        mode="scrape",
+        max_tokens=200,
+        sections="Target",
+        raw_text="# Overview\n\nIntro text.\n\n## Target\n\nSelected section content.",
+        html_source_text="<h1>Overview</h1><p>Intro text.</p><h2>Target</h2><p>Selected section content.</p>",
+        cache_hit=True,
+        cache_layer="memory",
+        extracted_at="2026-11-24T00:00:00+00:00",
+    )
+    assert "Selected section content." in result.text
+
+    traces = get_stage_traces("req-slice6-context")
+    expected_trace_id = get_or_create_trace_id("req-slice6-context")
+    by_stage = {item["stage"]: item for item in traces}
+
+    assert "section_selection" in by_stage
+    assert by_stage["section_selection"]["status"] == "success"
+    assert by_stage["section_selection"]["trace_id"] == expected_trace_id
+    assert by_stage["section_selection"]["cache_layer"] == "memory"
+    assert (by_stage["section_selection"]["tokens_returned"] or 0) > 0
+    assert by_stage["section_selection"]["duration_ms"] >= 0.0
+
+    assert "context_assembly" in by_stage
+    assert by_stage["context_assembly"]["status"] == "success"
+    assert by_stage["context_assembly"]["trace_id"] == expected_trace_id
+    assert by_stage["context_assembly"]["cache_layer"] == "memory"
+    assert (by_stage["context_assembly"]["tokens_returned"] or 0) > 0
+    assert by_stage["context_assembly"]["duration_ms"] >= 0.0
