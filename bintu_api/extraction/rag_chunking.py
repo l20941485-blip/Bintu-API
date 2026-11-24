@@ -416,6 +416,9 @@ def split_semantic_chunks(
             chunk_index = len(chunks)
             links = _URL.findall(piece)
 
+            # Compute per-chunk hash for stability and integrity
+            chunk_text_hash = hashlib.sha256(piece.encode("utf-8")).hexdigest()
+
             chunks.append(
                 SemanticChunk(
                     index=chunk_index,
@@ -425,7 +428,7 @@ def split_semantic_chunks(
                     chunk_strategy="semantic",
                     chunk_id=make_chunk_id(
                         source_url=source_url or "",
-                        content_sha256=content_sha256 or "",
+                        content_sha256=chunk_text_hash,  # Use chunk hash, not doc hash
                         chunk_strategy="semantic",
                         chunk_index=chunk_index,
                         max_tokens=max_tokens,
@@ -439,7 +442,7 @@ def split_semantic_chunks(
                     link_count=len(links),
                     source_url=source_url,
                     final_url=final_url or source_url,
-                    content_sha256=content_sha256,
+                    content_sha256=chunk_text_hash,  # Use chunk hash, not doc hash
                     extracted_at=extracted_at,
                 )
             )
