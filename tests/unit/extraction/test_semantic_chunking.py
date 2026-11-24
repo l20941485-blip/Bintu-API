@@ -357,3 +357,27 @@ def test_chunk_provenance_fields_completeness():
         # Structure
         assert isinstance(chunk.heading_path, list)
         assert isinstance(chunk.section_index, int)
+
+
+def test_semantic_chunking_tilde_fences_and_table_detection() -> None:
+    from bintu_api.extraction.rag_chunking import split_semantic_chunks
+
+    doc = (
+        "## Code & Tables\n\n"
+        "Inline pipe text like A | B should not be a table.\n\n"
+        "~~~python\n"
+        "def run():\n"
+        "    return 42\n"
+        "~~~\n\n"
+        "| col1 | col2 |\n"
+        "| --- | --- |\n"
+        "| val1 | val2 |\n"
+    )
+    chunks = split_semantic_chunks(doc, max_tokens=200)
+    assert chunks
+    assert any(c.contains_code and "~~~python" in c.text for c in chunks)
+    assert any(c.contains_table and "| col1 | col2 |" in c.text for c in chunks)
+
+    prose_only = split_semantic_chunks("Only A | B here.", max_tokens=100)
+    assert len(prose_only) == 1
+    assert prose_only[0].contains_table is False

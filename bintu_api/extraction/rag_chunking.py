@@ -159,6 +159,14 @@ def _is_table_block(block: str) -> bool:
     return len(lines) >= 2 and all("|" in line for line in lines)
 
 
+def _has_markdown_table(text: str) -> bool:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return any(
+        "|" in lines[idx] and _TABLE_SEPARATOR.match(lines[idx + 1])
+        for idx in range(len(lines) - 1)
+    )
+
+
 def _pack_lines(lines: list[str], max_tokens: int) -> list[str]:
     chunks: list[str] = []
     current: list[str] = []
@@ -194,6 +202,12 @@ def _split_oversized_table(block: str, max_tokens: int) -> list[str]:
     return [f"{header}\n{packed}" for packed in packed_rows]
 
 
+_FENCE_BLOCK = re.compile(
+    r"^(?P<fence>`{3,}|~{3,})[^\n]*\n.*?(?:^(?P=fence)[ \t]*$|\Z)",
+    flags=re.MULTILINE | re.DOTALL,
+)
+
+
 def _split_fenced_block(block: str, max_tokens: int) -> list[str]:
     if count_tokens(block) <= max_tokens:
         return [block]
@@ -203,12 +217,21 @@ def _split_fenced_block(block: str, max_tokens: int) -> list[str]:
         return _split_by_whitespace(block, max_tokens)
 
     opener = lines[0]
-    closing = lines[-1] if lines[-1].strip().startswith("```") else "```"
-    body_lines = lines[1:-1] if closing == lines[-1] else lines[1:]
-    body = "\n".join(body_lines)
+    fence_match = re.match(r"^\s*(`{3,}|~{3,})", opener)
+    fence_token = fence_match.group(1) if fence_match else "```"
+    fence_char = fence_token[0]
+    fence_len = len(fence_token)
+
+    last_stripped = lines[-1].strip()
+    has_closing = (
+        len(last_stripped) >= fence_len
+        and all(ch == fence_char for ch in last_stripped)
+    )
+    closing = lines[-1] if has_closing else fence_token
+    body_lines = lines[1:-1] if has_closing else lines[1:]
     body_budget = max(1, max_tokens - count_tokens(f"{opener}\n{closing}"))
 
-    return [f"{opener}\n{piece}\n{closing}" for piece in _pack_lines(body.splitlines(), body_budget)]
+    return [f"{opener}\n{piece}\n{closing}" for piece in _pack_lines(body_lines, body_budget)]
 
 
 def _split_by_whitespace(text: str, max_tokens: int) -> list[str]:
@@ -359,7 +382,7 @@ def _split_section(
     pieces: list[str] = []
     cursor = 0
 
-    for match in re.finditer(r"```.*?(?:```|\Z)", section, flags=re.DOTALL):
+    for match in _FENCE_BLOCK.finditer(section):
         prose = section[cursor : match.start()]
         if prose.strip():
             pieces.extend(_split_prose(prose, max_tokens))
@@ -436,8 +459,8 @@ def split_semantic_chunks(
                     ),
                     heading_path=list(heading_path),
                     section_index=section_index,
-                    contains_code="```" in piece,
-                    contains_table="|" in piece,
+                    contains_code=("```" in piece or "~~~" in piece),
+                    contains_table=_has_markdown_table(piece),
                     contains_links=bool(links),
                     link_count=len(links),
                     source_url=source_url,
