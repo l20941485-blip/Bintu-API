@@ -121,7 +121,7 @@ async def scrape_chunks(
                 max_tokens=max_tokens,
                 overlap_tokens=overlap_tokens,
                 source_url=sanitize_url(payload.url),
-                final_url=document.final_url if document else payload.url,
+                final_url=((document.final_url if document else None) or sanitize_url(payload.url)),
                 content_sha256=result.content_hash,
                 extracted_at=result.extracted_at,
             )
@@ -139,13 +139,13 @@ async def scrape_chunks(
                     contains_table=chunk.contains_table if return_metadata else None,
                     contains_links=chunk.contains_links if return_metadata else None,
                     link_count=chunk.link_count if return_metadata else None,
-                    source_url=chunk.source_url if return_metadata else None,
-                    final_url=chunk.final_url if return_metadata else None,
-                    content_sha256=result.content_hash if return_metadata else None,
-                    extracted_at=chunk.extracted_at if return_metadata else None,
+                    source_url=chunk.source_url,
+                    final_url=chunk.final_url,
+                    content_sha256=result.content_hash,
+                    extracted_at=chunk.extracted_at,
                     page_title=result.page_title if return_metadata else None,
                     content_fingerprint=result.content_fingerprint if return_metadata else None,
-                    chunk_sha256=(hashlib.sha256(chunk.text.encode("utf-8")).hexdigest() if return_metadata else None),
+                    chunk_sha256=hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
                     page_context=(
                         (
                             " | ".join(

@@ -96,3 +96,50 @@ def test_main_content_truncation_closes_open_code_fence() -> None:
     assert len(text) <= 54
     assert text.count("```") % 2 == 0
     assert text.endswith("```")
+
+
+def test_main_content_footnotes_truncate_long_urls() -> None:
+    markdown = (
+        "Intro text. " * 20
+        + "See [docs](https://example.com/very/long/documentation/path/that/exceeds/limit) "
+        + "and [again](https://example.com/very/long/documentation/path/that/exceeds/limit)."
+    )
+
+    with patch("trafilatura.extract", return_value=markdown):
+        text, applied = extract_main_content(
+            b"<html><body><article>Body</article></body></html>",
+            5000,
+            "utf-8",
+            "https://example.com/",
+            links="footnotes",
+            footnote_url_policy="truncated",
+            max_footnote_url_length=20,
+        )
+
+    assert applied is True
+    assert "See docs [1] and again [1]." in text
+    assert "## Links" in text
+    assert "1. " in text
+    assert "[URL truncated]" in text
+
+
+def test_main_content_footnotes_preserve_full_urls_when_configured() -> None:
+    full_url = "https://example.com/very/long/documentation/path/that/exceeds/limit"
+    markdown = "Intro text. " * 20 + f"See [docs]({full_url})."
+
+    with patch("trafilatura.extract", return_value=markdown):
+        text, applied = extract_main_content(
+            b"<html><body><article>Body</article></body></html>",
+            5000,
+            "utf-8",
+            "https://example.com/",
+            links="footnotes",
+            footnote_url_policy="full",
+            max_footnote_url_length=20,
+        )
+
+    assert applied is True
+    assert "See docs [1]." in text
+    assert "## Links" in text
+    assert f"(<{full_url}>)" in text
+    assert "[URL truncated]" not in text
