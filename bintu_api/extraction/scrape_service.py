@@ -355,6 +355,8 @@ class ScrapeService:
             content_cleaning["extractive_summary"] = {
                 "applied": True,
                 "mode": summary.mode,
+                "algorithm_version": summary.algorithm_version,
+                "source_fingerprint": summary.source_fingerprint,
                 "requested_sentence_count": summary.requested_sentence_count,
                 "returned_sentence_count": summary.returned_sentence_count,
                 "truncated": summary.truncated,
