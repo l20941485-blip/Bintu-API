@@ -261,7 +261,9 @@ class ScrapeService:
                 status="hit",
                 duration_ms=memory_lookup_duration_ms,
                 cache_layer=cache_layer,
-                tokens_returned=compute_approx_tokens(memory_entry.text),
+                tokens_returned=compute_approx_tokens(
+                    (self.source_decoder or decode_source_text)(document)
+                ),
             )
             self.cache_event_logger(
                 event="cache_hit",
