@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from datetime import UTC, datetime
 
 from bintu_api.common.fetch import FetchedHTML, compute_approx_tokens
@@ -50,6 +51,7 @@ from bintu_api.extraction.persistent_cache import (
 )
 from bintu_api.extraction.quality import assess_content_quality
 from bintu_api.extraction.quality_policy import (
+    ExtractionQualityError,
     QualityPolicy,
     enforce_quality_policy,
 )
@@ -64,6 +66,7 @@ from bintu_api.extraction.summary_cache import (
     log_summary_cache_validation,
     validate_cached_extractive_summary,
 )
+from bintu_api.observability import get_or_create_trace_id, record_stage_trace
 
 logger = logging.getLogger("bintu_api.scrape")
 
@@ -386,18 +389,33 @@ class ScrapeService:
                 total_sections=total_sections,
                 complete_sections=complete_sections,
             )
-            enforce_quality_policy(
-                text=cleaned_text,
-                extracted_tokens=extracted_tokens,
-                html_tokens=html_tokens,
-                quality=quality_assessment,
-                policy=QualityPolicy(
-                    mode=policy_mode,
-                    minimum_score=minimum_score,
-                ),
-                min_extracted_tokens=min_extracted_tokens if min_extracted_tokens > 0 else None,
-                min_yield_ratio=min_yield_ratio if min_yield_ratio > 0.0 else None,
-            )
+            policy_started = time.perf_counter()
+            try:
+                enforce_quality_policy(
+                    text=cleaned_text,
+                    extracted_tokens=extracted_tokens,
+                    html_tokens=html_tokens,
+                    quality=quality_assessment,
+                    policy=QualityPolicy(
+                        mode=policy_mode,
+                        minimum_score=minimum_score,
+                    ),
+                    min_extracted_tokens=min_extracted_tokens if min_extracted_tokens > 0 else None,
+                    min_yield_ratio=min_yield_ratio if min_yield_ratio > 0.0 else None,
+                )
+            except ExtractionQualityError:
+                duration_ms = (time.perf_counter() - policy_started) * 1000.0
+                record_stage_trace(
+                    request_id=request_id,
+                    trace_id=get_or_create_trace_id(request_id),
+                    stage="quality_policy",
+                    status="rejected",
+                    duration_ms=duration_ms,
+                    cache_layer=cache_layer,
+                    quality_score=getattr(quality_assessment, "score", None),
+                    tokens_returned=extracted_tokens,
+                )
+                raise
 
         write_memory_cache(
             self.cache,

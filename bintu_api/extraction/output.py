@@ -7,6 +7,7 @@ surfaces. It does not perform metering or MCP JSON-RPC formatting.
 from __future__ import annotations
 
 import hashlib
+import time
 from dataclasses import asdict
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -167,6 +168,7 @@ def build_scrape_response(
         result.pre_cleaning_characters if result.pre_cleaning_characters > 0 else len(result.markdown)
     )
     section_count, complete_section_count = _count_markdown_sections(result.markdown)
+    quality_started = time.perf_counter()
     quality_assessment = assess_content_quality(
         extracted_characters=len(result.markdown),
         boilerplate_characters=detect_boilerplate_characters(result.markdown),
@@ -174,6 +176,7 @@ def build_scrape_response(
         total_sections=section_count,
         complete_sections=complete_section_count,
     )
+    quality_duration_ms = (time.perf_counter() - quality_started) * 1000.0
 
     stale_reason, inferred_revalidated = _evaluate_cache_freshness(
         result.extracted_at,
@@ -205,18 +208,19 @@ def build_scrape_response(
         trace_id=trace_id,
         stage="quality_assessment",
         status="success",
-        duration_ms=0.0,
+        duration_ms=quality_duration_ms,
         cache_layer=cache_layer,
         extractor_version=str(extractor_ver),
         quality_score=getattr(quality_assessment, "score", None),
         tokens_returned=approx_tokens,
     )
+    delivery_started = time.perf_counter()
     record_stage_trace(
         request_id=request_id,
         trace_id=trace_id,
         stage="response_delivery",
         status="success",
-        duration_ms=0.0,
+        duration_ms=(time.perf_counter() - delivery_started) * 1000.0,
         cache_layer=cache_layer,
         extractor_version=str(extractor_ver),
         quality_score=getattr(quality_assessment, "score", None),

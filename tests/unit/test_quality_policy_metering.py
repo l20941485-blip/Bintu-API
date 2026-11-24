@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from bintu_api.api.routes.extract import router
 from bintu_api.extraction.models import ContentQuality
+from bintu_api.observability import get_or_create_trace_id, get_stage_traces
 from bintu_api.settings import Settings
 
 
@@ -125,6 +126,17 @@ def test_warn_low_quality_rest_extraction_remains_billable():
     assert event.quality_rejected is False
     assert event.billing is not None
     assert event.billing.billable_units == 9
+
+
+def test_stage_traces_correlation_and_duration():
+    request_id = "req-stage-trace-check"
+    traces = get_stage_traces(request_id)
+    if traces:
+        expected_trace_id = get_or_create_trace_id(request_id)
+        for trace_event in traces:
+            assert trace_event["trace_id"] == expected_trace_id
+            assert float(trace_event["duration_ms"]) >= 0.0
+        assert any(trace_event["stage"] == "quality_policy" and trace_event["status"] == "rejected" for trace_event in traces)
 
 
 def test_enforce_passing_quality_remains_billable():
