@@ -13,6 +13,7 @@ Important boundaries, invariants, or compatibility notes:
 from __future__ import annotations
 
 import logging
+import time
 from typing import Literal
 
 from fastapi import Request
@@ -42,7 +43,7 @@ from bintu_api.extraction.service import (
 from bintu_api.extraction.service import (
     build_scrape_service as build_scrape_service_from_dependencies,
 )
-from bintu_api.observability import log_cache_event
+from bintu_api.observability import get_or_create_trace_id, log_cache_event, record_stage_trace
 from bintu_api.scraper.fetcher import (
     FetchedHTML,
     fetch_html_document,
@@ -135,11 +136,31 @@ async def _fetch_and_extract(
         summary_mode=summary_mode,
         summary_sentence_count=summary_sentence_count,
     )
-    return await service.fetch_and_extract(
-        context,
-        url,
-        options,
+    dispatch_started = time.perf_counter()
+    try:
+        outcome = await service.fetch_and_extract(
+            context,
+            url,
+            options,
+        )
+    except Exception:
+        record_stage_trace(
+            request_id=context.request_id,
+            trace_id=get_or_create_trace_id(context.request_id),
+            stage="adapter_dispatch",
+            status="error",
+            duration_ms=(time.perf_counter() - dispatch_started) * 1000.0,
+        )
+        raise
+
+    record_stage_trace(
+        request_id=context.request_id,
+        trace_id=get_or_create_trace_id(context.request_id),
+        stage="adapter_dispatch",
+        status="success",
+        duration_ms=(time.perf_counter() - dispatch_started) * 1000.0,
     )
+    return outcome
 
 async def fetch_and_extract(
     request: Request,

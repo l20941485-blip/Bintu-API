@@ -1,3 +1,5 @@
+import pytest
+
 """Quality-policy billing classification contract tests."""
 
 from types import SimpleNamespace
@@ -193,3 +195,129 @@ def test_enforce_passing_quality_remains_billable():
     assert event.quality_rejected is False
     assert event.billing is not None
     assert event.billing.billable_units == 9
+
+def test_slice3_stage_trace_records_cache_lookup_policy_pass_and_cache_write() -> None:
+    from bintu_api.observability import get_stage_traces, record_stage_trace
+
+    request_id = "req-slice3-trace-check"
+
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_lookup",
+        status="hit",
+        duration_ms=1.25,
+        cache_layer="memory",
+        tokens_returned=120,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_lookup",
+        status="miss",
+        duration_ms=0.85,
+        cache_layer="none",
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="quality_policy",
+        status="passed",
+        duration_ms=2.40,
+        cache_layer="none",
+        quality_score=0.92,
+        tokens_returned=350,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_write",
+        status="success",
+        duration_ms=3.10,
+        cache_layer="memory",
+        tokens_returned=350,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_write",
+        status="success",
+        duration_ms=9.50,
+        cache_layer="persistent",
+        tokens_returned=350,
+    )
+
+    traces = get_stage_traces(request_id)
+    assert [(item["stage"], item["status"], item["cache_layer"]) for item in traces] == [
+        ("cache_lookup", "hit", "memory"),
+        ("cache_lookup", "miss", "none"),
+        ("quality_policy", "passed", "none"),
+        ("cache_write", "success", "memory"),
+        ("cache_write", "success", "persistent"),
+    ]
+    assert traces[2]["quality_score"] == 0.92
+    assert traces[3]["tokens_returned"] == 350
+    assert traces[4]["tokens_returned"] == 350
+
+@pytest.mark.asyncio
+async def test_slice4_adapter_dispatch_records_success_and_error_traces(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from bintu_api.api import scrape_adapter
+    from bintu_api.observability import get_stage_traces
+
+    class _DummyService:
+        def __init__(self, should_fail: bool = False) -> None:
+            self.should_fail = should_fail
+
+        async def fetch_and_extract(self, context, url, options):
+            if self.should_fail:
+                raise RuntimeError("upstream boom")
+            return None, SimpleNamespace(text="ok"), "cleaned"
+
+    dummy_request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                settings=SimpleNamespace(),
+                supabase_client=None,
+                cache={},
+            )
+        ),
+        state=SimpleNamespace(request_id="req-slice4-dispatch"),
+    )
+
+    monkeypatch.setattr(
+        scrape_adapter,
+        "build_scrape_service",
+        lambda _req: _DummyService(should_fail=False),
+    )
+
+    _, cached_ok, cleaned_ok = await scrape_adapter._fetch_and_extract(
+        dummy_request,
+        "https://example.com",
+        include_nav=False,
+        include_header=False,
+        include_footer=False,
+        render_js=False,
+    )
+    assert cached_ok.text == "ok"
+    assert cleaned_ok == "cleaned"
+
+    monkeypatch.setattr(
+        scrape_adapter,
+        "build_scrape_service",
+        lambda _req: _DummyService(should_fail=True),
+    )
+
+    with pytest.raises(RuntimeError, match="upstream boom"):
+        await scrape_adapter._fetch_and_extract(
+            dummy_request,
+            "https://example.com",
+            include_nav=False,
+            include_header=False,
+            include_footer=False,
+            render_js=False,
+        )
+
+    traces = get_stage_traces("req-slice4-dispatch")
+    dispatch_events = [item for item in traces if item["stage"] == "adapter_dispatch"]
+    assert [(item["stage"], item["status"]) for item in dispatch_events] == [
+        ("adapter_dispatch", "success"),
+        ("adapter_dispatch", "error"),
+    ]
+    assert all(item["duration_ms"] >= 0.0 for item in dispatch_events)
