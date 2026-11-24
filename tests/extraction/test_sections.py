@@ -131,3 +131,44 @@ def test_exact_heading_match_takes_priority():
     assert len(result.sections) == 1
     assert result.sections[0]["heading"] == "History"
     assert result.sections[0]["text"] == "History body"
+
+
+def test_token_budget_optimization_omits_low_value_sections():
+    """When budget is tight, truncate combined text to fit within max_tokens."""
+    text = (
+        "# Introduction\nShort intro.\n\n"
+        "## Background\n" + ("Long background text. " * 50) + "\n\n"
+        "## Methodology\n" + ("Detailed methodology. " * 50) + "\n\n"
+        "# Conclusion\nShort conclusion."
+    )
+
+    result = select_sections(
+        text=text,
+        sections=["Introduction", "Background", "Methodology", "Conclusion"],
+        max_tokens=20,
+    )
+
+    assert result.truncated is True
+    assert result.unmatched_sections == ()
+    assert len(result.sections[0]["text"]) <= 80
+    assert result.sections[-1]["text"] == ""
+    assert result.text == "\n\n".join(s["text"] for s in result.sections)
+    assert "Short intro." in result.text
+
+
+def test_token_budget_generous_keeps_all():
+    """When budget is large, all matched sections are retained untruncated."""
+    text = "# A\nText A\n\n# B\nText B"
+
+    result = select_sections(
+        text=text,
+        sections=["A", "B"],
+        max_tokens=1000,
+    )
+
+    assert result.truncated is False
+    assert result.unmatched_sections == ()
+    assert len(result.sections) == 2
+    assert "Text A" in result.text
+    assert "Text B" in result.text
+
