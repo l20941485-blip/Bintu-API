@@ -322,3 +322,113 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
 
 def metrics_response() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+from collections import OrderedDict, deque
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from threading import Lock
+
+_MAX_TRACED_REQUESTS = 512
+_MAX_STAGE_EVENTS_PER_REQUEST = 64
+_TRACE_LOCK = Lock()
+_REQUEST_TRACE_IDS: OrderedDict[str, str] = OrderedDict()
+_STAGE_TRACES_BY_REQUEST: OrderedDict[str, deque[dict[str, object]]] = OrderedDict()
+
+
+@dataclass(frozen=True)
+class StageTraceEvent:
+    request_id: str
+    trace_id: str
+    stage: str
+    status: str
+    duration_ms: float
+    cache_layer: str | None = None
+    extractor_version: str | None = None
+    quality_score: float | None = None
+    tokens_returned: int | None = None
+    timestamp_utc: str = ""
+
+
+def get_or_create_trace_id(request_id: str) -> str:
+    """Return a deterministic or stored trace_id correlated with request_id."""
+    normalized_req = request_id or uuid.uuid4().hex
+    with _TRACE_LOCK:
+        existing = _REQUEST_TRACE_IDS.get(normalized_req)
+        if existing:
+            _REQUEST_TRACE_IDS.move_to_end(normalized_req)
+            return existing
+        trace_id = f"trace_{uuid.uuid4().hex[:16]}"
+        _REQUEST_TRACE_IDS[normalized_req] = trace_id
+        _REQUEST_TRACE_IDS.move_to_end(normalized_req)
+        while len(_REQUEST_TRACE_IDS) > _MAX_TRACED_REQUESTS:
+            _REQUEST_TRACE_IDS.popitem(last=False)
+        return trace_id
+
+
+def record_stage_trace(
+    *,
+    request_id: str,
+    stage: str,
+    status: str,
+    duration_ms: float,
+    trace_id: str | None = None,
+    cache_layer: str | None = None,
+    extractor_version: str | None = None,
+    quality_score: float | None = None,
+    tokens_returned: int | None = None,
+) -> dict[str, object]:
+    """Record and log a structured per-stage observability trace event."""
+    resolved_request_id = request_id or "unknown"
+    resolved_trace_id = trace_id or get_or_create_trace_id(resolved_request_id)
+    event = StageTraceEvent(
+        request_id=resolved_request_id,
+        trace_id=resolved_trace_id,
+        stage=stage,
+        status=status,
+        duration_ms=round(max(0.0, float(duration_ms)), 3),
+        cache_layer=cache_layer,
+        extractor_version=extractor_version,
+        quality_score=quality_score,
+        tokens_returned=tokens_returned,
+        timestamp_utc=datetime.now(UTC).isoformat(),
+    )
+    payload = asdict(event)
+
+    with _TRACE_LOCK:
+        _REQUEST_TRACE_IDS[resolved_request_id] = resolved_trace_id
+        _REQUEST_TRACE_IDS.move_to_end(resolved_request_id)
+        while len(_REQUEST_TRACE_IDS) > _MAX_TRACED_REQUESTS:
+            _REQUEST_TRACE_IDS.popitem(last=False)
+
+        bucket = _STAGE_TRACES_BY_REQUEST.get(resolved_request_id)
+        if bucket is None:
+            bucket = deque(maxlen=_MAX_STAGE_EVENTS_PER_REQUEST)
+            _STAGE_TRACES_BY_REQUEST[resolved_request_id] = bucket
+        bucket.append(payload)
+        _STAGE_TRACES_BY_REQUEST.move_to_end(resolved_request_id)
+        while len(_STAGE_TRACES_BY_REQUEST) > _MAX_TRACED_REQUESTS:
+            _STAGE_TRACES_BY_REQUEST.popitem(last=False)
+
+    EXTRACTION_LOGGER.info(
+        "stage_trace request_id=%s trace_id=%s stage=%s status=%s duration_ms=%.3f cache_layer=%s extractor_version=%s quality_score=%s tokens_returned=%s",
+        resolved_request_id,
+        resolved_trace_id,
+        stage,
+        status,
+        event.duration_ms,
+        cache_layer or "none",
+        extractor_version or "none",
+        f"{quality_score:.4f}" if quality_score is not None else "none",
+        tokens_returned if tokens_returned is not None else "none",
+    )
+    return payload
+
+
+def get_stage_traces(request_id: str) -> list[dict[str, object]]:
+    """Return recorded stage trace events for a request_id in chronological order."""
+    with _TRACE_LOCK:
+        bucket = _STAGE_TRACES_BY_REQUEST.get(request_id)
+        if not bucket:
+            return []
+        return list(bucket)

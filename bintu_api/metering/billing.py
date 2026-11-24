@@ -13,11 +13,34 @@ from typing import Literal
 BillingUnit = Literal["context_tokens", "chunk_tokens"]
 
 
+_RATE_PER_MILLION_USD: dict[tuple[BillingUnit, bool], float] = {
+    ("context_tokens", False): 2.00,
+    ("context_tokens", True): 0.40,
+    ("chunk_tokens", False): 0.25,
+    ("chunk_tokens", True): 0.25,
+}
+
+
+def estimate_cost_usd(
+    *,
+    billable_units: int,
+    unit: BillingUnit,
+    cache_credit_applied: bool,
+) -> float:
+    """Estimate cost in USD from billable token units and billing policy."""
+    units = max(0, int(billable_units))
+    if units == 0:
+        return 0.0
+    rate = _RATE_PER_MILLION_USD[(unit, bool(cache_credit_applied))]
+    return round((units * rate) / 1_000_000, 6)
+
+
 @dataclass(frozen=True)
 class BillingDecision:
     billable_units: int
     unit: BillingUnit
     cache_credit_applied: bool
+    estimated_cost_usd: float = 0.0
 
 
 def classify_usage(
@@ -37,10 +60,17 @@ def classify_usage(
             billable_units=0,
             unit=unit,
             cache_credit_applied=False,
+            estimated_cost_usd=0.0,
         )
 
+    credit_applied = bool(cache_hit)
     return BillingDecision(
         billable_units=billable_units,
         unit=unit,
-        cache_credit_applied=bool(cache_hit),
+        cache_credit_applied=credit_applied,
+        estimated_cost_usd=estimate_cost_usd(
+            billable_units=billable_units,
+            unit=unit,
+            cache_credit_applied=credit_applied,
+        ),
     )

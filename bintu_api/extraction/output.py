@@ -26,6 +26,7 @@ from bintu_api.security.url_safety import (
     sanitize_url,
 )
 from bintu_api.metering.billing import BillingDecision, classify_usage
+from bintu_api.observability import get_or_create_trace_id, record_stage_trace
 from bintu_api.settings import Settings
 
 TOKEN_METHOD = "ceil(characters/4)"
@@ -220,7 +221,33 @@ def build_scrape_response(
         "billable_units": billing_decision.billable_units,
         "unit": billing_decision.unit,
         "cache_credit_applied": billing_decision.cache_credit_applied,
+        "estimated_cost_usd": billing_decision.estimated_cost_usd,
     }
+    trace_id = get_or_create_trace_id(request_id)
+    extractor_ver = getattr(settings, "extractor_version", None) or getattr(result, "extractor_version", None) or "unknown"
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="quality_assessment",
+        status="success",
+        duration_ms=0.0,
+        cache_layer=cache_layer,
+        extractor_version=str(extractor_ver),
+        quality_score=getattr(quality_assessment, "score", None),
+        tokens_returned=approx_tokens,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="response_delivery",
+        status="success",
+        duration_ms=0.0,
+        cache_layer=cache_layer,
+        extractor_version=str(extractor_ver),
+        quality_score=getattr(quality_assessment, "score", None),
+        tokens_returned=approx_tokens,
+    )
+
     return ScrapeTextResponse(
         url=url,
         text=result.markdown,
