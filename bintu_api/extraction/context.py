@@ -177,6 +177,7 @@ class ContextResult:
     omitted_chunk_count: int = 0
     omitted_sections: list[str] | None = None
 
+
 @dataclass(frozen=True)
 class CacheEconomics:
     """Extraction economics preserved across persistent-cache hits."""
@@ -208,6 +209,7 @@ def _decode_source_text(document: FetchedHTML) -> str:
 def decode_source_text(document: FetchedHTML) -> str:
     """Public alias for the established source-text decoder."""
     return _decode_source_text(document)
+
 
 def _sentences(text: str) -> list[str]:
     """Split prose into sentences while preserving terminal punctuation."""
@@ -295,32 +297,21 @@ def _retain_referenced_footnotes(selected_text: str, raw_text: str) -> str:
     if not retained:
         return selected_text
 
-    return (
-        f"{selected_text.rstrip()}\n\n## {section_title}\n"
-        + "\n\n".join(retained)
-    )
+    return f"{selected_text.rstrip()}\n\n## {section_title}\n" + "\n\n".join(retained)
 
 
 def _count_markdown_sections(text: str) -> tuple[int, int]:
     """Count Markdown headings and those followed by nonempty content."""
     lines = text.splitlines()
-    headings = [
-        index
-        for index, line in enumerate(lines)
-        if re.match(r"^#{1,6}\s+\S", line.strip())
-    ]
+    headings = [index for index, line in enumerate(lines) if re.match(r"^#{1,6}\s+\S", line.strip())]
 
     if not headings:
         return 0, 0
 
     complete = 0
     for position, heading_index in enumerate(headings):
-        end = (
-            headings[position + 1]
-            if position + 1 < len(headings)
-            else len(lines)
-        )
-        if "\n".join(lines[heading_index + 1:end]).strip():
+        end = headings[position + 1] if position + 1 < len(headings) else len(lines)
+        if "\n".join(lines[heading_index + 1 : end]).strip():
             complete += 1
 
     return len(headings), complete
@@ -380,16 +371,8 @@ async def extract_context(
     raw_text = raw_text or ""
     html_source_text = html_source_text or ""
 
-    resolved_page_title = (
-        document.page_title
-        if isinstance(document, FetchedHTML)
-        else None
-    )
-    resolved_page_title_source = (
-        document.page_title_source
-        if isinstance(document, FetchedHTML)
-        else "none"
-    )
+    resolved_page_title = document.page_title if isinstance(document, FetchedHTML) else None
+    resolved_page_title_source = document.page_title_source if isinstance(document, FetchedHTML) else "none"
     if resolved_page_title is None and cache_economics is not None:
         resolved_page_title = cache_economics.page_title
         resolved_page_title_source = cache_economics.page_title_source
@@ -404,23 +387,14 @@ async def extract_context(
     else:
         html_tokens = count_tokens(html_source_text)
         tokens_saved_estimate = None
-        resolved_extracted_at = (
-            extracted_at
-            or (
-                datetime.now(UTC).isoformat()
-                if cache_layer == "none"
-                else ""
-            )
-        )
+        resolved_extracted_at = extracted_at or (datetime.now(UTC).isoformat() if cache_layer == "none" else "")
 
     # Cache lookup observability (Phase 4): measure hit/miss distribution and
     # persistent-cache freshness without logging the raw target URL.
     cache_age_seconds: int | None = None
     if cache_hit and resolved_extracted_at:
         try:
-            extracted_time = datetime.fromisoformat(
-                resolved_extracted_at.replace("Z", "+00:00")
-            )
+            extracted_time = datetime.fromisoformat(resolved_extracted_at.replace("Z", "+00:00"))
             # Naive timestamps (no timezone) yield null
             if extracted_time.tzinfo is None:
                 cache_age_seconds = None
@@ -536,11 +510,7 @@ async def extract_context(
                 limiting_factor = "token_budget"
 
     elif mode == "chunk":
-        source_text = (
-            section_selection.text
-            if section_selection is not None
-            else raw_text
-        )
+        source_text = section_selection.text if section_selection is not None else raw_text
         policy_text = apply_link_policy(
             source_text,
             links=links,
@@ -552,9 +522,7 @@ async def extract_context(
                 max_tokens=max_tokens,
                 overlap_tokens=overlap_tokens,
                 source_url=sanitize_url(url),
-                content_sha256=hashlib.sha256(
-                    policy_text.encode("utf-8")
-                ).hexdigest(),
+                content_sha256=hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
                 extracted_at=resolved_extracted_at,
             )
             chunks = [asdict(chunk) for chunk in semantic_chunks]
@@ -596,11 +564,7 @@ async def extract_context(
             was_truncated = False
             chunks = []
         else:
-            source_text = (
-                section_selection.text
-                if section_selection is not None
-                else raw_text
-            )
+            source_text = section_selection.text if section_selection is not None else raw_text
             final_text, was_truncated = summarize_text(source_text, max_tokens)
             chunks = [
                 {
@@ -625,14 +589,10 @@ async def extract_context(
             "source_url": sanitize_url(url),
             "final_url": (
                 document.final_url
-                if document is not None
-                and isinstance(document, FetchedHTML)
-                and document.final_url
+                if document is not None and isinstance(document, FetchedHTML) and document.final_url
                 else sanitize_url(url)
             ),
-            "content_sha256": hashlib.sha256(
-                policy_text.encode("utf-8")
-            ).hexdigest(),
+            "content_sha256": hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
             "extracted_at": resolved_extracted_at,
         }
         chunks = attach_chunk_provenance(
@@ -649,13 +609,9 @@ async def extract_context(
                 if resolved_page_title:
                     context_parts.append(f"Page: {resolved_page_title}")
                 if heading_path:
-                    context_parts.append(
-                        "Section: " + " > ".join(heading_path)
-                    )
+                    context_parts.append("Section: " + " > ".join(heading_path))
                 chunk["page_context"] = (
-                    " | ".join(context_parts)
-                    if context_parts
-                    else "No additional page context available."
+                    " | ".join(context_parts) if context_parts else "No additional page context available."
                 )
 
         if not include_heading_path:
@@ -771,6 +727,7 @@ async def extract_context(
         content_quality=quality_assessment,
     )
 
+
 def attach_chunk_provenance(
     chunks: list[dict[str, Any]],
     *,
@@ -811,6 +768,7 @@ def attach_chunk_provenance(
             {
                 **chunk,
                 **provenance,
+                "content_sha256": content_sha256,
                 "chunk_id": chunk_id,
                 "chunk_sha256": chunk_digest,
             }
@@ -822,8 +780,3 @@ def attach_chunk_provenance(
 def delivered_savings(html_tokens: int, approx_tokens: int) -> int:
     """Return the non-negative token savings estimate for a delivered response."""
     return max(0, html_tokens - approx_tokens)
-
-
-
-
-

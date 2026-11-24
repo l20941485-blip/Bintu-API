@@ -45,7 +45,9 @@ def test_tool_error_result_includes_hint_retryable_and_retry_with():
     assert error["hint"] == "Wait before retrying."
     assert error["retryable"] is True
     assert error["retry_with"] == "retry_after_delay"
-    assert result["content"][0]["text"].endswith(". Hint: Wait before retrying.")
+    text = result["content"][0]["text"]
+    assert ". Hint: Wait before retrying." in text
+    assert text.endswith(". Retry with: retry_after_delay")
 
 
 def test_error_code_catalog_contains_existing_application_codes():
@@ -65,5 +67,3 @@ def test_error_code_normalization_preserves_stable_snake_case_contract():
     assert normalize_error_code("invalidOrUnsafeUrl") == "invalid_or_unsafe_url"
     assert normalize_error_code("  RENDER-JS Disabled  ") == "render_js_disabled"
     assert ToolError("UpstreamRateLimited", "message").code == "upstream_rate_limited"
-
-

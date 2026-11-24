@@ -70,7 +70,7 @@ class RagIngestionServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(persisted.heading_path, tuple(source.heading_path))
             self.assertEqual(persisted.source_url, source.source_url)
             self.assertEqual(persisted.final_url, source.final_url)
-            self.assertEqual(persisted.content_sha256, source.content_sha256)
+            self.assertEqual(persisted.content_sha256, request.content_sha256)
             self.assertEqual(persisted.extracted_at, source.extracted_at)
             self.assertEqual(persisted.access_labels, ("public",))
             self.assertIsNone(persisted.owner_identity)

@@ -134,29 +134,18 @@ async def scrape_chunks(
                 link_count=chunk.link_count if return_metadata else None,
                 source_url=chunk.source_url,
                 final_url=chunk.final_url,
-                content_sha256=chunk.content_sha256,
+                content_sha256=result.content_hash,
                 extracted_at=chunk.extracted_at,
                 page_title=result.page_title,
                 content_fingerprint=result.content_fingerprint,
-                chunk_sha256=hashlib.sha256(
-                    chunk.text.encode("utf-8")
-                ).hexdigest(),
+                chunk_sha256=hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
                 page_context=(
                     (
                         " | ".join(
                             part
                             for part in (
-                                (
-                                    f"Page: {result.page_title}"
-                                    if result.page_title
-                                    else None
-                                ),
-                                (
-                                    "Section: "
-                                    + " > ".join(chunk.heading_path)
-                                    if chunk.heading_path
-                                    else None
-                                ),
+                                (f"Page: {result.page_title}" if result.page_title else None),
+                                ("Section: " + " > ".join(chunk.heading_path) if chunk.heading_path else None),
                             )
                             if part
                         )
@@ -179,11 +168,7 @@ async def scrape_chunks(
                 chunk_strategy="sequential",
                 heading_path=None if not include_heading_path else [],
                 page_context=(
-                    (
-                        f"Page: {result.page_title}"
-                        if result.page_title
-                        else "No additional page context available."
-                    )
+                    (f"Page: {result.page_title}" if result.page_title else "No additional page context available.")
                     if include_page_context
                     else None
                 ),

@@ -269,6 +269,7 @@ async def _scrape_text(
             request_id,
             settings,
             revalidated=revalidated,
+            mode="scrape",
         )
 
         if sections is not None:

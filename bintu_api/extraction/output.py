@@ -7,6 +7,7 @@ surfaces. It does not perform metering or MCP JSON-RPC formatting.
 from __future__ import annotations
 
 import hashlib
+import time
 from dataclasses import asdict
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -20,6 +21,8 @@ from bintu_api.extraction.quality import (
     assess_yield,
     detect_boilerplate_characters,
 )
+from bintu_api.metering.billing import classify_usage
+from bintu_api.observability import get_or_create_trace_id, record_stage_trace
 from bintu_api.security.credentials import CREDENTIAL_QUERY_PARAMS
 from bintu_api.security.url_safety import (
     SENSITIVE_QUERY_PARAMETER_NAMES,
@@ -39,9 +42,7 @@ def _cache_age_seconds(
         return None
 
     try:
-        extracted_time = datetime.fromisoformat(
-            extracted_at.replace("Z", "+00:00")
-        )
+        extracted_time = datetime.fromisoformat(extracted_at.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return None
 
@@ -72,11 +73,7 @@ def build_provenance(
 ) -> Provenance:
     """Build provenance using real values only; inapplicable fields stay None."""
     fetched = document is not None and cache_layer == "none"
-    cache_age_seconds = (
-        _cache_age_seconds(extracted_at, datetime.now(UTC))
-        if cache_layer != "none"
-        else None
-    )
+    cache_age_seconds = _cache_age_seconds(extracted_at, datetime.now(UTC)) if cache_layer != "none" else None
     if cache_layer == "none":
         cache_fresh = True
     elif cache_layer == "persistent":
@@ -85,10 +82,7 @@ def build_provenance(
         cache_fresh = True
     else:
         cache_ttl_seconds = settings.cache_ttl_seconds
-        cache_fresh = (
-            cache_age_seconds is not None
-            and cache_age_seconds <= cache_ttl_seconds
-        )
+        cache_fresh = cache_age_seconds is not None and cache_age_seconds <= cache_ttl_seconds
     return Provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
@@ -100,11 +94,7 @@ def build_provenance(
             hit=cache_layer != "none",
             layer=cache_layer,
             age_seconds=cache_age_seconds,
-            ttl_seconds=(
-                cache_ttl_seconds
-                if cache_layer == "memory"
-                else None
-            ),
+            ttl_seconds=(cache_ttl_seconds if cache_layer == "memory" else None),
             fresh=cache_fresh,
             stale_reason=stale_reason,
             revalidated=revalidated,
@@ -120,22 +110,14 @@ def build_provenance(
 def _count_markdown_sections(text: str) -> tuple[int, int]:
     """Count Markdown headings and those followed by nonempty content."""
     lines = text.splitlines()
-    headings = [
-        index
-        for index, line in enumerate(lines)
-        if line.strip().startswith("#")
-    ]
+    headings = [index for index, line in enumerate(lines) if line.strip().startswith("#")]
 
     if not headings:
         return 0, 0
 
     complete = 0
     for position, heading_index in enumerate(headings):
-        end = (
-            headings[position + 1]
-            if position + 1 < len(headings)
-            else len(lines)
-        )
+        end = headings[position + 1] if position + 1 < len(headings) else len(lines)
         if "\n".join(lines[heading_index + 1 : end]).strip():
             complete += 1
 
@@ -170,6 +152,7 @@ def build_scrape_response(
     request_id: str,
     settings: Settings,
     revalidated: bool | None = None,
+    mode: str = "scrape",
 ) -> ScrapeTextResponse:
     """Build the shared scrape response while preserving cache economics."""
     approx_tokens = compute_approx_tokens(result.markdown)
@@ -182,13 +165,10 @@ def build_scrape_response(
     assessment = assess_yield(approx_tokens, result.html_tokens)
 
     pre_cleaning_characters = (
-        result.pre_cleaning_characters
-        if result.pre_cleaning_characters > 0
-        else len(result.markdown)
+        result.pre_cleaning_characters if result.pre_cleaning_characters > 0 else len(result.markdown)
     )
-    section_count, complete_section_count = _count_markdown_sections(
-        result.markdown
-    )
+    section_count, complete_section_count = _count_markdown_sections(result.markdown)
+    quality_started = time.perf_counter()
     quality_assessment = assess_content_quality(
         extracted_characters=len(result.markdown),
         boilerplate_characters=detect_boilerplate_characters(result.markdown),
@@ -196,6 +176,7 @@ def build_scrape_response(
         total_sections=section_count,
         complete_sections=complete_section_count,
     )
+    quality_duration_ms = (time.perf_counter() - quality_started) * 1000.0
 
     stale_reason, inferred_revalidated = _evaluate_cache_freshness(
         result.extracted_at,
@@ -204,6 +185,47 @@ def build_scrape_response(
     )
     if revalidated is None:
         revalidated = inferred_revalidated
+
+    # Calculate usage billing
+    cache_hit = cache_layer != "none"
+    billing_decision = classify_usage(
+        tokens=approx_tokens,
+        mode=mode,
+        cache_hit=cache_hit,
+    )
+    usage_data = {
+        "billable_units": billing_decision.billable_units,
+        "unit": billing_decision.unit,
+        "cache_credit_applied": billing_decision.cache_credit_applied,
+        "estimated_cost_usd": billing_decision.estimated_cost_usd,
+    }
+    trace_id = get_or_create_trace_id(request_id)
+    extractor_ver = (
+        getattr(settings, "extractor_version", None) or getattr(result, "extractor_version", None) or "unknown"
+    )
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="quality_assessment",
+        status="success",
+        duration_ms=quality_duration_ms,
+        cache_layer=cache_layer,
+        extractor_version=str(extractor_ver),
+        quality_score=getattr(quality_assessment, "score", None),
+        tokens_returned=approx_tokens,
+    )
+    delivery_started = time.perf_counter()
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="response_delivery",
+        status="success",
+        duration_ms=(time.perf_counter() - delivery_started) * 1000.0,
+        cache_layer=cache_layer,
+        extractor_version=str(extractor_ver),
+        quality_score=getattr(quality_assessment, "score", None),
+        tokens_returned=approx_tokens,
+    )
 
     return ScrapeTextResponse(
         url=url,
@@ -217,8 +239,7 @@ def build_scrape_response(
         tokens_saved_estimate=saved,
         low_yield=assessment.low_yield,
         yield_hint=assessment.hint,
-        content_cleaning=result.content_cleaning
-        or {"applied": False, "strategy": "standard"},
+        content_cleaning=result.content_cleaning or {"applied": False, "strategy": "standard"},
         content_quality=asdict(quality_assessment),
         provenance=build_provenance(
             url,
@@ -231,6 +252,7 @@ def build_scrape_response(
             stale_reason=stale_reason,
             revalidated=revalidated,
         ),
+        usage=usage_data,
     )
 
 

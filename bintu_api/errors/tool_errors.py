@@ -47,6 +47,8 @@ def build_mcp_tool_error_result(error: ToolError) -> dict[str, Any]:
     text = f"{error.code}: {error.message.rstrip('. ')}"
     if error.hint:
         text += f". Hint: {error.hint}"
+    if error.retry_with:
+        text += f". Retry with: {error.retry_with}"
 
     return {
         "content": [{"type": "text", "text": text}],
