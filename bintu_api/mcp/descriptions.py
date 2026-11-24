@@ -33,7 +33,11 @@ TOOL_DESCRIPTION = (
     "invalid_or_unsafe_url, upstream_access_denied, blocked_by_robots, "
     "payload_too_large, unsupported_media_type, upstream_rate_limited, and "
     "upstream_http_error. Repeated story blocks are excluded (deduplicated_count); "
-    "code is returned in fenced blocks; tables are pipe-delimited."
+    "code is returned in fenced blocks; tables are pipe-delimited. "
+    'For RAG ingestion and grounded citations, prefer mode="chunk" with '
+    'chunk_strategy="semantic" and use each chunk\'s chunk_id, heading_path, '
+    "char_start/char_end, and source_url/final_url as citation anchors; "
+    "usage.estimated_cost_usd reports estimated per-request token cost."
 )
 
 URL_DESCRIPTION = (

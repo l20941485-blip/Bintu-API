@@ -114,21 +114,15 @@ TOOL_OUTPUT_SCHEMA = {
                 },
                 "fresh": {
                     "type": "boolean",
-                    "description": (
-                        "Whether the result is fresh under Bintu's declared cache policy."
-                    ),
+                    "description": ("Whether the result is fresh under Bintu's declared cache policy."),
                 },
                 "stale_reason": {
                     "type": ["string", "null"],
-                    "description": (
-                        "Why a cached entry was considered stale, when applicable."
-                    ),
+                    "description": ("Why a cached entry was considered stale, when applicable."),
                 },
                 "revalidated": {
                     "type": "boolean",
-                    "description": (
-                        "True when a stale cache entry was refreshed during this request."
-                    ),
+                    "description": ("True when a stale cache entry was refreshed during this request."),
                 },
             },
             "required": [
@@ -185,38 +179,25 @@ TOOL_OUTPUT_SCHEMA = {
                     },
                     "heading_path": {
                         "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": (
-                            "Hierarchical Markdown heading path containing the chunk."
-                        ),
+                        "items": {"type": "string"},
+                        "description": ("Hierarchical Markdown heading path containing the chunk."),
                     },
                     "char_start": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ],
+                        "type": ["integer", "null"],
                         "minimum": 0,
                         "description": (
                             "Zero-based character offset of the chunk in the link-policy-filtered source text."
                         ),
                     },
                     "char_end": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ],
+                        "type": ["integer", "null"],
                         "minimum": 0,
                         "description": (
                             "Exclusive character offset of the chunk in the link-policy-filtered source text."
                         ),
                     },
                     "reassembled": {
-                        "type": [
-                            "boolean",
-                            "null"
-                        ],
+                        "type": ["boolean", "null"],
                         "description": (
                             "True when lead-in handling prevented a reliable source location; offsets are null in that case."
                         ),
@@ -230,17 +211,11 @@ TOOL_OUTPUT_SCHEMA = {
                     },
                     "chunk_strategy": {
                         "type": "string",
-                        "enum": [
-                            "sequential",
-                            "semantic"
-                        ],
+                        "enum": ["sequential", "semantic"],
                         "description": "Strategy used to produce the chunk.",
                     },
                     "section_index": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ],
+                        "type": ["integer", "null"],
                         "minimum": 0,
                         "description": (
                             "Zero-based index of the semantic section containing the chunk; null when "
@@ -253,57 +228,33 @@ TOOL_OUTPUT_SCHEMA = {
                     },
                     "source_url": {
                         "type": "string",
-                        "description": (
-                            "Requested URL with sensitive-looking query parameters removed."
-                        ),
+                        "description": ("Requested URL with sensitive-looking query parameters removed."),
                     },
                     "final_url": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "URL after redirects, when available.",
                     },
                     "content_sha256": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
-                        "description": (
-                            "SHA-256 digest of the link-policy-filtered source text."
-                        ),
+                        "type": ["string", "null"],
+                        "description": ("SHA-256 digest of the link-policy-filtered source text."),
                     },
                     "extracted_at": {
                         "type": "string",
                         "description": (
-                            "UTC ISO 8601 timestamp of the original extraction, including for "
-                            "cache-served responses."
+                            "UTC ISO 8601 timestamp of the original extraction, including for cache-served responses."
                         ),
                     },
                     "page_title": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "Resolved page title, when available.",
                     },
                     "content_fingerprint": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
-                        "description": (
-                            "Stable fingerprint of the canonical extracted content."
-                        ),
+                        "type": ["string", "null"],
+                        "description": ("Stable fingerprint of the canonical extracted content."),
                     },
                     "page_context": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
-                        "description": (
-                            "Human-readable page and section context for the chunk."
-                        ),
+                        "type": ["string", "null"],
+                        "description": ("Human-readable page and section context for the chunk."),
                     },
                 },
                 "required": [
@@ -383,8 +334,7 @@ TOOL_INPUT_SCHEMA = {
             "minimum": 1,
             "default": 100,
             "description": (
-                "For links=footnotes only, maximum URL length for the visible "
-                "label and truncated destination."
+                "For links=footnotes only, maximum URL length for the visible label and truncated destination."
             ),
         },
         "mode": {
@@ -444,10 +394,7 @@ TOOL_INPUT_SCHEMA = {
             "minimum": 1,
             "maximum": 10,
             "default": 3,
-            "description": (
-                "Maximum number of verbatim source sentences included in the "
-                "opt-in extractive summary."
-            ),
+            "description": ("Maximum number of verbatim source sentences included in the opt-in extractive summary."),
         },
         "chunk_strategy": {
             "type": "string",
@@ -463,33 +410,24 @@ TOOL_INPUT_SCHEMA = {
             "type": "integer",
             "minimum": 0,
             "default": 0,
-            "description": (
-                "Approximate token overlap between chunks. Must be non-negative "
-                "and less than max_tokens."
-            ),
+            "description": ("Approximate token overlap between chunks. Must be non-negative and less than max_tokens."),
         },
         "return_metadata": {
             "type": "boolean",
             "default": True,
             "description": (
-                "Include optional retrieval enrichment metadata. Core "
-                "provenance and identifiers remain available."
+                "Include optional retrieval enrichment metadata. Core provenance and identifiers remain available."
             ),
         },
         "include_heading_path": {
             "type": "boolean",
             "default": True,
-            "description": (
-                "Include the hierarchical heading path for each chunk."
-            ),
+            "description": ("Include the hierarchical heading path for each chunk."),
         },
         "include_page_context": {
             "type": "boolean",
             "default": True,
-            "description": (
-                "Include deterministic page-level context derived from the "
-                "page title and heading path."
-            ),
+            "description": ("Include deterministic page-level context derived from the page title and heading path."),
         },
         "cache": {
             "type": "boolean",
@@ -534,10 +472,7 @@ TOOL_OUTPUT_SCHEMA["properties"]["content_cleaning"] = {
         "terminal_sections_removed": {
             "type": "integer",
             "minimum": 0,
-            "description": (
-                "Number of recognized terminal non-body sections removed "
-                "after main-content extraction."
-            ),
+            "description": ("Number of recognized terminal non-body sections removed after main-content extraction."),
         },
     },
 }
@@ -562,6 +497,25 @@ TOOL_INPUT_SCHEMA["properties"]["sections"] = {
 }
 TOOL_INPUT_SCHEMA["properties"]["max_footnote_url_length"]["description"] = MAX_FOOTNOTE_URL_LENGTH_DESCRIPTION
 TOOL_OUTPUT_SCHEMA["properties"].update(OUTPUT_SCHEMA_EXTRA_PROPERTIES)
-
-
-
+TOOL_OUTPUT_SCHEMA["properties"].update(
+    {
+        "content_quality": {
+            "type": "object",
+            "description": "Quality assessment signals describing extraction usefulness and boilerplate contamination.",
+        },
+        "provenance": {
+            "type": "object",
+            "description": "Request and extraction provenance metadata when enabled.",
+        },
+        "usage": {
+            "type": "object",
+            "description": "Metered usage and estimated cost in USD for the request.",
+            "properties": {
+                "billable_units": {"type": "integer", "minimum": 0},
+                "unit": {"type": "string"},
+                "cache_credit_applied": {"type": "boolean"},
+                "estimated_cost_usd": {"type": "number", "minimum": 0.0},
+            },
+        },
+    }
+)

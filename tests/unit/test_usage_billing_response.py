@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.output import build_scrape_response
-from bintu_api.settings import Settings
 
 
 class UsageBillingResponseTests(unittest.TestCase):

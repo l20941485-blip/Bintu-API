@@ -9,15 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 
-import re
 from bintu_api.common.fetch import FetchedHTML, compute_approx_tokens
-from bintu_api.extraction.quality import assess_content_quality
-from bintu_api.extraction.quality_policy import (
-    QualityPolicy,
-    enforce_quality_policy,
-)
 from bintu_api.common.resolution import (
     ResolvedTarget,
     prepare_fetch_target,
@@ -41,6 +36,7 @@ from bintu_api.extraction.cleaner import (
     strip_noise_lines,
     suppress_boilerplate_lines,
 )
+from bintu_api.extraction.context import decode_source_text
 from bintu_api.extraction.dedupe import dedupe_blocks
 from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
@@ -51,6 +47,11 @@ from bintu_api.extraction.memory_cache import (
 from bintu_api.extraction.persistent_cache import (
     read_persistent_cache,
     write_persistent_cache,
+)
+from bintu_api.extraction.quality import assess_content_quality
+from bintu_api.extraction.quality_policy import (
+    QualityPolicy,
+    enforce_quality_policy,
 )
 from bintu_api.extraction.request_context import ScrapeRequestContext
 from bintu_api.extraction.request_policy import (
@@ -67,15 +68,10 @@ from bintu_api.extraction.summary_cache import (
 logger = logging.getLogger("bintu_api.scrape")
 
 
-
-
 def _count_quality_markdown_sections(text: str) -> tuple[int, int]:
     """Count Markdown headings and those with non-empty body content."""
     lines = text.splitlines()
-    headings = [
-        idx for idx, line in enumerate(lines)
-        if re.match(r"^#{1,6}\s+\S", line.strip())
-    ]
+    headings = [idx for idx, line in enumerate(lines) if re.match(r"^#{1,6}\s+\S", line.strip())]
     if not headings:
         return 0, 0
     complete = 0
@@ -207,21 +203,14 @@ class ScrapeService:
         )
 
         if result is not None:
-            summary_payload = (
-                result.content_cleaning.get("extractive_summary")
-                if result.content_cleaning
-                else None
-            )
+            summary_payload = result.content_cleaning.get("extractive_summary") if result.content_cleaning else None
             summary_validation = validate_cached_extractive_summary(
                 result.markdown,
                 summary_payload,
             )
             log_summary_cache_validation(summary_validation)
 
-            if (
-                summary_validation.status != "valid"
-                and summary_payload is not None
-            ):
+            if summary_validation.status != "valid" and summary_payload is not None:
                 result.content_cleaning.pop("extractive_summary", None)
 
             cache_layer = "persistent"
@@ -240,18 +229,12 @@ class ScrapeService:
             sections,
         )
 
-        memory_cache_fresh = (
-            memory_entry is not None
-            and is_memory_cache_fresh(
-                memory_entry.extracted_at,
-                ttl_seconds=settings.cache_ttl_seconds,
-            )
+        memory_cache_fresh = memory_entry is not None and is_memory_cache_fresh(
+            memory_entry.extracted_at,
+            ttl_seconds=settings.cache_ttl_seconds,
         )
 
-        fresh_memory_hit = (
-            memory_entry is not None
-            and memory_cache_fresh
-        )
+        fresh_memory_hit = memory_entry is not None and memory_cache_fresh
 
         if fresh_memory_hit:
             document = memory_entry.document
@@ -299,11 +282,7 @@ class ScrapeService:
                     layer=cache_layer,
                 )
 
-        extracted_at = (
-            datetime.now(UTC).isoformat()
-            if cache_layer == "none"
-            else memory_entry.extracted_at
-        )
+        extracted_at = datetime.now(UTC).isoformat() if cache_layer == "none" else memory_entry.extracted_at
 
         cleaned_text = ""
         cleaning_applied = False
@@ -317,14 +296,8 @@ class ScrapeService:
                 links=links,
             )
 
-            if (
-                cleaning_applied
-                and exclude_terminal_sections
-                and not sections
-            ):
-                cleaned_text, terminal_sections_removed = (
-                    remove_terminal_sections(cleaned_text)
-                )
+            if cleaning_applied and exclude_terminal_sections and not sections:
+                cleaned_text, terminal_sections_removed = remove_terminal_sections(cleaned_text)
 
         if cleaning_applied:
             extracted = ExtractedText(
@@ -352,11 +325,7 @@ class ScrapeService:
         cleaned_text, deduplicated_count = dedupe_blocks(cleaned_text)
         cleaned_text, boilerplate_lines_removed = suppress_boilerplate_lines(cleaned_text)
 
-        cleaning_applied = (
-            cleaning_applied
-            or terminal_sections_removed > 0
-            or boilerplate_lines_removed > 0
-        )
+        cleaning_applied = cleaning_applied or terminal_sections_removed > 0 or boilerplate_lines_removed > 0
         content_cleaning = {
             "applied": cleaning_applied,
             "strategy": (
@@ -408,7 +377,7 @@ class ScrapeService:
             min_extracted_tokens = getattr(settings, "quality_min_extracted_tokens", 0)
             min_yield_ratio = getattr(settings, "quality_min_yield_ratio", 0.0)
             extracted_tokens = compute_approx_tokens(cleaned_text)
-            html_tokens = compute_approx_tokens(self.source_decoder(document))
+            html_tokens = compute_approx_tokens((self.source_decoder or decode_source_text)(document))
             total_sections, complete_sections = _count_quality_markdown_sections(cleaned_text)
             quality_assessment = assess_content_quality(
                 extracted_characters=len(cleaned_text),
@@ -449,14 +418,11 @@ class ScrapeService:
             pre_cleaning_characters=pre_cleaning_characters,
         )
 
-        if (
-            not fresh_memory_hit
-            and should_write_persistent_cache(
-                database_client,
-                persistent_cache_enabled,
-                cacheable,
-                persist,
-            )
+        if not fresh_memory_hit and should_write_persistent_cache(
+            database_client,
+            persistent_cache_enabled,
+            cacheable,
+            persist,
         ):
             from bintu_api.extraction.output import redact_cache_url
 
@@ -473,14 +439,3 @@ class ScrapeService:
             )
 
         return document, result, cache_layer, revalidated
-
-
-
-
-
-
-
-
-
-
-

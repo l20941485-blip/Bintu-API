@@ -220,7 +220,11 @@ def _tool_error_for_http_exception(error: HTTPException) -> ToolError:
         )
 
     if error.status_code == 413:
-        return ToolError("payload_too_large", "The page exceeds the 1 MiB size limit.")
+        return ToolError(
+            "payload_too_large",
+            "The page exceeds the 1 MiB size limit.",
+            "Try a smaller page.",
+        )
     if error.status_code == 415:
         return ToolError(
             "unsupported_media_type",
