@@ -206,6 +206,7 @@ class ScrapeService:
         )
 
         if result is not None:
+            cache_lookup_started = time.perf_counter()
             summary_payload = result.content_cleaning.get("extractive_summary") if result.content_cleaning else None
             summary_validation = validate_cached_extractive_summary(
                 result.markdown,
@@ -217,6 +218,15 @@ class ScrapeService:
                 result.content_cleaning.pop("extractive_summary", None)
 
             cache_layer = "persistent"
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=get_or_create_trace_id(request_id),
+                stage="cache_lookup",
+                status="hit",
+                duration_ms=(time.perf_counter() - cache_lookup_started) * 1000.0,
+                cache_layer=cache_layer,
+                tokens_returned=getattr(result, "tokens", None),
+            )
             self.cache_event_logger(
                 event="cache_hit",
                 url=url,

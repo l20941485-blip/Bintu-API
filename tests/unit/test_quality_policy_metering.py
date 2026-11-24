@@ -158,6 +158,27 @@ def test_stage_traces_correlation_and_duration():
     assert traces[1]["status"] == "rejected"
 
 
+def test_persistent_cache_hit_stage_trace_metadata():
+    request_id = "req-persistent-cache-hit"
+    trace_id = get_or_create_trace_id(request_id)
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="cache_lookup",
+        status="hit",
+        duration_ms=0.42,
+        cache_layer="persistent",
+        tokens_returned=128,
+    )
+    traces = get_stage_traces(request_id)
+    assert len(traces) == 1
+    assert traces[0]["trace_id"] == trace_id
+    assert traces[0]["stage"] == "cache_lookup"
+    assert traces[0]["status"] == "hit"
+    assert traces[0]["cache_layer"] == "persistent"
+    assert traces[0]["tokens_returned"] == 128
+
+
 def test_enforce_passing_quality_remains_billable():
     response, queue_usage_event = _run_request(
         quality_score=0.8,
