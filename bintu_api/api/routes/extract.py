@@ -14,6 +14,7 @@ Important boundaries, invariants, or compatibility notes:
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from typing import Annotated, Literal
 
@@ -38,7 +39,7 @@ from bintu_api.extraction.sections import select_sections
 from bintu_api.extraction.token_budget import truncate_to_token_budget
 from bintu_api.metering.billing import classify_usage
 from bintu_api.metering.service import UsageEvent, queue_usage_event
-from bintu_api.observability import log_extraction_completed
+from bintu_api.observability import get_or_create_trace_id, log_extraction_completed, record_stage_trace
 from bintu_api.scraper.fetcher import _compute_approx_tokens
 from bintu_api.security.auth import (
     api_key_scheme,
@@ -318,6 +319,16 @@ async def _scrape_text(
                     0,
                     result.html_tokens - response.approx_tokens,
                 )
+        delivery_started = time.perf_counter()
+        record_stage_trace(
+            request_id=request_id,
+            trace_id=get_or_create_trace_id(request_id),
+            stage="response_delivery",
+            status="success",
+            duration_ms=(time.perf_counter() - delivery_started) * 1000.0,
+            cache_layer=cache_layer,
+            tokens_returned=response.approx_tokens,
+        )
         log_extraction_completed(
             request_id=request_id,
             url=url,

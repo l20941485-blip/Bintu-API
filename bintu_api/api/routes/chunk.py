@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 import uuid
 from typing import Literal
 
@@ -29,7 +30,7 @@ from bintu_api.extraction.cache_store import CachedMarkdown
 from bintu_api.extraction.context import split_into_chunks
 from bintu_api.extraction.output import TOKEN_METHOD, sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
-from bintu_api.observability import log_extraction_completed
+from bintu_api.observability import get_or_create_trace_id, log_extraction_completed, record_stage_trace
 from bintu_api.scraper.fetcher import FetchedHTML, _compute_approx_tokens
 from bintu_api.security.auth import api_key_scheme
 
@@ -62,6 +63,8 @@ async def scrape_chunks(
     include_page_context: bool = True,
 ) -> ScrapeChunksResponse:
     settings = request.app.state.settings
+    request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
+    trace_id = get_or_create_trace_id(request_id)
     routes_common.verify_api_access(request, settings)
 
     if not 100 <= max_tokens <= 50000:
@@ -108,55 +111,70 @@ async def scrape_chunks(
         exclude_terminal_sections=payload.exclude_terminal_sections,
     )
 
+    chunking_started: float | None = None
+    chunking_tokens: int | None = None
     if chunk_strategy == "semantic":
-        semantic_chunks = split_semantic_chunks(
-            result.markdown,
-            max_tokens=max_tokens,
-            overlap_tokens=overlap_tokens,
-            source_url=sanitize_url(payload.url),
-            final_url=document.final_url if document else payload.url,
-            content_sha256=result.content_hash,
-            extracted_at=result.extracted_at,
-        )
-        chunks = [
-            RestChunk(
-                index=chunk.index,
-                text=chunk.text,
-                approx_tokens=chunk.approx_tokens,
-                tokens=chunk.tokens,
-                chunk_strategy=chunk.chunk_strategy,
-                chunk_id=chunk.chunk_id,
-                heading_path=chunk.heading_path if include_heading_path else None,
-                section_index=chunk.section_index,
-                contains_code=chunk.contains_code if return_metadata else None,
-                contains_table=chunk.contains_table if return_metadata else None,
-                contains_links=chunk.contains_links if return_metadata else None,
-                link_count=chunk.link_count if return_metadata else None,
-                source_url=chunk.source_url,
-                final_url=chunk.final_url,
+        chunking_started = time.perf_counter()
+        try:
+            semantic_chunks = split_semantic_chunks(
+                result.markdown,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+                source_url=sanitize_url(payload.url),
+                final_url=document.final_url if document else payload.url,
                 content_sha256=result.content_hash,
-                extracted_at=chunk.extracted_at,
-                page_title=result.page_title,
-                content_fingerprint=result.content_fingerprint,
-                chunk_sha256=hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
-                page_context=(
-                    (
-                        " | ".join(
-                            part
-                            for part in (
-                                (f"Page: {result.page_title}" if result.page_title else None),
-                                ("Section: " + " > ".join(chunk.heading_path) if chunk.heading_path else None),
-                            )
-                            if part
-                        )
-                        or "No additional page context available."
-                    )
-                    if include_page_context
-                    else None
-                ),
+                extracted_at=result.extracted_at,
             )
-            for chunk in semantic_chunks
-        ]
+            chunks = [
+                RestChunk(
+                    index=chunk.index,
+                    text=chunk.text,
+                    approx_tokens=chunk.approx_tokens,
+                    tokens=chunk.tokens,
+                    chunk_strategy=chunk.chunk_strategy,
+                    chunk_id=chunk.chunk_id,
+                    heading_path=chunk.heading_path if include_heading_path else None,
+                    section_index=chunk.section_index,
+                    contains_code=chunk.contains_code if return_metadata else None,
+                    contains_table=chunk.contains_table if return_metadata else None,
+                    contains_links=chunk.contains_links if return_metadata else None,
+                    link_count=chunk.link_count if return_metadata else None,
+                    source_url=chunk.source_url,
+                    final_url=chunk.final_url,
+                    content_sha256=result.content_hash,
+                    extracted_at=chunk.extracted_at,
+                    page_title=result.page_title,
+                    content_fingerprint=result.content_fingerprint,
+                    chunk_sha256=hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
+                    page_context=(
+                        (
+                            " | ".join(
+                                part
+                                for part in (
+                                    (f"Page: {result.page_title}" if result.page_title else None),
+                                    ("Section: " + " > ".join(chunk.heading_path) if chunk.heading_path else None),
+                                )
+                                if part
+                            )
+                            or "No additional page context available."
+                        )
+                        if include_page_context
+                        else None
+                    ),
+                )
+                for chunk in semantic_chunks
+            ]
+            chunking_tokens = sum(chunk.approx_tokens for chunk in chunks)
+        except Exception:
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=trace_id,
+                stage="chunking",
+                status="error",
+                duration_ms=(time.perf_counter() - chunking_started) * 1000.0,
+                cache_layer=cache_layer,
+            )
+            raise
     else:
         chunk_strings = split_into_chunks(result.markdown, max_tokens)
         chunks = [
@@ -177,6 +195,27 @@ async def scrape_chunks(
         ]
 
     approx_tokens = sum(chunk.approx_tokens for chunk in chunks)
+    if chunking_started is not None:
+        record_stage_trace(
+            request_id=request_id,
+            trace_id=trace_id,
+            stage="chunking",
+            status="success",
+            duration_ms=(time.perf_counter() - chunking_started) * 1000.0,
+            cache_layer=cache_layer,
+            tokens_returned=chunking_tokens if chunking_tokens is not None else approx_tokens,
+        )
+
+    delivery_started = time.perf_counter()
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="response_delivery",
+        status="success",
+        duration_ms=(time.perf_counter() - delivery_started) * 1000.0,
+        cache_layer=cache_layer,
+        tokens_returned=approx_tokens,
+    )
 
     return ScrapeChunksResponse(
         url=payload.url,

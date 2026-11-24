@@ -321,3 +321,180 @@ async def test_slice4_adapter_dispatch_records_success_and_error_traces(monkeypa
         ("adapter_dispatch", "error"),
     ]
     assert all(item["duration_ms"] >= 0.0 for item in dispatch_events)
+
+
+@pytest.mark.asyncio
+async def test_slice5_chunk_route_records_chunking_and_response_delivery_traces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from bintu_api.api import scrape_adapter
+    from bintu_api.api.routes import chunk as chunk_route
+    from bintu_api.api.schemas import MobileScrapeTextRequest
+    from bintu_api.extraction.cache_store import CachedMarkdown
+    from bintu_api.observability import get_or_create_trace_id, get_stage_traces
+
+    cached_doc = CachedMarkdown(
+        markdown="# Intro\n\nFirst paragraph with details.\n\n## Details\n\nSecond section body.",
+        html_tokens=40,
+        tokens_saved_estimate=10,
+        truncated=False,
+        limiting_factor="none",
+        extracted_at="2026-11-24T00:00:00+00:00",
+        content_hash="abc123",
+        page_title="Guide",
+        content_fingerprint="fp123",
+    )
+
+    class _RateLimiter:
+        def check(self, _identity: str) -> None:
+            return None
+
+    async def _fake_fetch_and_extract(*_args, **_kwargs):
+        return None, cached_doc, "memory", False
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                settings=SimpleNamespace(
+                    render_js_enabled=False,
+                    api_key="",
+                    rapidapi_proxy_secret="",
+                ),
+                rate_limiter=_RateLimiter(),
+            )
+        ),
+        state=SimpleNamespace(request_id="req-slice5-chunk"),
+        headers={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    payload = MobileScrapeTextRequest(url="https://example.com/guide")
+
+    monkeypatch.setattr(chunk_route.routes_common, "verify_api_access", lambda *_a, **_kw: None)
+    monkeypatch.setattr(chunk_route.routes_common, "rate_limit_identity", lambda *_a, **_kw: "anon")
+    monkeypatch.setattr(scrape_adapter, "fetch_and_extract", _fake_fetch_and_extract)
+
+    response = await chunk_route.scrape_chunks(
+        request,
+        payload,
+        max_tokens=120,
+        chunk_strategy="semantic",
+    )
+    assert response.chunk_count >= 1
+
+    traces = get_stage_traces("req-slice5-chunk")
+    expected_trace_id = get_or_create_trace_id("req-slice5-chunk")
+    by_stage = {item["stage"]: item for item in traces}
+
+    assert "chunking" in by_stage
+    assert by_stage["chunking"]["status"] == "success"
+    assert by_stage["chunking"]["trace_id"] == expected_trace_id
+    assert (by_stage["chunking"]["tokens_returned"] or 0) > 0
+    assert by_stage["chunking"]["duration_ms"] >= 0.0
+
+    assert "response_delivery" in by_stage
+    assert by_stage["response_delivery"]["status"] == "success"
+    assert by_stage["response_delivery"]["trace_id"] == expected_trace_id
+    assert by_stage["response_delivery"]["cache_layer"] == "memory"
+    assert (by_stage["response_delivery"]["tokens_returned"] or 0) > 0
+    assert by_stage["response_delivery"]["duration_ms"] >= 0.0
+
+    def _boom(*_args, **_kwargs):
+        raise ValueError("semantic split failure")
+
+    monkeypatch.setattr(chunk_route, "split_semantic_chunks", _boom)
+    with pytest.raises(ValueError, match="semantic split failure"):
+        await chunk_route.scrape_chunks(
+            request,
+            payload,
+            max_tokens=120,
+            chunk_strategy="semantic",
+        )
+
+    err_traces = [
+        item
+        for item in get_stage_traces("req-slice5-chunk")
+        if item["stage"] == "chunking" and item["status"] == "error"
+    ]
+    assert len(err_traces) == 1
+    assert err_traces[0]["trace_id"] == expected_trace_id
+
+
+@pytest.mark.asyncio
+async def test_slice5_extract_route_records_response_delivery_trace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from bintu_api.api import scrape_adapter
+    from bintu_api.api.routes import extract as extract_route
+    from bintu_api.api.schemas import ScrapeTextResponse
+    from bintu_api.extraction.cache_store import CachedMarkdown
+    from bintu_api.observability import get_or_create_trace_id, get_stage_traces
+
+    cached_doc = CachedMarkdown(
+        markdown="Concise extracted text for delivery trace check.",
+        html_tokens=20,
+        tokens_saved_estimate=8,
+        truncated=False,
+        limiting_factor="none",
+        extracted_at="2026-11-24T00:00:00+00:00",
+        content_hash="def456",
+    )
+
+    class _RateLimiter:
+        def check(self, _identity: str) -> None:
+            return None
+
+    async def _fake_fetch_and_extract(*_args, **_kwargs):
+        return None, cached_doc, "persistent", False
+
+    def _fake_build_response(url, result, _document, cache_layer, _request_id, _settings, **_kwargs):
+        return ScrapeTextResponse(
+            url=url,
+            text=result.markdown,
+            tokens=10,
+            approx_tokens=10,
+            html_tokens=result.html_tokens,
+            tokens_saved_estimate=result.tokens_saved_estimate,
+            truncated=False,
+            limiting_factor="none",
+            cache_hit=True,
+            cache_layer=cache_layer,
+            extracted_at=result.extracted_at,
+        )
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                settings=SimpleNamespace(max_text_characters=6000),
+                rate_limiter=_RateLimiter(),
+                supabase_client=None,
+            )
+        ),
+        state=SimpleNamespace(request_id="req-slice5-extract"),
+    )
+
+    monkeypatch.setattr(scrape_adapter, "fetch_and_extract", _fake_fetch_and_extract)
+    monkeypatch.setattr(extract_route, "_build_response", _fake_build_response)
+
+    resp = await extract_route._scrape_text(
+        request,
+        "https://example.com/article",
+        False,
+        False,
+        False,
+        "anon",
+    )
+    assert resp.approx_tokens == 10
+
+    traces = get_stage_traces("req-slice5-extract")
+    expected_trace_id = get_or_create_trace_id("req-slice5-extract")
+    delivery_events = [item for item in traces if item["stage"] == "response_delivery"]
+    assert len(delivery_events) == 1
+    assert delivery_events[0]["status"] == "success"
+    assert delivery_events[0]["trace_id"] == expected_trace_id
+    assert delivery_events[0]["cache_layer"] == "persistent"
+    assert delivery_events[0]["tokens_returned"] == 10
+    assert delivery_events[0]["duration_ms"] >= 0.0
