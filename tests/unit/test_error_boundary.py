@@ -67,3 +67,24 @@ def test_error_code_normalization_preserves_stable_snake_case_contract():
     assert normalize_error_code("invalidOrUnsafeUrl") == "invalid_or_unsafe_url"
     assert normalize_error_code("  RENDER-JS Disabled  ") == "render_js_disabled"
     assert ToolError("UpstreamRateLimited", "message").code == "upstream_rate_limited"
+
+def test_http_mcp_error_response_normalizes_code_and_includes_structured_content():
+    from bintu_api.mcp.http_api import _mcp_error_response
+
+    result = _mcp_error_response(
+        "Render-JS Disabled",
+        "JavaScript rendering is disabled on this service.",
+        "  Retry with render_js=false.  ",
+    )
+
+    assert result["isError"] is True
+    assert result["structuredContent"] == {
+        "error": {
+            "code": "render_js_disabled",
+            "message": "JavaScript rendering is disabled on this service.",
+            "hint": "Retry with render_js=false.",
+            "retryable": False,
+        }
+    }
+    assert result["content"][0]["text"].startswith("render_js_disabled:")
+    assert ". Hint: Retry with render_js=false." in result["content"][0]["text"]

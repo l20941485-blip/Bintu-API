@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
 from bintu_api.api import mcp_adapter
+from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
 from bintu_api.mcp.assistant import assistant_tool_definition
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
@@ -52,16 +53,13 @@ def _mcp_error_response(
     hint: str,
 ) -> dict[str, Any]:
     """Return a stable in-band tool error."""
-    logger.info("mcp_tool_error code=%s", code)
-    return {
-        "content": [
-            {
-                "type": "text",
-                "text": f"{code}: {message} {hint}".strip(),
-            }
-        ],
-        "isError": True,
-    }
+    error = ToolError(
+        code=code,
+        message=message,
+        hint=hint.strip() or None,
+    )
+    logger.info("mcp_tool_error code=%s", error.code)
+    return build_mcp_tool_error_result(error)
 
 
 @router.get("/tools")
