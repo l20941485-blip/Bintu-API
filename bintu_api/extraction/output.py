@@ -87,9 +87,13 @@ def build_provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
         requested_url=sanitize_url(url),
-        final_url=document.final_url if fetched else None,
+        final_url=((document.final_url or sanitize_url(url)) if fetched else None),
         bytes_fetched=len(document.body) if fetched else None,
-        content_sha256=(hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None),
+        content_sha256=(
+            hashlib.sha256(text.encode("utf-8")).hexdigest()
+            if text
+            else (getattr(document, "content_sha256", None) or None)
+        ),
         cache=CacheInfo(
             hit=cache_layer != "none",
             layer=cache_layer,
