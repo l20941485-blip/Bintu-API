@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from bintu_api.api.routes.extract import router
 from bintu_api.extraction.models import ContentQuality
-from bintu_api.observability import get_or_create_trace_id, get_stage_traces
+from bintu_api.observability import get_or_create_trace_id, get_stage_traces, record_stage_trace
 from bintu_api.settings import Settings
 
 
@@ -130,13 +130,53 @@ def test_warn_low_quality_rest_extraction_remains_billable():
 
 def test_stage_traces_correlation_and_duration():
     request_id = "req-stage-trace-check"
+    expected_trace_id = get_or_create_trace_id(request_id)
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=expected_trace_id,
+        stage="fetch",
+        status="success",
+        duration_ms=1.25,
+        cache_layer="none",
+    )
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=expected_trace_id,
+        stage="quality_policy",
+        status="rejected",
+        duration_ms=-0.5,
+        cache_layer="none",
+        quality_score=0.2,
+        tokens_returned=0,
+    )
     traces = get_stage_traces(request_id)
-    if traces:
-        expected_trace_id = get_or_create_trace_id(request_id)
-        for trace_event in traces:
-            assert trace_event["trace_id"] == expected_trace_id
-            assert float(trace_event["duration_ms"]) >= 0.0
-        assert any(trace_event["stage"] == "quality_policy" and trace_event["status"] == "rejected" for trace_event in traces)
+    assert [t["stage"] for t in traces] == ["fetch", "quality_policy"]
+    for trace_event in traces:
+        assert trace_event["trace_id"] == expected_trace_id
+        assert float(trace_event["duration_ms"]) >= 0.0
+    assert traces[1]["duration_ms"] == 0.0
+    assert traces[1]["status"] == "rejected"
+
+
+def test_persistent_cache_hit_stage_trace_metadata():
+    request_id = "req-persistent-cache-hit"
+    trace_id = get_or_create_trace_id(request_id)
+    record_stage_trace(
+        request_id=request_id,
+        trace_id=trace_id,
+        stage="cache_lookup",
+        status="hit",
+        duration_ms=0.42,
+        cache_layer="persistent",
+        tokens_returned=128,
+    )
+    traces = get_stage_traces(request_id)
+    assert len(traces) == 1
+    assert traces[0]["trace_id"] == trace_id
+    assert traces[0]["stage"] == "cache_lookup"
+    assert traces[0]["status"] == "hit"
+    assert traces[0]["cache_layer"] == "persistent"
+    assert traces[0]["tokens_returned"] == 128
 
 
 def test_enforce_passing_quality_remains_billable():
