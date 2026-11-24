@@ -264,6 +264,8 @@ class ScrapeService:
                     layer="none",
                 )
 
+            fetch_started = time.perf_counter()
+            fetch_status = "success"
             try:
                 document, _resolved_target = await self._fetch_document(
                     url,
@@ -273,20 +275,38 @@ class ScrapeService:
                 )
             except Exception:
                 if memory_entry is None:
+                    record_stage_trace(
+                        request_id=request_id,
+                        trace_id=get_or_create_trace_id(request_id),
+                        stage="fetch",
+                        status="error",
+                        duration_ms=(time.perf_counter() - fetch_started) * 1000.0,
+                        cache_layer=cache_layer,
+                    )
                     raise
 
                 document = memory_entry.document
                 cache_layer = "memory"
                 revalidated = True
+                fetch_status = "fallback"
                 self.cache_event_logger(
                     event="stale_cache_fallback",
                     url=url,
                     request_id=request_id,
                     layer=cache_layer,
                 )
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=get_or_create_trace_id(request_id),
+                stage="fetch",
+                status=fetch_status,
+                duration_ms=(time.perf_counter() - fetch_started) * 1000.0,
+                cache_layer=cache_layer,
+            )
 
         extracted_at = datetime.now(UTC).isoformat() if cache_layer == "none" else memory_entry.extracted_at
 
+        extraction_started = time.perf_counter()
         cleaned_text = ""
         cleaning_applied = False
         terminal_sections_removed = 0
@@ -327,6 +347,15 @@ class ScrapeService:
         cleaned_text = normalize_markdown(cleaned_text)
         cleaned_text, deduplicated_count = dedupe_blocks(cleaned_text)
         cleaned_text, boilerplate_lines_removed = suppress_boilerplate_lines(cleaned_text)
+        record_stage_trace(
+            request_id=request_id,
+            trace_id=get_or_create_trace_id(request_id),
+            stage="content_extraction",
+            status="success",
+            duration_ms=(time.perf_counter() - extraction_started) * 1000.0,
+            cache_layer=cache_layer,
+            tokens_returned=compute_approx_tokens(cleaned_text),
+        )
 
         cleaning_applied = cleaning_applied or terminal_sections_removed > 0 or boilerplate_lines_removed > 0
         content_cleaning = {
@@ -344,10 +373,20 @@ class ScrapeService:
         }
 
         if options.summary_mode != "none":
+            summary_started = time.perf_counter()
             summary = build_extractive_summary(
                 cleaned_text,
                 mode=options.summary_mode,
                 sentence_count=options.summary_sentence_count,
+            )
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=get_or_create_trace_id(request_id),
+                stage="extractive_summary",
+                status="success",
+                duration_ms=(time.perf_counter() - summary_started) * 1000.0,
+                cache_layer=cache_layer,
+                tokens_returned=compute_approx_tokens(cleaned_text),
             )
             content_cleaning["extractive_summary"] = {
                 "applied": True,
