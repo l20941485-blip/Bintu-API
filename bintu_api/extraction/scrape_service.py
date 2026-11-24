@@ -11,7 +11,13 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from bintu_api.common.fetch import FetchedHTML
+import re
+from bintu_api.common.fetch import FetchedHTML, compute_approx_tokens
+from bintu_api.extraction.quality import assess_content_quality
+from bintu_api.extraction.quality_policy import (
+    QualityPolicy,
+    enforce_quality_policy,
+)
 from bintu_api.common.resolution import (
     ResolvedTarget,
     prepare_fetch_target,
@@ -59,6 +65,25 @@ from bintu_api.extraction.summary_cache import (
 )
 
 logger = logging.getLogger("bintu_api.scrape")
+
+
+
+
+def _count_quality_markdown_sections(text: str) -> tuple[int, int]:
+    """Count Markdown headings and those with non-empty body content."""
+    lines = text.splitlines()
+    headings = [
+        idx for idx, line in enumerate(lines)
+        if re.match(r"^#{1,6}\s+\S", line.strip())
+    ]
+    if not headings:
+        return 0, 0
+    complete = 0
+    for pos, heading_idx in enumerate(headings):
+        end = headings[pos + 1] if pos + 1 < len(headings) else len(lines)
+        if "\n".join(lines[heading_idx + 1 : end]).strip():
+            complete += 1
+    return len(headings), complete
 
 
 class ScrapeService:
@@ -376,6 +401,34 @@ class ScrapeService:
             text=cleaned_text,
             truncated=extracted.truncated,
         )
+
+        if cache_layer == "none":
+            policy_mode = getattr(settings, "quality_policy_mode", "observe")
+            minimum_score = getattr(settings, "quality_minimum_score", 0.0)
+            min_extracted_tokens = getattr(settings, "quality_min_extracted_tokens", 0)
+            min_yield_ratio = getattr(settings, "quality_min_yield_ratio", 0.0)
+            extracted_tokens = compute_approx_tokens(cleaned_text)
+            html_tokens = compute_approx_tokens(self.source_decoder(document))
+            total_sections, complete_sections = _count_quality_markdown_sections(cleaned_text)
+            quality_assessment = assess_content_quality(
+                extracted_characters=len(cleaned_text),
+                boilerplate_characters=0,
+                pre_cleaning_characters=pre_cleaning_characters,
+                total_sections=total_sections,
+                complete_sections=complete_sections,
+            )
+            enforce_quality_policy(
+                text=cleaned_text,
+                extracted_tokens=extracted_tokens,
+                html_tokens=html_tokens,
+                quality=quality_assessment,
+                policy=QualityPolicy(
+                    mode=policy_mode,
+                    minimum_score=minimum_score,
+                ),
+                min_extracted_tokens=min_extracted_tokens if min_extracted_tokens > 0 else None,
+                min_yield_ratio=min_yield_ratio if min_yield_ratio > 0.0 else None,
+            )
 
         write_memory_cache(
             self.cache,

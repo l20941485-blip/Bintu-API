@@ -131,3 +131,104 @@ def test_unknown_policy_mode_is_rejected():
             quality=HIGH_QUALITY,
             policy=policy,
         )
+
+
+def test_empty_extraction_is_rejected():
+    from bintu_api.extraction.quality_policy import (
+        ExtractionQualityError,
+        enforce_quality_policy,
+    )
+
+    policy = QualityPolicy(mode="enforce", minimum_score=0.5)
+    with pytest.raises(ExtractionQualityError):
+        enforce_quality_policy(
+            text="",
+            extracted_tokens=0,
+            html_tokens=1500,
+            quality=ContentQualityAssessment(0.0, 0.0, 0.0, 0.0),
+            policy=policy,
+        )
+
+
+def test_whitespace_only_extraction_is_rejected():
+    from bintu_api.extraction.quality_policy import (
+        ExtractionQualityError,
+        enforce_quality_policy,
+    )
+
+    policy = QualityPolicy(mode="enforce", minimum_score=0.5)
+    with pytest.raises(ExtractionQualityError):
+        enforce_quality_policy(
+            text="   \n\t  ",
+            extracted_tokens=0,
+            html_tokens=1500,
+            quality=ContentQualityAssessment(0.0, 0.0, 0.0, 0.0),
+            policy=policy,
+        )
+
+
+def test_below_minimum_extracted_tokens_is_rejected():
+    from bintu_api.extraction.quality_policy import (
+        ExtractionQualityError,
+        enforce_quality_policy,
+    )
+
+    policy = QualityPolicy(mode="enforce", minimum_score=0.5)
+    with pytest.raises(ExtractionQualityError):
+        enforce_quality_policy(
+            text="Short snippet",
+            extracted_tokens=5,
+            html_tokens=200,
+            quality=ContentQualityAssessment(0.85, 0.02, 0.95, 1.0),
+            policy=policy,
+            min_extracted_tokens=25,
+        )
+
+
+def test_low_yield_ratio_is_rejected():
+    from bintu_api.extraction.quality_policy import (
+        ExtractionQualityError,
+        enforce_quality_policy,
+    )
+
+    policy = QualityPolicy(mode="enforce", minimum_score=0.5)
+    with pytest.raises(ExtractionQualityError):
+        enforce_quality_policy(
+            text="Small extracted text from a large HTML document.",
+            extracted_tokens=40,
+            html_tokens=2000,
+            quality=ContentQualityAssessment(0.85, 0.02, 0.95, 1.0),
+            policy=policy,
+            min_extracted_tokens=10,
+            min_yield_ratio=0.05,
+        )
+
+
+def test_healthy_extraction_passes():
+    from bintu_api.extraction.quality_policy import enforce_quality_policy
+
+    policy = QualityPolicy(mode="enforce", minimum_score=0.5)
+    decision = enforce_quality_policy(
+        text="Substantial extracted article text with enough tokens and clear structure.",
+        extracted_tokens=250,
+        html_tokens=1000,
+        quality=ContentQualityAssessment(0.88, 0.03, 0.92, 1.0),
+        policy=policy,
+        min_extracted_tokens=25,
+        min_yield_ratio=0.05,
+    )
+    assert decision.action == "return"
+
+
+def test_policy_can_be_disabled():
+    from bintu_api.extraction.quality_policy import enforce_quality_policy
+
+    policy = QualityPolicy(mode="observe", minimum_score=0.9)
+    decision = enforce_quality_policy(
+        text="",
+        extracted_tokens=0,
+        html_tokens=5000,
+        quality=ContentQualityAssessment(0.0, 1.0, 0.0, 0.0),
+        policy=policy,
+    )
+    assert decision.action == "return"

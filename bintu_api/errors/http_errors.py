@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from fastapi import HTTPException
+from bintu_api.extraction.quality_policy import ExtractionQualityError
 
 from bintu_api.observability import log_upstream_error
 from bintu_api.scraper.fetcher import (
@@ -72,6 +73,16 @@ def translate_upstream_error(
     error: Exception, *, url: str, request_id: str
 ) -> HTTPException:
     """Translate a scraper exception into an HTTPException response."""
+    if isinstance(error, ExtractionQualityError):
+        return HTTPException(
+            status_code=422,
+            detail={
+                "code": "quality_policy_rejected",
+                "reason": error.reason,
+                "message": "Extracted content did not satisfy the configured quality policy.",
+                "warnings": list(error.warnings),
+            },
+        )
     if isinstance(error, RedirectedToPrivateNetwork):
         log_upstream_error(
             error_type="redirect_to_private_network",

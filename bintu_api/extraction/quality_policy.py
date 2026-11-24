@@ -71,3 +71,84 @@ def evaluate_quality_policy(
             warnings=("quality_below_threshold",),
         )
     return QualityPolicyDecision(action="return")
+
+
+class ExtractionQualityError(Exception):
+    """Raised when extraction fails the configured quality policy."""
+
+    def __init__(
+        self,
+        reason: str = "quality_policy_rejected",
+        *,
+        warnings: tuple[str, ...] = (),
+        details: dict[str, object] | None = None,
+    ) -> None:
+        self.reason = reason
+        self.warnings = warnings
+        self.details = details or {}
+        super().__init__(reason)
+
+
+def enforce_quality_policy(
+    *,
+    text: str,
+    extracted_tokens: int,
+    html_tokens: int,
+    quality: ContentQualityAssessment,
+    policy: QualityPolicy,
+    min_extracted_tokens: int | None = None,
+    min_yield_ratio: float | None = None,
+) -> QualityPolicyDecision:
+    """Enforce a quality policy on extracted content and raise on rejection."""
+    decision = evaluate_quality_policy(
+        quality=quality,
+        policy=policy,
+    )
+
+    if policy.mode != "enforce":
+        return decision
+
+    if not text or not text.strip():
+        raise ExtractionQualityError(
+            "empty_extraction",
+            warnings=("empty_extraction", *decision.warnings),
+            details={"extracted_tokens": extracted_tokens, "html_tokens": html_tokens},
+        )
+
+    if min_extracted_tokens is not None and extracted_tokens < min_extracted_tokens:
+        raise ExtractionQualityError(
+            "below_minimum_extracted_tokens",
+            warnings=("below_minimum_extracted_tokens", *decision.warnings),
+            details={
+                "extracted_tokens": extracted_tokens,
+                "min_extracted_tokens": min_extracted_tokens,
+            },
+        )
+
+    if (
+        min_yield_ratio is not None
+        and html_tokens > 0
+        and (extracted_tokens / html_tokens) < min_yield_ratio
+    ):
+        raise ExtractionQualityError(
+            "low_yield_ratio",
+            warnings=("low_yield_ratio", *decision.warnings),
+            details={
+                "extracted_tokens": extracted_tokens,
+                "html_tokens": html_tokens,
+                "yield_ratio": round(extracted_tokens / html_tokens, 4),
+                "min_yield_ratio": min_yield_ratio,
+            },
+        )
+
+    if decision.action == "reject":
+        raise ExtractionQualityError(
+            "quality_below_threshold",
+            warnings=decision.warnings,
+            details={
+                "score": quality.score,
+                "minimum_score": policy.minimum_score,
+            },
+        )
+
+    return decision

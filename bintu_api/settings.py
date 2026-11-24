@@ -127,6 +127,41 @@ def _https_to_http_redirect_allowed_domains_env() -> frozenset[str]:
     return frozenset(domains)
 
 
+def _quality_policy_mode_env() -> str:
+    """QUALITY_POLICY_MODE: observe (default) | warn | enforce."""
+    raw = os.getenv("QUALITY_POLICY_MODE", "").strip().lower()
+    if not raw:
+        return "observe"
+    if raw in ("observe", "warn", "enforce"):
+        return raw
+    logger.warning(
+        "invalid_env_value name=QUALITY_POLICY_MODE value=%r using_default=observe",
+        raw,
+    )
+    return "observe"
+
+
+def _quality_float_0_1_env(name: str, default: float = 0.0) -> float:
+    """Read a float in [0.0, 1.0] from env, falling back safely to default."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("invalid_env_value name=%s value=%r using_default=%s", name, raw, default)
+        return default
+    if not (0.0 <= value <= 1.0):
+        logger.warning(
+            "out_of_range_env_value name=%s value=%s allowed=0.0..1.0 using_default=%s",
+            name,
+            value,
+            default,
+        )
+        return default
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     api_key: str
@@ -185,6 +220,10 @@ class Settings:
     # parse time so the service cannot be used as a public host/port probe
     # (S8). Override with ALLOWED_PORTS.
     allowed_ports: str = ""
+    quality_policy_mode: str = "observe"
+    quality_minimum_score: float = 0.0
+    quality_min_extracted_tokens: int = 0
+    quality_min_yield_ratio: float = 0.0
     service_description: str = (
         "Extract readable text from public HTML pages. JavaScript rendering is "
         "disabled unless explicitly enabled. Responses are bounded, requests are "
@@ -240,6 +279,10 @@ class Settings:
             robots_cache_ttl_seconds=_bounded_int_env("ROBOTS_CACHE_TTL_SECONDS", 3600, minimum=0, maximum=86400),
             cors_allowed_origins=os.getenv("CORS_ALLOWED_ORIGINS", "").strip(),
             allowed_ports=os.getenv("ALLOWED_PORTS", "").strip(),
+            quality_policy_mode=_quality_policy_mode_env(),
+            quality_minimum_score=_quality_float_0_1_env("QUALITY_MINIMUM_SCORE", 0.0),
+            quality_min_extracted_tokens=_bounded_int_env("QUALITY_MIN_EXTRACTED_TOKENS", 0, minimum=0, maximum=100000),
+            quality_min_yield_ratio=_quality_float_0_1_env("QUALITY_MIN_YIELD_RATIO", 0.0),
         )
         if settings.render_js_enabled:
             logger.warning(
