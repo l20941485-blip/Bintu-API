@@ -227,6 +227,8 @@ async def test_main_content_only_applies_with_links_false():
         "utf-8",
         "https://example.com/final",
         links="false",
+        footnote_url_policy="truncated",
+        max_footnote_url_length=100,
     )
     assert result.markdown == ("Cleaned article content. " * 1000).rstrip()
     assert result.content_cleaning == {
@@ -274,12 +276,7 @@ async def test_terminal_section_exclusion_preserves_explicit_sections():
     cache = FakeCache()
     request = make_request(cache, database_client=object())
     service = make_service(cache)
-    markdown = (
-        "# Article\n\n"
-        "Meaningful body content.\n\n"
-        "## References\n\n"
-        "[1] Example reference."
-    )
+    markdown = "# Article\n\nMeaningful body content.\n\n## References\n\n[1] Example reference."
 
     with patch(
         "bintu_api.extraction.scrape_service.extract_main_content",

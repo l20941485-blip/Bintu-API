@@ -203,8 +203,7 @@ def _footnote_destination_key(destination: str) -> str:
 
     host = f"[{hostname.lower()}]" if ":" in hostname else hostname.lower()
     if port is not None and not (
-        (parts.scheme.lower() == "http" and port == 80)
-        or (parts.scheme.lower() == "https" and port == 443)
+        (parts.scheme.lower() == "http" and port == 80) or (parts.scheme.lower() == "https" and port == 443)
     ):
         host = f"{host}:{port}"
 
@@ -226,8 +225,7 @@ def _footnote_display_label(destination: str, max_length: int) -> str:
             port = None
 
         if port is not None and not (
-            (parts.scheme.lower() == "http" and port == 80)
-            or (parts.scheme.lower() == "https" and port == 443)
+            (parts.scheme.lower() == "http" and port == 80) or (parts.scheme.lower() == "https" and port == 443)
         ):
             host = f"{host}:{port}"
 
@@ -239,7 +237,7 @@ def _footnote_display_label(destination: str, max_length: int) -> str:
         return label
     if max_length == 1:
         return "…"
-    return f"{label[:max_length - 1]}…"
+    return f"{label[: max_length - 1]}…"
 
 
 PRE_NL = "\x01"
@@ -398,6 +396,8 @@ def extract_main_content(
     from_encoding: str | None,
     base_url: str | None,
     links: str = "inline",
+    footnote_url_policy: Literal["full", "truncated"] = "truncated",
+    max_footnote_url_length: int = 100,
 ) -> tuple[str, bool]:
     """Extract the primary article or documentation container as Markdown.
 
@@ -417,7 +417,7 @@ def extract_main_content(
             html,
             url=base_url,
             output_format="markdown",
-            include_links=links == "inline",
+            include_links=links != "false",
             include_tables=True,
         )
     except Exception as error:
@@ -435,7 +435,67 @@ def extract_main_content(
     if len(cleaned) < 200:
         return "", False
 
-    truncated = cleaned[:max_characters]
+    footnote_block = ""
+    if links == "footnotes":
+        footnote_map: dict[str, int] = {}
+        footnote_lines: list[str] = []
+
+        def _collect_footnote(match: re.Match[str]) -> str:
+            label_text = match.group(1).strip()
+            destination = match.group(2).strip()
+            if not destination:
+                return label_text
+            if destination not in footnote_map:
+                idx = len(footnote_map) + 1
+                footnote_map[destination] = idx
+                display_label = _footnote_display_label(
+                    destination,
+                    max_footnote_url_length,
+                )
+                escaped_label = display_label.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+                if footnote_url_policy == "truncated" and len(destination) > max_footnote_url_length:
+                    footnote_lines.append(f"{idx}. {escaped_label} [URL truncated]")
+                else:
+                    footnote_lines.append(f"{idx}. [{escaped_label}](<{destination}>)")
+            ref_num = footnote_map[destination]
+            return f"{label_text} [{ref_num}]"
+
+        # Replace markdown links [label](url) without raw character-class brackets
+        parts = cleaned.split("[")
+        if len(parts) > 1:
+            rebuilt = [parts[0]]
+            for seg in parts[1:]:
+                if "](" in seg and ")" in seg.split("](", 1)[1]:
+                    lbl, rest = seg.split("](", 1)
+                    dest, after = rest.split(")", 1)
+                    if "\n" not in lbl and "\r" not in lbl and " " not in dest and "\t" not in dest:
+                        dest_clean = dest.strip()
+                        lbl_clean = lbl.strip()
+                        if dest_clean:
+                            if dest_clean not in footnote_map:
+                                idx = len(footnote_map) + 1
+                                footnote_map[dest_clean] = idx
+                                display_label = _footnote_display_label(
+                                    dest_clean,
+                                    max_footnote_url_length,
+                                )
+                                escaped_label = (
+                                    display_label.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+                                )
+                                if footnote_url_policy == "truncated" and len(dest_clean) > max_footnote_url_length:
+                                    footnote_lines.append(f"{idx}. {escaped_label} [URL truncated]")
+                                else:
+                                    footnote_lines.append(f"{idx}. [{escaped_label}](<{dest_clean}>)")
+                            ref_num = footnote_map[dest_clean]
+                            rebuilt.append(f"{lbl_clean} [{ref_num}]{after}")
+                            continue
+                rebuilt.append("[" + seg)
+            cleaned = "".join(rebuilt)
+        if footnote_lines:
+            footnote_block = "\n\n## Links\n" + "\n".join(footnote_lines)
+
+    combined = cleaned + footnote_block
+    truncated = combined[:max_characters]
     truncated = close_open_fence(truncated)
 
     return truncated, True
@@ -488,16 +548,9 @@ def extract_text_result(
         and max_footnote_url_length is not None
         and footnote_display_max_length != max_footnote_url_length
     ):
-        raise ValueError(
-            "Specify either max_footnote_url_length or "
-            "footnote_display_max_length, not both"
-        )
+        raise ValueError("Specify either max_footnote_url_length or footnote_display_max_length, not both")
     if max_footnote_url_length is None:
-        max_footnote_url_length = (
-            footnote_display_max_length
-            if footnote_display_max_length is not None
-            else 100
-        )
+        max_footnote_url_length = footnote_display_max_length if footnote_display_max_length is not None else 100
     if links == "footnotes" and max_footnote_url_length < 1:
         raise ValueError("max_footnote_url_length must be greater than zero")
 
@@ -652,9 +705,7 @@ def extract_text_result(
             continue
 
         href_parts = urlsplit(href)
-        original_destination = (
-            href if href_parts.scheme and href_parts.netloc else urljoin(base_url, href)
-        )
+        original_destination = href if href_parts.scheme and href_parts.netloc else urljoin(base_url, href)
         resolved = urlsplit(original_destination)
 
         if resolved.scheme not in {"http", "https"} or not resolved.hostname:
@@ -775,22 +826,11 @@ def extract_text_result(
                 destination,
                 max_footnote_url_length,
             )
-            escaped_label = (
-                display_label.replace("\\", "\\\\")
-                .replace("[", "\\[")
-                .replace("]", "\\]")
-            )
-            if (
-                footnote_url_policy == "truncated"
-                and len(destination) > max_footnote_url_length
-            ):
-                footnote_lines.append(
-                    f"{index}. {escaped_label} [URL truncated]"
-                )
+            escaped_label = display_label.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+            if footnote_url_policy == "truncated" and len(destination) > max_footnote_url_length:
+                footnote_lines.append(f"{index}. {escaped_label} [URL truncated]")
             else:
-                footnote_lines.append(
-                    f"{index}. [{escaped_label}](<{destination}>)"
-                )
+                footnote_lines.append(f"{index}. [{escaped_label}](<{destination}>)")
         footnote_block = "\n\n## Links\n" + "\n".join(footnote_lines)
 
     text = "\n".join(lines)
@@ -800,7 +840,6 @@ def extract_text_result(
 
     fallback_text = None
     if len(bs4_text) == 0 and comment_thread_root is None:
-
         fallback_text = _trafilatura_fallback(
             html_bytes,
             max_characters,
@@ -822,9 +861,6 @@ def extract_text_result(
         footnote_block,
         max_characters,
     )
-
-
-
 
 
 def extract_page_title(soup) -> tuple[str | None, str]:

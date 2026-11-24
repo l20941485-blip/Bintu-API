@@ -261,9 +261,7 @@ class ScrapeService:
                 status="hit",
                 duration_ms=memory_lookup_duration_ms,
                 cache_layer=cache_layer,
-                tokens_returned=compute_approx_tokens(
-                    (self.source_decoder or decode_source_text)(document)
-                ),
+                tokens_returned=compute_approx_tokens((self.source_decoder or decode_source_text)(document)),
             )
             self.cache_event_logger(
                 event="cache_hit",
@@ -355,7 +353,9 @@ class ScrapeService:
                 extraction_cap,
                 document.charset,
                 document.final_url or url,
-                links=links,
+                links=options.links,
+                footnote_url_policy=options.footnote_url_policy,
+                max_footnote_url_length=options.max_footnote_url_length,
             )
 
             if cleaning_applied and exclude_terminal_sections and not sections:
