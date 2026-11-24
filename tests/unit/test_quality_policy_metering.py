@@ -193,3 +193,61 @@ def test_enforce_passing_quality_remains_billable():
     assert event.quality_rejected is False
     assert event.billing is not None
     assert event.billing.billable_units == 9
+
+def test_slice3_stage_trace_records_cache_lookup_policy_pass_and_cache_write() -> None:
+    from bintu_api.observability import get_stage_traces, record_stage_trace
+
+    request_id = "req-slice3-trace-check"
+
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_lookup",
+        status="hit",
+        duration_ms=1.25,
+        cache_layer="memory",
+        tokens_returned=120,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_lookup",
+        status="miss",
+        duration_ms=0.85,
+        cache_layer="none",
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="quality_policy",
+        status="passed",
+        duration_ms=2.40,
+        cache_layer="none",
+        quality_score=0.92,
+        tokens_returned=350,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_write",
+        status="success",
+        duration_ms=3.10,
+        cache_layer="memory",
+        tokens_returned=350,
+    )
+    record_stage_trace(
+        request_id=request_id,
+        stage="cache_write",
+        status="success",
+        duration_ms=9.50,
+        cache_layer="persistent",
+        tokens_returned=350,
+    )
+
+    traces = get_stage_traces(request_id)
+    assert [(item["stage"], item["status"], item["cache_layer"]) for item in traces] == [
+        ("cache_lookup", "hit", "memory"),
+        ("cache_lookup", "miss", "none"),
+        ("quality_policy", "passed", "none"),
+        ("cache_write", "success", "memory"),
+        ("cache_write", "success", "persistent"),
+    ]
+    assert traces[2]["quality_score"] == 0.92
+    assert traces[3]["tokens_returned"] == 350
+    assert traces[4]["tokens_returned"] == 350

@@ -235,6 +235,7 @@ class ScrapeService:
             )
             return document, result, cache_layer, revalidated
 
+        memory_lookup_started = time.perf_counter()
         memory_entry = await read_memory_cache(
             self.cache,
             cache_key,
@@ -248,10 +249,20 @@ class ScrapeService:
         )
 
         fresh_memory_hit = memory_entry is not None and memory_cache_fresh
+        memory_lookup_duration_ms = (time.perf_counter() - memory_lookup_started) * 1000.0
 
         if fresh_memory_hit:
             document = memory_entry.document
             cache_layer = "memory"
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=get_or_create_trace_id(request_id),
+                stage="cache_lookup",
+                status="hit",
+                duration_ms=memory_lookup_duration_ms,
+                cache_layer=cache_layer,
+                tokens_returned=compute_approx_tokens(memory_entry.text),
+            )
             self.cache_event_logger(
                 event="cache_hit",
                 url=url,
@@ -260,6 +271,14 @@ class ScrapeService:
             )
         else:
             if memory_entry is not None:
+                record_stage_trace(
+                    request_id=request_id,
+                    trace_id=get_or_create_trace_id(request_id),
+                    stage="cache_lookup",
+                    status="stale",
+                    duration_ms=memory_lookup_duration_ms,
+                    cache_layer="memory",
+                )
                 self.cache_event_logger(
                     event="stale_cache_refresh",
                     url=url,
@@ -267,6 +286,14 @@ class ScrapeService:
                     layer="memory",
                 )
             else:
+                record_stage_trace(
+                    request_id=request_id,
+                    trace_id=get_or_create_trace_id(request_id),
+                    stage="cache_lookup",
+                    status="miss",
+                    duration_ms=memory_lookup_duration_ms,
+                    cache_layer="none",
+                )
                 self.cache_event_logger(
                     event="cache_miss",
                     url=url,
@@ -465,7 +492,18 @@ class ScrapeService:
                     tokens_returned=extracted_tokens,
                 )
                 raise
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=get_or_create_trace_id(request_id),
+                stage="quality_policy",
+                status="passed",
+                duration_ms=(time.perf_counter() - policy_started) * 1000.0,
+                cache_layer=cache_layer,
+                quality_score=getattr(quality_assessment, "score", None),
+                tokens_returned=extracted_tokens,
+            )
 
+        mem_write_started = time.perf_counter()
         write_memory_cache(
             self.cache,
             cache_key,
@@ -473,6 +511,15 @@ class ScrapeService:
             cache_layer,
             cleaned_text,
             extracted_at,
+        )
+        record_stage_trace(
+            request_id=request_id,
+            trace_id=get_or_create_trace_id(request_id),
+            stage="cache_write",
+            status="success",
+            duration_ms=(time.perf_counter() - mem_write_started) * 1000.0,
+            cache_layer="memory",
+            tokens_returned=compute_approx_tokens(cleaned_text),
         )
 
         result = build_cached_markdown(
@@ -493,6 +540,7 @@ class ScrapeService:
         ):
             from bintu_api.extraction.output import redact_cache_url
 
+            persist_write_started = time.perf_counter()
             await write_persistent_cache(
                 database_client,
                 redact_cache_url(url),
@@ -503,6 +551,15 @@ class ScrapeService:
                 result,
                 self.persistent_cache_writer,
                 request_id=request_id,
+            )
+            record_stage_trace(
+                request_id=request_id,
+                trace_id=get_or_create_trace_id(request_id),
+                stage="cache_write",
+                status="success",
+                duration_ms=(time.perf_counter() - persist_write_started) * 1000.0,
+                cache_layer="persistent",
+                tokens_returned=getattr(result, "tokens", None),
             )
 
         return document, result, cache_layer, revalidated
