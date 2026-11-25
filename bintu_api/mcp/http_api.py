@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Security
 from pydantic import ValidationError
 
 from bintu_api.api import mcp_adapter
-from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
+from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result, retry_policy_for_code
 from bintu_api.mcp.assistant import assistant_tool_definition
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
@@ -53,12 +53,12 @@ def _mcp_error_response(
     hint: str,
 ) -> dict[str, Any]:
     """Return a stable in-band tool error."""
-    normalized_code = code.strip().lower().replace("-", "_").replace(" ", "_")
-    retry_with = "render_js=false" if normalized_code == "render_js_disabled" else None
+    retryable, retry_with = retry_policy_for_code(code)
     error = ToolError(
         code=code,
         message=message,
         hint=hint.strip() or None,
+        retryable=retryable,
         retry_with=retry_with,
     )
     logger.info("mcp_tool_error code=%s", error.code)

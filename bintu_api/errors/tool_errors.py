@@ -37,6 +37,35 @@ class ToolError:
             object.__setattr__(self, "retry_with", str(self.retry_with))
 
 
+
+
+_RETRY_AFTER_DELAY_CODES = frozenset({
+    "upstream_rate_limited",
+    "upstream_service_unavailable",
+})
+_RETRY_LATER_CODES = frozenset({
+    "upstream_timeout",
+    "upstream_connection_error",
+    "robots_unreachable",
+})
+_RENDER_JS_FALLBACK_CODES = frozenset({
+    "render_js_disabled",
+    "upstream_render_error",
+})
+
+
+def retry_policy_for_code(code: str) -> tuple[bool, str | None]:
+    """Return canonical (retryable, retry_with) metadata for an error code."""
+    normalized = normalize_error_code(code) if isinstance(code, str) and code.strip() else ""
+    if normalized in _RETRY_AFTER_DELAY_CODES:
+        return True, "retry_after_delay"
+    if normalized in _RETRY_LATER_CODES:
+        return True, "retry_later"
+    if normalized in _RENDER_JS_FALLBACK_CODES:
+        return False, "render_js=false"
+    return False, None
+
+
 def build_mcp_tool_error_result(error: ToolError) -> dict[str, Any]:
     structured_error = asdict(error)
     if error.hint is None:

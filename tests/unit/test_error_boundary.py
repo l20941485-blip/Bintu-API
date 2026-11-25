@@ -120,3 +120,31 @@ def test_http_and_streamable_mcp_render_js_and_url_error_parity() -> None:
         )
     )
     assert http_url["structuredContent"] == streamable_url["structuredContent"]
+
+
+def test_http_and_streamable_mcp_retryable_error_parity() -> None:
+    from fastapi import HTTPException
+
+    from bintu_api.mcp.http_api import _mcp_error_response
+    from bintu_api.mcp.streamable import _tool_error_for_http_exception, _tool_error_result
+
+    cases = [
+        ("upstream_rate_limited", "Rate limited.", "Wait before retrying.", True, "retry_after_delay"),
+        ("upstream_timeout", "Timed out.", "Retry later.", True, "retry_later"),
+        ("upstream_connection_error", "Connection failed.", "Retry later.", True, "retry_later"),
+        ("upstream_access_denied", "Access denied.", "Try another URL.", False, None),
+    ]
+    for code, message, hint, expected_retryable, expected_retry_with in cases:
+        http_res = _mcp_error_response(code, message, hint)
+        stream_res = _tool_error_result(
+            _tool_error_for_http_exception(
+                HTTPException(
+                    status_code=429 if code == "upstream_rate_limited" else 502,
+                    detail={"code": code, "message": message, "hint": hint},
+                )
+            )
+        )
+        assert http_res["structuredContent"] == stream_res["structuredContent"]
+        err = http_res["structuredContent"]["error"]
+        assert err["retryable"] is expected_retryable
+        assert err.get("retry_with") == expected_retry_with
