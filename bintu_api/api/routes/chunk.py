@@ -73,6 +73,7 @@ async def scrape_chunks(
             detail={
                 "code": "invalid_token_budget",
                 "message": "max_tokens must be between 100 and 50000.",
+                "hint": "Set max_tokens between 100 and 50000.",
             },
         )
 
@@ -82,6 +83,7 @@ async def scrape_chunks(
             detail={
                 "code": "invalid_overlap_budget",
                 "message": "overlap_tokens must be non-negative and less than max_tokens.",
+                "hint": "Set overlap_tokens between 0 and max_tokens - 1.",
             },
         )
 

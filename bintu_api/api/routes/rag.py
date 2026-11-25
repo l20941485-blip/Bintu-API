@@ -73,6 +73,7 @@ async def answer_question(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -143,6 +144,7 @@ async def mobile_answer_question(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -213,6 +215,7 @@ async def mobile_ingest_knowledge(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -255,6 +258,7 @@ async def mobile_ingest_knowledge(
             detail={
                 "code": "no_ingestable_content",
                 "message": "The page did not contain ingestable readable content.",
+                "hint": "Check that the target page contains extractable text or try a different URL.",
             },
         )
 
@@ -321,6 +325,7 @@ async def answer_documentation_question(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -386,6 +391,7 @@ async def ingest_documentation(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -428,6 +434,7 @@ async def ingest_documentation(
             detail={
                 "code": "no_ingestable_content",
                 "message": "The page did not contain ingestable readable content.",
+                "hint": "Check that the target page contains extractable text or try a different URL.",
             },
         )
 
@@ -499,6 +506,7 @@ async def list_mobile_rag_documents(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -514,6 +522,7 @@ async def list_mobile_rag_documents(
             detail={
                 "code": "invalid_limit",
                 "message": "limit must be between 1 and 100.",
+                "hint": "Pass limit between 1 and 100.",
             },
         )
 
@@ -523,6 +532,7 @@ async def list_mobile_rag_documents(
             detail={
                 "code": "invalid_offset",
                 "message": "offset must not be negative.",
+                "hint": "Pass a non-negative offset (0 or greater).",
             },
         )
 
@@ -584,6 +594,7 @@ async def delete_mobile_rag_document(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -605,6 +616,7 @@ async def delete_mobile_rag_document(
             detail={
                 "code": "document_not_found",
                 "message": "The requested knowledge document was not found.",
+                "hint": "Verify the document_id or list stored documents first.",
             },
         )
 
@@ -646,6 +658,7 @@ async def get_mobile_rag_document(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -667,6 +680,7 @@ async def get_mobile_rag_document(
             detail={
                 "code": "document_not_found",
                 "message": "The requested knowledge document was not found.",
+                "hint": "Verify the document_id or list stored documents first.",
             },
         )
 
@@ -736,6 +750,7 @@ async def refresh_mobile_rag_document(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -757,6 +772,7 @@ async def refresh_mobile_rag_document(
             detail={
                 "code": "document_not_found",
                 "message": "The requested knowledge document was not found.",
+                "hint": "Verify the document_id or list stored documents first.",
             },
         )
 
@@ -795,6 +811,7 @@ async def refresh_mobile_rag_document(
             detail={
                 "code": "no_ingestable_content",
                 "message": "The page did not contain ingestable readable content.",
+                "hint": "Check that the target page contains extractable text or try a different URL.",
             },
         )
 
