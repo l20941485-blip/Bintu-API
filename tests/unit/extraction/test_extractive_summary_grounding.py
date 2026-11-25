@@ -58,3 +58,31 @@ def test_leading_mode_preserves_exact_source_spans():
 
     for sentence in summary.sentences:
         assert MARKDOWN[sentence.char_start:sentence.char_end] == sentence.text
+
+
+REDUNDANT_MARKDOWN = (
+    "# Retrieval Architecture\n\n"
+    "In this guide, we examine key behavior.\n\n"
+    "Indexing chunks improves semantic retrieval accuracy across documents.\n\n"
+    "Indexing chunks improves semantic retrieval accuracy across documents.\n\n"
+    "Preserving heading paths keeps section context grounded during synthesis."
+)
+
+
+def test_key_sentences_suppresses_duplicates_and_preserves_source_order():
+    summary = build_extractive_summary(
+        REDUNDANT_MARKDOWN,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+
+    texts = [sentence.text for sentence in summary.sentences]
+    assert len(texts) == 2
+    assert len(set(texts)) == 2
+    assert summary.sentences[0].char_start < summary.sentences[1].char_start
+
+    for sentence in summary.sentences:
+        assert (
+            REDUNDANT_MARKDOWN[sentence.char_start:sentence.char_end]
+            == sentence.text
+        )

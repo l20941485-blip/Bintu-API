@@ -259,6 +259,22 @@ def _jaccard_similarity(
     return intersection / union
 
 
+_GENERIC_OPENER_PREFIXES = (
+    "in this article",
+    "in this guide",
+    "in this post",
+    "click here",
+    "learn more",
+    "read more",
+    "subscribe to",
+)
+
+
+def _has_generic_opener(sentence: str) -> bool:
+    normalized = " ".join(sentence.strip().lower().split())
+    return any(normalized.startswith(prefix) for prefix in _GENERIC_OPENER_PREFIXES)
+
+
 def _salience_score(
     sentence: str,
     heading_path: tuple[str, ...],
@@ -266,12 +282,26 @@ def _salience_score(
     candidate_count: int,
 ) -> float:
     tokens = _content_tokens(sentence)
+    heading_tokens = _content_tokens(" ".join(heading_path))
 
     length_score = min(1.0, len(tokens) / 18.0)
     position_score = 1.0 - (position / max(1, candidate_count))
-    heading_score = min(1.0, len(heading_path) / 3.0)
 
-    return 0.55 * length_score + 0.30 * position_score + 0.15 * heading_score
+    depth_score = min(1.0, len(heading_path) / 3.0)
+    if heading_tokens and tokens:
+        overlap_ratio = len(tokens & heading_tokens) / len(heading_tokens)
+        heading_score = 0.5 * depth_score + 0.5 * min(1.0, overlap_ratio)
+    else:
+        heading_score = depth_score
+
+    opener_penalty = 0.12 if _has_generic_opener(sentence) else 0.0
+    score = (
+        0.55 * length_score
+        + 0.30 * position_score
+        + 0.15 * heading_score
+        - opener_penalty
+    )
+    return max(0.0, score)
 
 
 def _select_key_sentences(
@@ -301,21 +331,21 @@ def _select_key_sentences(
     remaining = list(scored)
 
     while remaining and len(selected) < sentence_count:
-        selected_tokens = [item[2] for item in selected]
+        selected_token_sets = [item[2] for item in selected]
 
-        if not selected_tokens:
+        if not selected_token_sets:
             available = remaining
         else:
             available = [
                 item
                 for item in remaining
                 if all(
-                    _jaccard_similarity(item[6], token) < 0.85
-                    for token in selected_tokens
+                    _jaccard_similarity(item[6], token_set) < 0.85
+                    for token_set in selected_token_sets
                 )
             ] or remaining
 
-        if not selected_tokens:
+        if not selected_token_sets:
             best = min(
                 available,
                 key=lambda item: (-item[0], item[1]),
@@ -323,11 +353,11 @@ def _select_key_sentences(
         else:
             def redundancy_penalty(
                 item,
-                _selected_tokens=selected_tokens,
+                _selected_token_sets=selected_token_sets,
             ):
                 maximum = max(
-                    _jaccard_similarity(item[6], token)
-                    for token in _selected_tokens
+                    _jaccard_similarity(item[6], token_set)
+                    for token_set in _selected_token_sets
                 )
                 return -(item[0] - 0.65 * maximum)
 
@@ -387,6 +417,8 @@ def build_extractive_summary(
     else:
         selected = _select_key_sentences(candidates, sentence_count)
 
+    selected_set = set(selected)
+
     sentences = tuple(
         SummarySentence(
             text=text,
@@ -401,13 +433,13 @@ def build_extractive_summary(
             ),
         )
         for index, (text, start, end, heading_path) in enumerate(candidates)
-        if (text, start, end, heading_path) in selected
+        if (text, start, end, heading_path) in selected_set
     )
 
     selected_indices = tuple(
         index
         for index, candidate in enumerate(candidates)
-        if candidate in selected
+        if candidate in selected_set
     )
 
     return ExtractiveSummary(
