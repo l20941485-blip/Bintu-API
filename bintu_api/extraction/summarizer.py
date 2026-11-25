@@ -129,9 +129,7 @@ _CJK_SENTENCE_BOUNDARY_RE = re.compile(
     r"(?=[\"')\]]*|$)"
 )
 
-_SENTENCE_BOUNDARY_RE = re.compile(
-    rf"(?:{_LATIN_SENTENCE_BOUNDARY_RE.pattern}|{_CJK_SENTENCE_BOUNDARY_RE.pattern})"
-)
+_SENTENCE_BOUNDARY_RE = re.compile(rf"(?:{_LATIN_SENTENCE_BOUNDARY_RE.pattern}|{_CJK_SENTENCE_BOUNDARY_RE.pattern})")
 
 _ABBREVIATION_SUFFIX_RE = re.compile(
     r"(?:\b(?:e\.g|i\.e|etc|vs|dr|mr|mrs|ms|prof|fig|no|vol|pp|st)\.|(?:\b[a-zA-Z]\.){2,})$",
@@ -173,11 +171,7 @@ def _split_line_sentences(stripped: str) -> list[str]:
 
 
 def _is_inside_fence(lines: list[str], index: int) -> bool:
-    fence_count = sum(
-        1
-        for line in lines[: index + 1]
-        if _FENCE_RE.match(line.strip())
-    )
+    fence_count = sum(1 for line in lines[: index + 1] if _FENCE_RE.match(line.strip()))
     return fence_count % 2 == 1
 
 
@@ -237,7 +231,41 @@ def _split_extractive_sentences(
 _CJK_CHARACTER_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
 
+_LIST_ITEM_PREFIX_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+")
+_SENTENCE_END_RE = re.compile(r'[.!?]["\')\]]*$')
+_ALL_WORDS_RE = re.compile(r"[A-Za-z0-9_]+")
+_TITLE_OR_UPPER_WORD_RE = re.compile(r"^(?:[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)*|[A-Z0-9._-]{2,})$")
+
+
+def _is_non_sentence_fragment(sentence: str) -> bool:
+    stripped = sentence.strip()
+    if not stripped:
+        return True
+
+    # Pipe-delimited Markdown table rows or infobox separators
+    if stripped.startswith("|") or stripped.count("|") >= 2:
+        return True
+
+    # Bullet or numbered list items without terminal sentence punctuation
+    if _LIST_ITEM_PREFIX_RE.match(stripped) and not _SENTENCE_END_RE.search(stripped):
+        return True
+
+    # Short capitalized/nav token dumps lacking sentence punctuation (e.g. infobox rows)
+    words = _ALL_WORDS_RE.findall(stripped)
+    if (
+        len(words) >= 3
+        and not _SENTENCE_END_RE.search(stripped)
+        and sum(1 for w in words if _TITLE_OR_UPPER_WORD_RE.match(w)) / len(words) >= 0.75
+    ):
+        return True
+
+    return False
+
+
 def _is_eligible_summary_sentence(sentence: str) -> bool:
+    if _is_non_sentence_fragment(sentence):
+        return False
+
     if len(sentence) >= 30:
         return True
 
@@ -305,6 +333,11 @@ _GENERIC_OPENER_PREFIXES = (
     "learn more",
     "read more",
     "subscribe to",
+    "from wikipedia",
+    "navigation menu",
+    "table of contents",
+    "skip to content",
+    "cookie policy",
 )
 
 
@@ -333,12 +366,7 @@ def _salience_score(
         heading_score = depth_score
 
     opener_penalty = 0.12 if _has_generic_opener(sentence) else 0.0
-    score = (
-        0.55 * length_score
-        + 0.30 * position_score
-        + 0.15 * heading_score
-        - opener_penalty
-    )
+    score = 0.55 * length_score + 0.30 * position_score + 0.15 * heading_score - opener_penalty
     return max(0.0, score)
 
 
@@ -377,10 +405,7 @@ def _select_key_sentences(
             available = [
                 item
                 for item in remaining
-                if all(
-                    _jaccard_similarity(item[6], token_set) < 0.85
-                    for token_set in selected_token_sets
-                )
+                if all(_jaccard_similarity(item[6], token_set) < 0.65 for token_set in selected_token_sets)
             ] or remaining
 
         if not selected_token_sets:
@@ -389,15 +414,13 @@ def _select_key_sentences(
                 key=lambda item: (-item[0], item[1]),
             )
         else:
+
             def redundancy_penalty(
                 item,
                 _selected_token_sets=selected_token_sets,
             ):
-                maximum = max(
-                    _jaccard_similarity(item[6], token_set)
-                    for token_set in _selected_token_sets
-                )
-                return -(item[0] - 0.65 * maximum)
+                maximum = max(_jaccard_similarity(item[6], token_set) for token_set in _selected_token_sets)
+                return -(item[0] - 0.80 * maximum)
 
             best = min(
                 available,
@@ -407,10 +430,7 @@ def _select_key_sentences(
         selected.append((best[1], (best[2], best[3], best[4], best[5]), best[6]))
         remaining.remove(best)
 
-    return [
-        item[1]
-        for item in sorted(selected, key=lambda item: item[0])
-    ]
+    return [item[1] for item in sorted(selected, key=lambda item: item[0])]
 
 
 def build_extractive_summary(
@@ -463,7 +483,9 @@ def build_extractive_summary(
             heading_path=heading_path,
             char_start=start,
             char_end=end,
-            score=1.0 if mode == "leading" else _salience_score(
+            score=1.0
+            if mode == "leading"
+            else _salience_score(
                 text,
                 heading_path,
                 index,
@@ -474,11 +496,7 @@ def build_extractive_summary(
         if (text, start, end, heading_path) in selected_set
     )
 
-    selected_indices = tuple(
-        index
-        for index, candidate in enumerate(candidates)
-        if candidate in selected_set
-    )
+    selected_indices = tuple(index for index, candidate in enumerate(candidates) if candidate in selected_set)
 
     return ExtractiveSummary(
         mode=mode,
@@ -493,9 +511,7 @@ def build_extractive_summary(
             candidate_count=len(candidates),
             selected_indices=selected_indices,
             scores=tuple(sentence.score for sentence in sentences),
-            heading_paths=tuple(
-                sentence.heading_path for sentence in sentences
-            ),
+            heading_paths=tuple(sentence.heading_path for sentence in sentences),
             redundancy_threshold=0.85,
         ),
     )

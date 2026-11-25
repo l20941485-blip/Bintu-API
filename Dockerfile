@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     wget \
     ca-certificates \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies separately from browser installation for a cleaner, reproducible image build.
