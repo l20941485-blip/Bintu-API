@@ -160,3 +160,45 @@ def test_chunk_provenance_includes_content_fingerprint():
 
     assert fingerprint.startswith("sha256:")
     assert fingerprint != "sha256:" + "0" * 64
+
+def test_summarize_chunks_include_provenance():
+    import asyncio
+    import hashlib
+    from types import SimpleNamespace
+
+    from bintu_api.extraction.context import extract_context
+    from bintu_api.extraction.fingerprint import compute_content_fingerprint
+
+    raw_text = (
+        "First sentence of the article for summary provenance.\n"
+        "Second sentence adds extra detail so token budgeting truncates cleanly."
+    )
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(settings=SimpleNamespace())),
+        state=SimpleNamespace(request_id="test-request"),
+        headers={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    result = asyncio.run(
+        extract_context(
+            request=request,
+            identity="contract-test",
+            url="https://example.com/article?token=secret",
+            mode="summarize",
+            max_tokens=16,
+            raw_text=raw_text,
+            html_source_text="<html><head><title>Sample Title</title></head><body>" + raw_text + "</body></html>",
+            extracted_at="2026-11-25T16:46:00+00:00",
+        )
+    )
+
+    assert result.chunks is not None and len(result.chunks) == 1
+    chunk = result.chunks[0]
+    assert chunk["text"] == result.text
+    assert chunk["approx_tokens"] == result.approx_tokens
+    assert chunk["tokens"] == result.approx_tokens
+    assert chunk["source_url"] == "https://example.com/article"
+    assert chunk["final_url"] == "https://example.com/article"
+    assert chunk["extracted_at"] == "2026-11-25T16:46:00+00:00"
+    assert chunk["content_sha256"] == hashlib.sha256(result.text.encode("utf-8")).hexdigest()
+    assert chunk["content_fingerprint"] == compute_content_fingerprint(result.text)

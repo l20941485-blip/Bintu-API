@@ -39,6 +39,7 @@ from bintu_api.extraction.quality import (
     assess_content_quality,
     assess_yield,
     detect_boilerplate_characters,
+    evaluate_content_quality_policy,
 )
 from bintu_api.extraction.rag_chunking import make_chunk_id, split_semantic_chunks
 from bintu_api.extraction.sections import select_sections
@@ -674,6 +675,28 @@ async def extract_context(
                     for key in optional_metadata_keys:
                         chunk.pop(key, None)
 
+        elif mode == "summarize" and chunks:
+            summary_text = final_text or ""
+            summary_provenance = {
+                "page_title": resolved_page_title,
+                "page_title_source": resolved_page_title_source,
+                "content_fingerprint": compute_content_fingerprint(summary_text),
+                "source_url": sanitize_url(url),
+                "final_url": (
+                    document.final_url
+                    if document is not None
+                    and isinstance(document, FetchedHTML)
+                    and document.final_url
+                    else sanitize_url(url)
+                ),
+                "content_sha256": hashlib.sha256(summary_text.encode("utf-8")).hexdigest(),
+                "extracted_at": resolved_extracted_at,
+            }
+            chunks = attach_chunk_provenance(
+                chunks,
+                **summary_provenance,
+            )
+
         tokens_saved_estimate = delivered_savings(
             html_tokens,
             approx_tokens,
@@ -729,6 +752,11 @@ async def extract_context(
         pre_cleaning_characters=len(pre_cleaning_text),
         total_sections=section_count,
         complete_sections=complete_section_count,
+    )
+    quality_assessment = evaluate_content_quality_policy(
+        quality_assessment,
+        policy=getattr(settings, "quality_policy", "observe"),
+        url=url,
     )
 
     return ContextResult(

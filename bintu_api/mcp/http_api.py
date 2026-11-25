@@ -171,6 +171,16 @@ async def call_tool(
             )
         raise
 
+    except Exception as error:
+        # Catch-all for any unexpected errors: return stable MCP error
+        # rather than a malformed payload or 500 status code.
+        logger.exception("unexpected_error MCP tool call")
+        return _mcp_error_response(
+            "internal_error",
+            "An unexpected error occurred during tool execution.",
+            str(error),
+        )
+
     cache_economics = mcp_adapter.build_cache_economics(document, cached, cache_layer)
 
     context = await mcp_adapter.run_extraction(

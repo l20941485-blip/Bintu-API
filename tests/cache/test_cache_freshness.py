@@ -182,6 +182,7 @@ def test_memory_cache_does_not_write_empty_extraction() -> None:
     assert cache.items == {}
 
 
+
 def test_fresh_extraction_is_fresh_without_cache_age():
     settings = Settings(
         api_key="",
@@ -379,3 +380,27 @@ def test_provenance_with_stale_reason_marks_memory_entry_not_fresh() -> None:
     assert provenance.cache.stale_reason == "extractor_version_changed"
     assert provenance.cache.revalidated is True
     assert provenance.cache.fresh is False
+
+
+def test_write_memory_cache_skips_when_already_cached() -> None:
+    cache = FakeMemoryCache()
+    original_doc = MagicMock()
+    replacement_doc = MagicMock()
+    cache.set(
+        "key",
+        MemoryCacheEntry(document=original_doc, extracted_at="2026-01-01T00:00:00+00:00"),
+    )
+
+    write_memory_cache(
+        cache,
+        "key",
+        replacement_doc,
+        "memory",
+        "updated text",
+        "2026-02-01T00:00:00+00:00",
+    )
+
+    entry = asyncio.run(read_memory_cache(cache, "key", False, []))
+    assert isinstance(entry, MemoryCacheEntry)
+    assert entry.document is original_doc
+    assert entry.extracted_at == "2026-01-01T00:00:00+00:00"

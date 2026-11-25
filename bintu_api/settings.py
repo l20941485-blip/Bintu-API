@@ -21,6 +21,7 @@ logger = logging.getLogger("bintu_api.settings")
 
 DEFAULT_CACHE_TTL_SECONDS = 86400
 ROBOTS_MODES = ("enforce", "warn", "off")
+QUALITY_POLICIES = ("observe", "warn", "enforce")
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -60,6 +61,17 @@ def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int
         )
         return default
     return value
+
+
+def _quality_policy_env() -> str:
+    """QUALITY_POLICY: observe (default) | warn | enforce. Unknown values fall back to observe."""
+    raw = os.getenv("QUALITY_POLICY", "").strip().lower()
+    if not raw:
+        return "observe"
+    if raw not in QUALITY_POLICIES:
+        logger.warning("invalid_env_value name=QUALITY_POLICY value=%r using_default=observe", raw)
+        return "observe"
+    return raw
 
 
 def _robots_mode_env() -> str:
@@ -207,6 +219,7 @@ class Settings:
     # robots.txt handling: enforce (default) blocks disallowed fetches, warn only
     # reports, off skips the check. Cache TTL is in seconds (0..86400).
     robots_mode: str = "enforce"
+    quality_policy: str = "observe"
     robots_cache_ttl_seconds: int = 3600
     https_to_http_redirect_allowed_domains: frozenset[str] = frozenset()
     # Comma-separated extra browser origins allowed to send credentialed

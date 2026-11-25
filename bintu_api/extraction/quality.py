@@ -7,6 +7,7 @@ extraction orchestrator and performs no network access.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -188,3 +189,53 @@ def assess_content_quality(
         main_content_coverage=round(main_content_coverage, 4),
         section_completeness=round(section_completeness, 4),
     )
+
+QUALITY_POLICIES = ("observe", "warn", "enforce")
+DEFAULT_QUALITY_MIN_SCORE = 0.5
+
+_quality_logger = logging.getLogger("bintu_api.extraction.quality")
+
+
+class ContentQualityPolicyError(ValueError):
+    """Raised when enforced content quality falls below the configured threshold."""
+
+    def __init__(self, assessment: ContentQualityAssessment, min_score: float, url: str = "") -> None:
+        self.assessment = assessment
+        self.min_score = min_score
+        self.url = url
+        super().__init__(
+            f"Content quality score {assessment.score:.4f} is below minimum threshold {min_score:.4f}"
+        )
+
+
+def evaluate_content_quality_policy(
+    assessment: ContentQualityAssessment,
+    *,
+    policy: str = "observe",
+    min_score: float = DEFAULT_QUALITY_MIN_SCORE,
+    url: str = "",
+) -> ContentQualityAssessment:
+    """Apply observe, warn, or enforce policy against a quality assessment."""
+    if not isinstance(policy, str):
+        normalized_policy = "observe"
+    else:
+        normalized_policy = (policy or "observe").strip().lower()
+        if normalized_policy not in QUALITY_POLICIES:
+            normalized_policy = "observe"
+
+    if normalized_policy == "observe" or assessment.score >= min_score:
+        return assessment
+
+    if normalized_policy == "warn":
+        _quality_logger.warning(
+            "content_quality_below_threshold score=%.4f min_score=%.4f boilerplate_ratio=%.4f coverage=%.4f completeness=%.4f url=%s",
+            assessment.score,
+            min_score,
+            assessment.boilerplate_ratio,
+            assessment.main_content_coverage,
+            assessment.section_completeness,
+            url,
+        )
+        return assessment
+
+    raise ContentQualityPolicyError(assessment=assessment, min_score=min_score, url=url)
