@@ -111,4 +111,6 @@ def test_rejects_invalid_limit():
             )
 
     assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "invalid_limit"
+    detail = response.json()["detail"]
+    assert detail["code"] == "invalid_limit"
+    assert detail["hint"] == "Pass limit between 1 and 100."
