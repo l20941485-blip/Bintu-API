@@ -54,7 +54,7 @@ from pydantic import ValidationError
 
 from bintu_api.api import mcp_adapter
 from bintu_api.api.scrape_adapter import fetch_and_extract as routes_common_fetch_and_extract
-from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result
+from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result, retry_policy_for_code
 from bintu_api.mcp.assistant import ASSISTANT_TOOL_NAME, call_assistant_tool
 from bintu_api.mcp.protocol import (
     AUTH_REQUIRED,
@@ -197,20 +197,7 @@ def _tool_error_for_http_exception(error: HTTPException) -> ToolError:
         "upstream_render_error",
         "render_js_disabled",
     }:
-        retryable = code in {
-            "upstream_rate_limited",
-            "upstream_timeout",
-            "upstream_connection_error",
-        }
-        retry_with = (
-            "retry_after_delay"
-            if code == "upstream_rate_limited"
-            else "retry_later"
-            if retryable
-            else "render_js=false"
-            if code in {"render_js_disabled", "upstream_render_error"}
-            else None
-        )
+        retryable, retry_with = retry_policy_for_code(code)
         return ToolError(
             code,
             str(message or "The tool request could not be completed."),
