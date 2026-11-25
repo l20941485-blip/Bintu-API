@@ -35,6 +35,7 @@ async def ingest_public_knowledge(
             detail={
                 "code": "knowledge_core_unavailable",
                 "message": "The knowledge core is not configured.",
+                "hint": "Verify Supabase and knowledge store configuration before retrying.",
             },
         )
 
@@ -77,6 +78,7 @@ async def ingest_public_knowledge(
             detail={
                 "code": "no_ingestable_content",
                 "message": "The page did not contain ingestable readable content.",
+                "hint": "Check that the target page contains extractable text or try a different URL.",
             },
         )
 
