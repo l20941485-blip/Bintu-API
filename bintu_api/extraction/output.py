@@ -82,7 +82,11 @@ def build_provenance(
         cache_fresh = True
     else:
         cache_ttl_seconds = settings.cache_ttl_seconds
-        cache_fresh = cache_age_seconds is not None and cache_age_seconds <= cache_ttl_seconds
+        cache_fresh = (
+            cache_age_seconds is not None
+            and cache_age_seconds <= cache_ttl_seconds
+            and stale_reason is None
+        )
     return Provenance(
         request_id=request_id,
         fetched_at=datetime.now(UTC).isoformat(),
@@ -140,9 +144,11 @@ def _evaluate_cache_freshness(
         # Persistent entries are not TTL-expired; extractor-version changes
         # are the only staleness signal (handled elsewhere).
         return None, False
+    if not extracted_at or not str(extracted_at).strip():
+        return "missing_timestamp", True
     age = _cache_age_seconds(extracted_at, datetime.now(UTC))
     if age is None:
-        return "missing_timestamp", True
+        return "invalid_timestamp", True
     if age > ttl_seconds:
         return "ttl_expired", True
     return None, False
