@@ -84,7 +84,39 @@ def test_http_mcp_error_response_normalizes_code_and_includes_structured_content
             "message": "JavaScript rendering is disabled on this service.",
             "hint": "Retry with render_js=false.",
             "retryable": False,
+            "retry_with": "render_js=false",
         }
     }
     assert result["content"][0]["text"].startswith("render_js_disabled:")
     assert ". Hint: Retry with render_js=false." in result["content"][0]["text"]
+
+
+def test_http_and_streamable_mcp_render_js_and_url_error_parity() -> None:
+    from fastapi import HTTPException
+
+    from bintu_api.mcp.http_api import _mcp_error_response
+    from bintu_api.mcp.streamable import _tool_error_for_http_exception, _tool_error_result
+
+    http_render = _mcp_error_response(
+        "render_js_disabled",
+        "JavaScript rendering is disabled on this service.",
+        "Retry with render_js=false for plain HTML extraction.",
+    )
+    streamable_render = _tool_error_result(
+        _tool_error_for_http_exception(
+            HTTPException(status_code=400, detail={"code": "render_js_disabled"})
+        )
+    )
+    assert http_render["structuredContent"] == streamable_render["structuredContent"]
+
+    http_url = _mcp_error_response(
+        "invalid_or_unsafe_url",
+        "The target URL is invalid or unsafe.",
+        "Use an absolute public HTTP or HTTPS URL.",
+    )
+    streamable_url = _tool_error_result(
+        _tool_error_for_http_exception(
+            HTTPException(status_code=400, detail={"code": "invalid_or_unsafe_url"})
+        )
+    )
+    assert http_url["structuredContent"] == streamable_url["structuredContent"]
