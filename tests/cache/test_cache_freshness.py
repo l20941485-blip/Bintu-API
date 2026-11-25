@@ -341,3 +341,41 @@ def test_persistent_hit_older_than_ttl_remains_fresh() -> None:
     assert provenance.cache.fresh is True
     assert provenance.cache.stale_reason is None
     assert provenance.cache.revalidated is False
+
+
+def test_evaluate_cache_freshness_distinguishes_missing_invalid_and_expired() -> None:
+    from bintu_api.extraction.output import _evaluate_cache_freshness
+
+    assert _evaluate_cache_freshness(None, "memory", 60) == ("missing_timestamp", True)
+    assert _evaluate_cache_freshness("   ", "memory", 60) == ("missing_timestamp", True)
+    assert _evaluate_cache_freshness("not-a-timestamp", "memory", 60) == ("invalid_timestamp", True)
+    assert _evaluate_cache_freshness("2026-01-01T00:00:00", "memory", 60) == ("invalid_timestamp", True)
+
+    expired_ts = (datetime.now(UTC) - timedelta(seconds=120)).isoformat()
+    assert _evaluate_cache_freshness(expired_ts, "memory", 60) == ("ttl_expired", True)
+
+    fresh_ts = (datetime.now(UTC) - timedelta(seconds=10)).isoformat()
+    assert _evaluate_cache_freshness(fresh_ts, "memory", 60) == (None, False)
+    assert _evaluate_cache_freshness(None, "persistent", 60) == (None, False)
+    assert _evaluate_cache_freshness(None, "none", 60) == (None, False)
+
+
+def test_provenance_with_stale_reason_marks_memory_entry_not_fresh() -> None:
+    fresh_ts = (datetime.now(UTC) - timedelta(seconds=10)).isoformat()
+    provenance = build_provenance(
+        url="https://example.com",
+        text="Example",
+        document=None,
+        cache_layer="memory",
+        request_id="req-stale-reason",
+        settings=_settings(),
+        extracted_at=fresh_ts,
+        stale_reason="extractor_version_changed",
+        revalidated=True,
+    )
+
+    assert provenance.cache.age_seconds is not None
+    assert provenance.cache.age_seconds <= 86400
+    assert provenance.cache.stale_reason == "extractor_version_changed"
+    assert provenance.cache.revalidated is True
+    assert provenance.cache.fresh is False
