@@ -120,7 +120,7 @@ def _source_fingerprint(markdown: str) -> str:
 _EXTRACTIVE_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _FENCE_RE = re.compile(r"^```")
 _LATIN_SENTENCE_BOUNDARY_RE = re.compile(
-    r"(?<=[.!?\u2026])"
+    r"(?<=[.!?…])"
     r"(?=[\"')\]]*\s+(?=[^\s])|$)"
 )
 
@@ -132,6 +132,44 @@ _CJK_SENTENCE_BOUNDARY_RE = re.compile(
 _SENTENCE_BOUNDARY_RE = re.compile(
     rf"(?:{_LATIN_SENTENCE_BOUNDARY_RE.pattern}|{_CJK_SENTENCE_BOUNDARY_RE.pattern})"
 )
+
+_ABBREVIATION_SUFFIX_RE = re.compile(
+    r"(?:\b(?:e\.g|i\.e|etc|vs|dr|mr|mrs|ms|prof|fig|no|vol|pp|st)\.|(?:\b[a-zA-Z]\.){2,})$",
+    re.IGNORECASE,
+)
+_DECIMAL_OR_VERSION_RE = re.compile(r"(?:\d+\.\d+|\d+\.)$")
+_NEXT_TOKEN_LOWER_RE = re.compile(r"^[\"')\]]*\s+[a-z0-9]")
+
+
+_TRAILING_CLOSERS = "\"')]}”’）】"
+
+
+def _split_line_sentences(stripped: str) -> list[str]:
+    raw_parts = _SENTENCE_BOUNDARY_RE.split(stripped)
+    if len(raw_parts) <= 1:
+        return [part for part in raw_parts if part.strip()]
+
+    merged: list[str] = []
+    for part in raw_parts:
+        if not part:
+            continue
+        if not merged:
+            merged.append(part)
+            continue
+
+        prev = merged[-1]
+        prev_trimmed = prev.rstrip(_TRAILING_CLOSERS)
+        has_period = prev_trimmed.endswith(".")
+        is_decimal_or_version = bool(_DECIMAL_OR_VERSION_RE.search(prev_trimmed))
+        is_abbreviation = bool(_ABBREVIATION_SUFFIX_RE.search(prev_trimmed))
+        starts_lowercase_or_digit = bool(_NEXT_TOKEN_LOWER_RE.match(part))
+
+        if has_period and (is_decimal_or_version or is_abbreviation or starts_lowercase_or_digit):
+            merged[-1] = prev + part
+        else:
+            merged.append(part)
+
+    return [item for item in merged if item.strip()]
 
 
 def _is_inside_fence(lines: list[str], index: int) -> bool:
@@ -176,7 +214,7 @@ def _split_extractive_sentences(
         heading_path = _active_heading(lines, line_index)
         cursor = 0
 
-        for sentence in _SENTENCE_BOUNDARY_RE.split(stripped):
+        for sentence in _split_line_sentences(stripped):
             start = markdown.find(sentence, cursor)
             if start == -1:
                 continue

@@ -86,3 +86,27 @@ def test_key_sentences_suppresses_duplicates_and_preserves_source_order():
             REDUNDANT_MARKDOWN[sentence.char_start:sentence.char_end]
             == sentence.text
         )
+
+
+ABBREVIATION_AND_VERSION_MARKDOWN = (
+    "# Release Notes\n\n"
+    "Version 1.4.0 improves chunking accuracy across technical docs, "
+    "e.g. multi-section markdown pages.\n\n"
+    "Extractive summaries remain grounded in exact source spans."
+)
+
+
+def test_key_sentences_avoids_splitting_versions_and_abbreviations():
+    summary = build_extractive_summary(
+        ABBREVIATION_AND_VERSION_MARKDOWN,
+        mode="key_sentences",
+        sentence_count=2,
+    )
+
+    assert summary.sentences
+    for sentence in summary.sentences:
+        assert (
+            ABBREVIATION_AND_VERSION_MARKDOWN[sentence.char_start:sentence.char_end]
+            == sentence.text
+        )
+        assert not sentence.text.endswith("e.g.")
