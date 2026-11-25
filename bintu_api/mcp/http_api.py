@@ -53,10 +53,13 @@ def _mcp_error_response(
     hint: str,
 ) -> dict[str, Any]:
     """Return a stable in-band tool error."""
+    normalized_code = code.strip().lower().replace("-", "_").replace(" ", "_")
+    retry_with = "render_js=false" if normalized_code == "render_js_disabled" else None
     error = ToolError(
         code=code,
         message=message,
         hint=hint.strip() or None,
+        retry_with=retry_with,
     )
     logger.info("mcp_tool_error code=%s", error.code)
     return build_mcp_tool_error_result(error)
@@ -153,7 +156,7 @@ async def call_tool(
         return _mcp_error_response(
             "invalid_or_unsafe_url",
             "The target URL is invalid or unsafe.",
-            "URL must start with http:// or https:// and be publicly accessible.",
+            "Use an absolute public HTTP or HTTPS URL.",
         )
     except HTTPException as error:
         detail = error.detail
