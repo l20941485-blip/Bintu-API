@@ -183,6 +183,10 @@ class SemanticChunkEndpointTests(unittest.IsolatedAsyncioTestCase):
             caught.exception.detail["code"],
             "invalid_overlap_budget",
         )
+        self.assertEqual(
+            caught.exception.detail["hint"],
+            "Set overlap_tokens between 0 and max_tokens - 1.",
+        )
 
 
 if __name__ == "__main__":
