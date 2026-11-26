@@ -44,6 +44,8 @@ class SemanticChunk:
     contains_table: bool = False
     contains_links: bool = False
     link_count: int = 0
+    char_start: int = 0
+    char_end: int = 0
     source_url: str | None = None
     final_url: str | None = None
     content_sha256: str | None = None
@@ -442,6 +444,10 @@ def split_semantic_chunks(
             # Compute per-chunk hash for stability and integrity
             chunk_text_hash = hashlib.sha256(piece.encode("utf-8")).hexdigest()
 
+            # Approximate char offsets within the original document
+            char_start = start + section.find(piece)
+            char_end = char_start + len(piece)
+
             chunks.append(
                 SemanticChunk(
                     index=chunk_index,
@@ -463,6 +469,8 @@ def split_semantic_chunks(
                     contains_table=_has_markdown_table(piece),
                     contains_links=bool(links),
                     link_count=len(links),
+                    char_start=char_start,
+                    char_end=char_end,
                     source_url=source_url,
                     final_url=final_url or source_url,
                     content_sha256=chunk_text_hash,  # Use chunk hash, not doc hash

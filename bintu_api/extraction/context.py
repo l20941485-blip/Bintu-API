@@ -180,6 +180,8 @@ class ContextResult:
     selected_chunk_count: int = 0
     omitted_chunk_count: int = 0
     omitted_sections: list[str] | None = None
+    usage: dict[str, Any] | None = None
+    telemetry: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -759,6 +761,28 @@ async def extract_context(
         url=url,
     )
 
+    # Stage 11 & 12: Usage metering and telemetry
+    from bintu_api.metering.billing import classify_usage
+    billing = classify_usage(
+        tokens=approx_tokens,
+        mode=mode,
+        cache_hit=cache_hit,
+        extraction_failed=False,
+        quality_rejected=quality_assessment.policy == 'enforce' and quality_assessment.score < getattr(settings, 'quality_minimum_score', 0.0),
+    )
+    usage_payload = {
+        'billable_units': billing.billable_units,
+        'unit': billing.unit,
+        'cache_credit_applied': billing.cache_credit_applied,
+        'estimated_cost_usd': billing.estimated_cost_usd,
+    }
+    telemetry_payload = {
+        'request_id': getattr(getattr(request, 'state', None), 'request_id', None),
+        'extractor_version': getattr(settings, 'service_version', '1.4.0'),
+        'quality_score': quality_assessment.score,
+        'tokens_returned': approx_tokens,
+    }
+
     return ContextResult(
         mode=mode,
         chunk_selection_policy=chunk_selection_policy,
@@ -812,6 +836,8 @@ async def extract_context(
         warnings=section_warnings,
         content_cleaning=content_cleaning,
         content_quality=quality_assessment,
+        usage=usage_payload,
+        telemetry=telemetry_payload,
     )
 
 

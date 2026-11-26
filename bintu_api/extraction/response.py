@@ -130,6 +130,8 @@ def build_mcp_envelope(
             else context.text
         ),
         "truncated": context.truncated,
+        "omitted_sections": context.omitted_sections,
+        "chunk_selection_policy": context.chunk_selection_policy,
         **(
             {
                 "selected_sections": context.selected_sections,
@@ -146,6 +148,8 @@ def build_mcp_envelope(
         "split": context.split,
         "chunks": context.chunks,
         **provenance,
+        **({"usage": context.usage} if context.usage else {}),
+        **({"telemetry": context.telemetry} if context.telemetry else {}),
     }
 
     # Chunk mode already returns the document in `chunks[].text`. Keeping the
@@ -166,6 +170,8 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
         "url": safe_source_url,
         "text": context.text,
         "truncated": context.truncated,
+        "omitted_sections": context.omitted_sections,
+        "chunk_selection_policy": context.chunk_selection_policy,
         "cache_hit": context.cache_hit,
         "cache_layer": context.cache_layer,
         "revalidated": context.revalidated,
@@ -193,6 +199,8 @@ def build_rest_response(context: ContextResult, source_url: str) -> dict[str, An
             if context.selected_sections is not None
             else {}
         ),
+        **({"usage": context.usage} if context.usage else {}),
+        **({"telemetry": context.telemetry} if context.telemetry else {}),
         "provenance": provenance,
     }
 
