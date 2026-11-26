@@ -1,4 +1,4 @@
-﻿"""Yield and low-yield assessment for Bintu extraction.
+"""Yield and low-yield assessment for Bintu extraction.
 
 This module owns the low-yield detection rule (large page, almost no text,
 low ratio) and the JavaScript-rendered hint logic. It is imported by the
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 LOW_YIELD_MIN_HTML_TOKENS = 1000
 LOW_YIELD_MAX_TEXT_TOKENS = 100
@@ -82,6 +82,8 @@ class ContentQualityAssessment:
     boilerplate_ratio: float
     main_content_coverage: float
     section_completeness: float
+    policy: str = "observe"
+    warnings: list[str] = field(default_factory=list)
 
 
 def detect_boilerplate_characters(text: str) -> int:
@@ -223,8 +225,23 @@ def evaluate_content_quality_policy(
         if normalized_policy not in QUALITY_POLICIES:
             normalized_policy = "observe"
 
+    warnings = []
+    if assessment.score < min_score:
+        warnings.append(f"quality_score_below_threshold:{min_score}")
+    if assessment.boilerplate_ratio > 0.15:
+        warnings.append("high_boilerplate_ratio")
+    if assessment.main_content_coverage < 0.5:
+        warnings.append("low_main_content_coverage")
+
     if normalized_policy == "observe" or assessment.score >= min_score:
-        return assessment
+        return ContentQualityAssessment(
+            score=assessment.score,
+            boilerplate_ratio=assessment.boilerplate_ratio,
+            main_content_coverage=assessment.main_content_coverage,
+            section_completeness=assessment.section_completeness,
+            policy=normalized_policy,
+            warnings=warnings,
+        )
 
     if normalized_policy == "warn":
         _quality_logger.warning(
@@ -236,6 +253,13 @@ def evaluate_content_quality_policy(
             assessment.section_completeness,
             url,
         )
-        return assessment
+        return ContentQualityAssessment(
+            score=assessment.score,
+            boilerplate_ratio=assessment.boilerplate_ratio,
+            main_content_coverage=assessment.main_content_coverage,
+            section_completeness=assessment.section_completeness,
+            policy=normalized_policy,
+            warnings=warnings,
+        )
 
     raise ContentQualityPolicyError(assessment=assessment, min_score=min_score, url=url)

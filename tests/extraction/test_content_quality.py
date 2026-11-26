@@ -81,7 +81,9 @@ def test_quality_policy_observe_allows_low_score():
         complete_sections=0,
     )
     result = evaluate_content_quality_policy(low, policy="observe", min_score=0.5)
-    assert result == low
+    assert result.score == low.score
+    assert result.policy == 'observe'
+    assert 'quality_score_below_threshold:0.5' in result.warnings
 
 
 def test_quality_policy_warn_logs_below_threshold(caplog):
@@ -103,7 +105,9 @@ def test_quality_policy_warn_logs_below_threshold(caplog):
             min_score=0.5,
             url="https://example.com/low",
         )
-    assert result == low
+    assert result.score == low.score
+    assert result.policy == 'warn'
+    assert 'quality_score_below_threshold:0.5' in result.warnings
     assert any("content_quality_below_threshold" in rec.message for rec in caplog.records)
 
 

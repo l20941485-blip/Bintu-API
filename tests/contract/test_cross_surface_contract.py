@@ -60,7 +60,10 @@ MCP_ENVELOPE_FIELDS = {
     "truncated",
     "split",
     "chunks",
-}
+"telemetry",
+    "usage",
+    "omitted_sections",
+    "chunk_selection_policy"}
 
 
 class CrossSurfaceContractTests(unittest.TestCase):
