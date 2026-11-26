@@ -53,3 +53,38 @@ class McpTokenBudgetExtractionTests(unittest.TestCase):
 
 
 
+
+
+
+def test_truncation_respects_word_boundaries():
+    """Verify that truncation cuts at spaces or newlines, not mid-word."""
+    from bintu_api.extraction.html_extract import _truncate_extracted_text
+    
+    # Case 1: Cut at space
+    text = "This is a long sentence that should be cut at a word boundary."
+    result = _truncate_extracted_text(text, max_characters=20)
+    
+    assert result.truncated is True
+    assert len(result.text) <= 20
+    # The last character should NOT be alphanumeric (should be space or punctuation)
+    last_char = result.text[-1]
+    assert not last_char.isalnum(), f"Cut mid-word! Last char: '{last_char}' in '{result.text}'"
+    
+    # Case 2: Cut at newline
+    text_with_newline = "Line one\nLine two is very long and should be cut here."
+    result2 = _truncate_extracted_text(text_with_newline, max_characters=15)
+    
+    assert result2.truncated is True
+    # Should end at newline or space before "Line two"
+    assert "\n" in result2.text or result2.text.endswith(" "), f"Did not respect newline/space: '{result2.text}'"
+
+
+def test_truncation_handles_giant_words():
+    """Verify fallback behavior when no boundary exists (giant word)."""
+    from bintu_api.extraction.html_extract import _truncate_extracted_text
+    
+    giant_word = "A" * 1000
+    result = _truncate_extracted_text(giant_word, max_characters=50)
+    
+    assert result.truncated is True
+    assert len(result.text) == 50  # Fallback to hard cut is acceptable here

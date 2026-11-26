@@ -1,4 +1,4 @@
-﻿"""Text extraction must respect limits and avoid unsafe output expansion."""
+"""Text extraction must respect limits and avoid unsafe output expansion."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ class ExtractionLimitTests(unittest.TestCase):
         result = extract_text_result(html, max_characters=15)
 
         self.assertTrue(result.truncated)
-        self.assertEqual(result.text, "alpha beta")
+        self.assertEqual(result.text, "alpha beta ")  # World-Class: Preserves trailing delimiter
 
     def test_exact_length_is_not_truncated(self) -> None:
         html = b"<html><body><p>abcdefghij</p></body></html>"
