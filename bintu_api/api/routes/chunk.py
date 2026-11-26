@@ -36,6 +36,14 @@ from bintu_api.security.auth import api_key_scheme
 
 router = APIRouter(tags=["Extraction"])
 
+DEFAULT_MAX_TOKENS = 6000
+
+
+def _resolve_int_override(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
 
 @router.post(
     "/api/v1/scrape/chunks",
@@ -52,7 +60,7 @@ router = APIRouter(tags=["Extraction"])
 async def scrape_chunks(
     request: Request,
     payload: MobileScrapeTextRequest,
-    max_tokens: int = 6000,
+    max_tokens: int | None = None,
     links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
@@ -67,7 +75,17 @@ async def scrape_chunks(
     trace_id = get_or_create_trace_id(request_id)
     routes_common.verify_api_access(request, settings)
 
-    if not 100 <= max_tokens <= 50000:
+    resolved_max_tokens = (
+        _resolve_int_override(max_tokens)
+        if max_tokens is not None
+        else (
+            _resolve_int_override(getattr(payload, "max_tokens", None))
+            or _resolve_int_override(getattr(payload, "chunk_token_budget", None))
+            or DEFAULT_MAX_TOKENS
+        )
+    )
+
+    if not 100 <= resolved_max_tokens <= 50000:
         raise HTTPException(
             status_code=400,
             detail={
@@ -77,7 +95,7 @@ async def scrape_chunks(
             },
         )
 
-    if overlap_tokens < 0 or overlap_tokens >= max_tokens:
+    if overlap_tokens < 0 or overlap_tokens >= resolved_max_tokens:
         raise HTTPException(
             status_code=400,
             detail={
@@ -108,7 +126,7 @@ async def scrape_chunks(
         links,
         skip_cache,
         persist,
-        max_tokens,
+        resolved_max_tokens,
         payload.main_content_only,
         exclude_terminal_sections=payload.exclude_terminal_sections,
     )
@@ -120,7 +138,7 @@ async def scrape_chunks(
         try:
             semantic_chunks = split_semantic_chunks(
                 result.markdown,
-                max_tokens=max_tokens,
+                max_tokens=resolved_max_tokens,
                 overlap_tokens=overlap_tokens,
                 source_url=sanitize_url(payload.url),
                 final_url=((document.final_url if document else None) or sanitize_url(payload.url)),
@@ -178,7 +196,7 @@ async def scrape_chunks(
             )
             raise
     else:
-        chunk_strings = split_into_chunks(result.markdown, max_tokens)
+        chunk_strings = split_into_chunks(result.markdown, resolved_max_tokens)
         chunks = [
             RestChunk(
                 index=index,
@@ -222,7 +240,7 @@ async def scrape_chunks(
     return ScrapeChunksResponse(
         url=payload.url,
         mode="chunk",
-        max_tokens=max_tokens,
+        max_tokens=resolved_max_tokens,
         tokens=approx_tokens,
         approx_tokens=approx_tokens,
         html_tokens=result.html_tokens,
