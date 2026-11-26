@@ -100,6 +100,8 @@ class MobileScrapeTextRequest(BaseModel):
     summary_mode: Literal["none", "leading", "key_sentences"] = "none"
     summary_sentence_count: int = Field(default=3, ge=1, le=10)
     render_js: bool = False
+    max_tokens: int | None = Field(default=None, ge=100, le=50000)
+    chunk_token_budget: int | None = Field(default=None, ge=100, le=50000)
     chunk_strategy: Literal["sequential", "semantic"] = "sequential"
     overlap_tokens: int = Field(default=0, ge=0, le=1000)
 

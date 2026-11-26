@@ -152,6 +152,63 @@ class ScrapeChunksEndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(chunk.text.strip())
 
 
+
+    async def test_body_max_tokens_and_alias_are_respected(self) -> None:
+        request = self._request()
+        payload = self._payload()
+        payload.max_tokens = 250
+        payload.chunk_token_budget = 400
+
+        result = MagicMock()
+        result.markdown = ("First paragraph about web scraping. Second paragraph about token budgets. ") * 50
+        result.html_tokens = 500
+        result.truncated = False
+        result.extracted_at = "2026-10-29T00:00:00+00:00"
+
+        with (
+            patch("bintu_api.api.scrape_adapter.verify_api_access"),
+            patch(
+                "bintu_api.api.scrape_adapter.rate_limit_identity",
+                return_value="test-client",
+            ),
+            patch(
+                "bintu_api.api.routes.chunk._scrape_chunks",
+                new=AsyncMock(return_value=(None, result, "none", False)),
+            ) as mock_scrape,
+        ):
+            response_body = await scrape_chunks(
+                request,
+                payload,
+                skip_cache=False,
+                persist=False,
+            )
+
+        self.assertEqual(response_body.max_tokens, 250)
+        self.assertEqual(mock_scrape.await_args.args[10], 250)
+
+        payload.max_tokens = None
+        with (
+            patch("bintu_api.api.scrape_adapter.verify_api_access"),
+            patch(
+                "bintu_api.api.scrape_adapter.rate_limit_identity",
+                return_value="test-client",
+            ),
+            patch(
+                "bintu_api.api.routes.chunk._scrape_chunks",
+                new=AsyncMock(return_value=(None, result, "none", False)),
+            ) as mock_alias_scrape,
+        ):
+            response_alias = await scrape_chunks(
+                request,
+                payload,
+                skip_cache=False,
+                persist=False,
+            )
+
+        self.assertEqual(response_alias.max_tokens, 400)
+        self.assertEqual(mock_alias_scrape.await_args.args[10], 400)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
