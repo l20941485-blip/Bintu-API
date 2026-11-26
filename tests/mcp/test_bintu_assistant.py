@@ -512,6 +512,7 @@ def test_assistant_extraction_forwards_to_streamable_tools_call_result(monkeypat
 def test_ask_knowledge_handles_missing_client_auth_error_and_answer(monkeypatch) -> None:
     import asyncio
     from types import SimpleNamespace
+
     from fastapi import HTTPException
 
     from bintu_api.mcp import assistant as assistant_module
