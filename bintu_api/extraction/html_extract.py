@@ -495,26 +495,11 @@ def extract_main_content(
         if footnote_lines:
             footnote_block = "\n\n## Links\n" + "\n".join(footnote_lines)
 
-    combined = cleaned + footnote_block
-    
-    # World-Class Fix: Respect word boundaries instead of hard slicing
-    if len(combined) > max_characters:
-        # Find the last safe boundary (newline or space) within the limit
-        limit = max_characters - 4 if "```" in combined else max_characters
-        last_newline = combined.rfind("\n", 0, limit)
-        last_space = combined.rfind(" ", 0, limit)
-        last_boundary = max(last_newline, last_space)
-        
-        if last_boundary == -1:
-            # No boundary found (e.g., one giant word), force cut but try to close fences
-            last_boundary = limit
-            
-        # Include the delimiter (space/newline) for cleaner output if possible
-        truncated = combined[:last_boundary + 1]
-        truncated = close_open_fence(truncated)
-    else:
-        truncated = combined
-    truncated = close_open_fence(truncated)
+    truncated = _truncate_extracted_text_with_footnotes(
+        cleaned,
+        footnote_block,
+        max_characters,
+    ).text
 
     return truncated, True
 

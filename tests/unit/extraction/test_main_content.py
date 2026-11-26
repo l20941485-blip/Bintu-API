@@ -78,7 +78,7 @@ def test_main_content_extraction_respects_character_cap() -> None:
         )
 
     assert applied is True
-    assert len(text) == 251  # World-Class: +1 for preserved trailing delimiter
+    assert len(text) == 250
 
 
 def test_main_content_truncation_closes_open_code_fence() -> None:
