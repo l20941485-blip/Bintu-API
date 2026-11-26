@@ -45,6 +45,23 @@ def _resolve_int_override(value: object) -> int | None:
     return value
 
 
+DEFAULT_CHUNK_STRATEGY: str = "sequential"
+DEFAULT_OVERLAP_TOKENS = 0
+VALID_CHUNK_STRATEGIES = ("sequential", "semantic")
+
+
+def _resolve_chunk_strategy(
+    query_value: object,
+    payload: object,
+) -> str:
+    if isinstance(query_value, str) and query_value in VALID_CHUNK_STRATEGIES:
+        return query_value
+    body_value = getattr(payload, "chunk_strategy", None)
+    if isinstance(body_value, str) and body_value in VALID_CHUNK_STRATEGIES:
+        return body_value
+    return DEFAULT_CHUNK_STRATEGY
+
+
 @router.post(
     "/api/v1/scrape/chunks",
     response_model=ScrapeChunksResponse,
@@ -64,8 +81,8 @@ async def scrape_chunks(
     links: Literal["inline", "footnotes", "false"] = "inline",
     skip_cache: bool = False,
     persist: bool = True,
-    chunk_strategy: Literal["sequential", "semantic"] = "sequential",
-    overlap_tokens: int = 0,
+    chunk_strategy: Literal["sequential", "semantic"] | None = None,
+    overlap_tokens: int | None = None,
     return_metadata: bool = True,
     include_heading_path: bool = True,
     include_page_context: bool = True,
@@ -95,7 +112,17 @@ async def scrape_chunks(
             },
         )
 
-    if overlap_tokens < 0 or overlap_tokens >= resolved_max_tokens:
+    resolved_chunk_strategy = _resolve_chunk_strategy(chunk_strategy, payload)
+    resolved_overlap_tokens = (
+        _resolve_int_override(overlap_tokens)
+        if overlap_tokens is not None
+        else (
+            _resolve_int_override(getattr(payload, "overlap_tokens", None))
+            or DEFAULT_OVERLAP_TOKENS
+        )
+    )
+
+    if resolved_overlap_tokens < 0 or resolved_overlap_tokens >= resolved_max_tokens:
         raise HTTPException(
             status_code=400,
             detail={
@@ -133,13 +160,13 @@ async def scrape_chunks(
 
     chunking_started: float | None = None
     chunking_tokens: int | None = None
-    if chunk_strategy == "semantic":
+    if resolved_chunk_strategy == "semantic":
         chunking_started = time.perf_counter()
         try:
             semantic_chunks = split_semantic_chunks(
                 result.markdown,
                 max_tokens=resolved_max_tokens,
-                overlap_tokens=overlap_tokens,
+                overlap_tokens=resolved_overlap_tokens,
                 source_url=sanitize_url(payload.url),
                 final_url=((document.final_url if document else None) or sanitize_url(payload.url)),
                 content_sha256=result.content_hash,
