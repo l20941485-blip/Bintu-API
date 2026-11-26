@@ -632,6 +632,82 @@ class McpStreamableTests(unittest.TestCase):
         )
 
 
+    def test_tools_call_applies_chunk_token_budget_alias_and_max_tokens_precedence(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+
+        seen_budgets: list[int] = []
+
+        async def _fake_fetch(_request, _url, **kwargs):
+            seen_budgets.append(kwargs["max_tokens"])
+            doc = SimpleNamespace(
+                text="Hello world. Second sentence here.",
+                title="Sample",
+                final_url="https://example.com",
+                content_cleaning=SimpleNamespace(applied=False, strategy="none", terminal_sections_removed=0),
+                content_quality=None,
+                deduplicated_count=0,
+            )
+            cached = SimpleNamespace(
+                markdown="Hello world. Second sentence here.",
+                truncated=False,
+                extracted_at="2026-01-01T00:00:00Z",
+                content_cleaning={"applied": False, "strategy": "standard"},
+            )
+            return doc, cached, "none", False
+
+        with patch(
+            "bintu_api.mcp.streamable.routes_common_fetch_and_extract",
+            new=AsyncMock(side_effect=_fake_fetch),
+        ):
+            alias_only = self.rpc(
+                "tools/call",
+                {
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "chunk_token_budget": 250,
+                    },
+                },
+                request_id=10,
+            )
+            self.assertEqual(alias_only.status_code, 200)
+            self.assertEqual(seen_budgets[-1], 250)
+
+            conflict = self.rpc(
+                "tools/call",
+                {
+                    "name": TOOL_NAME,
+                    "arguments": {
+                        "url": "https://example.com",
+                        "chunk_token_budget": 250,
+                        "max_tokens": 400,
+                    },
+                },
+                request_id=11,
+            )
+            self.assertEqual(conflict.status_code, 200)
+            self.assertEqual(seen_budgets[-1], 400)
+
+    def test_tools_call_rejects_out_of_range_max_tokens_and_overlap_tokens(self) -> None:
+        for bad_args in (
+            {"url": "https://example.com", "max_tokens": 50},
+            {"url": "https://example.com", "max_tokens": 60000},
+            {"url": "https://example.com", "max_tokens": 500, "overlap_tokens": -1},
+            {"url": "https://example.com", "max_tokens": 500, "overlap_tokens": 500},
+        ):
+            response = self.rpc(
+                "tools/call",
+                {"name": TOOL_NAME, "arguments": bad_args},
+                request_id=20,
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            result = payload["result"]
+            self.assertTrue(result["isError"])
+            self.assertIn("invalid_arguments:", result["content"][0]["text"])
+
+
 class McpScopedApiKeyTests(unittest.TestCase):
     """MCP_API_KEY unlocks the MCP surfaces only, never REST or /metrics."""
 
