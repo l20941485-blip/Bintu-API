@@ -445,7 +445,8 @@ def split_semantic_chunks(
             chunk_text_hash = hashlib.sha256(piece.encode("utf-8")).hexdigest()
 
             # Approximate char offsets within the original document
-            char_start = start + section.find(piece)
+            rel_offset = section.find(piece)
+            char_start = start + rel_offset if rel_offset >= 0 else start
             char_end = char_start + len(piece)
 
             chunks.append(
