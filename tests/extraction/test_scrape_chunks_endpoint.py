@@ -219,6 +219,7 @@ if __name__ == "__main__":
 class TestResolveChunkLimitingFactor:
     def test_non_truncated_always_returns_none(self) -> None:
         from unittest.mock import MagicMock
+
         from bintu_api.api.routes.chunk import _resolve_chunk_limiting_factor
 
         assert _resolve_chunk_limiting_factor(False, "char_cap") == "none"
@@ -234,6 +235,7 @@ class TestResolveChunkLimitingFactor:
 
     def test_truncated_falls_back_to_token_budget_for_missing_or_mock(self) -> None:
         from unittest.mock import MagicMock
+
         from bintu_api.api.routes.chunk import _resolve_chunk_limiting_factor
 
         assert _resolve_chunk_limiting_factor(True, None) == "token_budget"
