@@ -465,3 +465,160 @@ def test_add_knowledge_returns_ingested_summary(monkeypatch) -> None:
     assert payload["chunk_count"] == 2
     assert payload["status"] == "ready"
 
+
+
+def test_assistant_extraction_forwards_to_streamable_tools_call_result(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from bintu_api.mcp import assistant as assistant_module
+    from bintu_api.mcp import streamable as streamable_module
+
+    captured: dict = {}
+
+    async def _fake_tools_call_result(*, request, settings, request_id, params):
+        captured["request_id"] = request_id
+        captured["params"] = params
+        return {"content": [{"type": "text", "text": "forwarded"}]}
+
+    monkeypatch.setattr(streamable_module, "_tools_call_result", _fake_tools_call_result)
+
+    res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace())),
+            SimpleNamespace(),
+            "req_ext",
+            {
+                "arguments": {
+                    "domain": "extraction",
+                    "action": "scrape",
+                    "url": "https://example.com/article",
+                    "max_tokens": 1200,
+                }
+            },
+        )
+    )
+
+    assert res["content"][0]["text"] == "forwarded"
+    assert captured["request_id"] == "req_ext"
+    assert captured["params"]["name"] == streamable_module.TOOL_NAME
+    assert captured["params"]["arguments"] == {
+        "url": "https://example.com/article",
+        "mode": "scrape",
+        "max_tokens": 1200,
+    }
+
+
+def test_ask_knowledge_handles_missing_client_auth_error_and_answer(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+
+    from bintu_api.mcp import assistant as assistant_module
+
+    missing_client_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(supabase_client=None))),
+            SimpleNamespace(),
+            "req_no_db",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "ask_knowledge",
+                    "document_id": "doc_1",
+                    "query": "What is covered?",
+                }
+            },
+        )
+    )
+    assert missing_client_res["isError"] is True
+    assert "knowledge_core_unavailable:" in missing_client_res["content"][0]["text"]
+
+    async def _unauthorized(_request, _settings):
+        raise HTTPException(status_code=401, detail={"code": "invalid_session", "message": "Expired session"})
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _unauthorized)
+    req_with_db = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(supabase_client=object())))
+
+    unauth_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            req_with_db,
+            SimpleNamespace(),
+            "req_unauth",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "ask_knowledge",
+                    "document_id": "doc_1",
+                    "query": "What is covered?",
+                }
+            },
+        )
+    )
+    assert unauth_res["isError"] is True
+    assert "invalid_session: Expired session" in unauth_res["content"][0]["text"]
+
+    async def _valid_user(_request, _settings):
+        return "user_42"
+
+    class _FakeRepo:
+        def __init__(self, _client) -> None:
+            pass
+
+    class _FakeRetrieval:
+        def __init__(self, _repo) -> None:
+            pass
+
+    class _FakeAnswerService:
+        def __init__(self, _retrieval) -> None:
+            pass
+
+        async def answer(self, *, query: str, limit: int, owner_identity: str, document_id: str | None):
+            assert query == "What is covered?"
+            assert limit == 3
+            assert owner_identity == "user_42"
+            assert document_id == "doc_1"
+            return SimpleNamespace(
+                answer="Summary answer.",
+                insufficient_evidence=False,
+                citations=[
+                    SimpleNamespace(
+                        chunk_id="chk_0",
+                        revision_id="rev_1",
+                        document_id="doc_1",
+                        source_url="https://example.com/doc",
+                        final_url="https://example.com/doc",
+                        heading_path=("Intro",),
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _valid_user)
+    monkeypatch.setattr(assistant_module, "SupabaseRetrievalRepository", _FakeRepo)
+    monkeypatch.setattr(assistant_module, "RagRetrievalService", _FakeRetrieval)
+    monkeypatch.setattr(assistant_module, "RagAnswerService", _FakeAnswerService)
+
+    ok_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            req_with_db,
+            SimpleNamespace(),
+            "req_ask_ok",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "ask_knowledge",
+                    "document_id": "doc_1",
+                    "query": "What is covered?",
+                    "limit": 3,
+                }
+            },
+        )
+    )
+    assert not ok_res.get("isError")
+    payload = json.loads(ok_res["content"][0]["text"])
+    assert payload["domain"] == "knowledge"
+    assert payload["action"] == "ask_knowledge"
+    assert payload["answer"] == "Summary answer."
+    assert payload["insufficient_evidence"] is False
+    assert payload["citations"][0]["chunk_id"] == "chk_0"
+    assert payload["citations"][0]["heading_path"] == ["Intro"]
