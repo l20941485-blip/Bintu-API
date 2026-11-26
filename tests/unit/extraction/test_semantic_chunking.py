@@ -381,3 +381,15 @@ def test_semantic_chunking_tilde_fences_and_table_detection() -> None:
     prose_only = split_semantic_chunks("Only A | B here.", max_tokens=100)
     assert len(prose_only) == 1
     assert prose_only[0].contains_table is False
+
+
+def test_semantic_chunks_overlap_preserves_valid_char_offsets() -> None:
+    paragraphs = [f"Paragraph {i} contains enough words to test overlap across chunk boundaries." for i in range(1, 10)]
+    doc = "## Section\n\n" + "\n\n".join(paragraphs)
+
+    chunks = split_semantic_chunks(doc, max_tokens=30, overlap_tokens=10)
+
+    assert len(chunks) > 1
+    for chunk in chunks:
+        assert chunk.char_start >= 0
+        assert chunk.char_end == chunk.char_start + len(chunk.text)
