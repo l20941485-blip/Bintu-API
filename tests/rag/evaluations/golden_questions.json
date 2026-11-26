@@ -130,5 +130,40 @@
       "docs"
     ],
     "owner_identity": null
+  },
+  {
+    "question": "rate limit",
+    "expected_chunk_ids": [
+      "chunk-rate-limits"
+    ],
+    "expected_answer_contains": [
+      "100 per minute"
+    ],
+    "access_labels": [
+      "public"
+    ],
+    "owner_identity": null
+  },
+  {
+    "question": "onboarding rate limits",
+    "expected_chunk_ids": [
+      "chunk-rate-limits"
+    ],
+    "expected_answer_contains": [
+      "100 per minute"
+    ],
+    "access_labels": [
+      "public"
+    ],
+    "owner_identity": null
+  },
+  {
+    "question": "rate webhooks onboarding",
+    "expected_chunk_ids": [],
+    "expected_answer_contains": [],
+    "access_labels": [
+      "public"
+    ],
+    "owner_identity": null
   }
 ]
