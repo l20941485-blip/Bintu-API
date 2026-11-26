@@ -135,3 +135,76 @@ def test_knowledge_core_unavailable_includes_recovery_hint() -> None:
     error_text = result["content"][0]["text"]
     assert "knowledge_core_unavailable: The knowledge core is not configured." in error_text
     assert "domain=extraction" in error_text
+
+def test_assistant_rejects_out_of_range_max_tokens() -> None:
+    from pydantic import ValidationError
+
+    for invalid_max in (99, 50001):
+        with pytest.raises(ValidationError):
+            AssistantArguments.model_validate(
+                {
+                    "domain": "extraction",
+                    "action": "scrape",
+                    "url": "https://example.com/article",
+                    "max_tokens": invalid_max,
+                }
+            )
+
+
+def test_assistant_rejects_out_of_range_limit() -> None:
+    from pydantic import ValidationError
+
+    for invalid_limit in (0, 21):
+        with pytest.raises(ValidationError):
+            AssistantArguments.model_validate(
+                {
+                    "domain": "knowledge",
+                    "action": "ask_knowledge",
+                    "query": "What does this document say?",
+                    "document_id": "doc_123",
+                    "limit": invalid_limit,
+                }
+            )
+
+
+def test_assistant_forbids_extra_fields_and_validates_manage_knowledge() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        AssistantArguments.model_validate(
+            {
+                "domain": "extraction",
+                "action": "scrape",
+                "url": "https://example.com/article",
+                "unexpected_field": True,
+            }
+        )
+
+    listed = AssistantArguments.model_validate(
+        {
+            "domain": "knowledge",
+            "action": "manage_knowledge",
+            "operation": "list",
+        }
+    )
+    assert listed.operation == "list"
+
+    with pytest.raises(ValueError, match="document_id"):
+        AssistantArguments.model_validate(
+            {
+                "domain": "knowledge",
+                "action": "manage_knowledge",
+                "operation": "inspect",
+            }
+        )
+
+    with pytest.raises(ValueError, match="confirm=true"):
+        AssistantArguments.model_validate(
+            {
+                "domain": "knowledge",
+                "action": "manage_knowledge",
+                "operation": "delete",
+                "document_id": "doc_123",
+            }
+        )
+
