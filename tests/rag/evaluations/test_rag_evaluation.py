@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from bintu_api.rag.answer import RagAnswerService
+from bintu_api.rag.observability import RagAnswerObservability
 from bintu_api.rag.retrieval import RagRetrievalService, RetrievedChunk
 
 GOLDEN_PATH = Path(__file__).with_name("golden_questions.json")
@@ -142,6 +143,16 @@ def reciprocal_rank(
     return 0.0
 
 
+
+
+class _RecordingObserver:
+    def __init__(self) -> None:
+        self.events: list[RagAnswerObservability] = []
+
+    def record_answer(self, event: RagAnswerObservability) -> None:
+        self.events.append(event)
+
+
 class RagEvaluationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.chunks = [
@@ -188,7 +199,11 @@ class RagEvaluationTests(unittest.IsolatedAsyncioTestCase):
         self.retrieval = RagRetrievalService(
             EvaluationRepository(self.chunks)
         )
-        self.answer_service = RagAnswerService(self.retrieval)
+        self.observer = _RecordingObserver()
+        self.answer_service = RagAnswerService(
+            self.retrieval,
+            observer=self.observer,
+        )
 
     async def test_golden_questions_meet_retrieval_quality_targets(self) -> None:
         golden = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
@@ -239,9 +254,14 @@ class RagEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(answer.citations)
                 for citation in answer.citations:
                     self.assertIn(citation.chunk_id, retrieved_ids)
+                self.assertIsNone(self.observer.events[-1].abstention_reason)
             else:
                 self.assertTrue(answer.insufficient_evidence)
                 self.assertEqual(answer.citations, ())
+                self.assertIn(
+                    self.observer.events[-1].abstention_reason,
+                    ("no_chunks", "below_term_threshold"),
+                )
 
         self.assertGreaterEqual(sum(recalls) / len(recalls), 0.9)
         self.assertGreaterEqual(sum(precisions) / len(precisions), 0.8)
