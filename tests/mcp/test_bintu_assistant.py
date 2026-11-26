@@ -623,3 +623,76 @@ def test_ask_knowledge_handles_missing_client_auth_error_and_answer(monkeypatch)
     assert payload["insufficient_evidence"] is False
     assert payload["citations"][0]["chunk_id"] == "chk_0"
     assert payload["citations"][0]["heading_path"] == ["Intro"]
+
+
+def test_manage_knowledge_refresh_error_and_inspect_not_found(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from bintu_api.mcp import assistant as assistant_module
+
+    async def _valid_user(_request, _settings):
+        return "user_42"
+
+    async def _refresh_fails(*, request, settings, user_id, document_id):
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "refresh_failed", "message": "Upstream fetch failed"},
+        )
+
+    class _EmptyDetailRepo:
+        def __init__(self, _client) -> None:
+            pass
+
+        async def get_document_details(self, *, owner_identity: str, document_id: str):
+            return None
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _valid_user)
+    monkeypatch.setattr(assistant_module, "refresh_user_knowledge", _refresh_fails)
+    monkeypatch.setattr(assistant_module, "SupabaseDocumentDetailRepository", _EmptyDetailRepo)
+
+    req = SimpleNamespace(
+        headers={},
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=object())),
+    )
+
+    refresh_err = asyncio.run(
+        assistant_module.call_assistant_tool(
+            req,
+            SimpleNamespace(),
+            "req_refresh_err",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "refresh",
+                    "document_id": "doc_1",
+                }
+            },
+        )
+    )
+    assert refresh_err["isError"] is True
+    assert "refresh_failed: Upstream fetch failed" in refresh_err["content"][0]["text"]
+
+    inspect_missing = asyncio.run(
+        assistant_module.call_assistant_tool(
+            req,
+            SimpleNamespace(),
+            "req_inspect_missing",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "inspect",
+                    "document_id": "doc_missing",
+                }
+            },
+        )
+    )
+    assert inspect_missing["isError"] is True
+    payload_text = inspect_missing["content"][0]["text"]
+    assert "document_not_found:" in payload_text
+    if payload_text.startswith("{"):
+        assert json.loads(payload_text)["error"]["code"] == "document_not_found"
