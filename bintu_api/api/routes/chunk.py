@@ -50,6 +50,15 @@ DEFAULT_OVERLAP_TOKENS = 0
 VALID_CHUNK_STRATEGIES = ("sequential", "semantic")
 
 
+
+
+def _resolve_chunk_limiting_factor(truncated: bool, upstream_factor: object) -> str:
+    if not truncated:
+        return "none"
+    if isinstance(upstream_factor, str) and upstream_factor in {"char_cap", "token_budget"}:
+        return upstream_factor
+    return "token_budget"
+
 def _resolve_chunk_strategy(
     query_value: object,
     payload: object,
@@ -272,7 +281,7 @@ async def scrape_chunks(
         approx_tokens=approx_tokens,
         html_tokens=result.html_tokens,
         token_method=TOKEN_METHOD,
-        limiting_factor="token_budget" if result.truncated else "none",
+        limiting_factor=_resolve_chunk_limiting_factor(result.truncated, result.limiting_factor),
         chunk_count=len(chunks),
         cache_hit=cache_layer != "none",
         cache_layer=cache_layer,
