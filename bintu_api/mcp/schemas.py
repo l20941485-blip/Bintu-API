@@ -68,6 +68,7 @@ TOOL_OUTPUT_SCHEMA = {
         },
         "limiting_factor": {
             "type": "string",
+            "enum": ["char_cap", "token_budget", "none"],
             "description": "Which limit bound the returned text: char_cap (extracted-text character ceiling) or token_budget (max_tokens), or none when no limit shortened the response.",
         },
         "chunk_count": {
