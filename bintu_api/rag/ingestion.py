@@ -87,6 +87,8 @@ class RagIngestionService:
         request: ExtractionIngestionRequest,
         chunk: SemanticChunk,
     ) -> RagChunk:
+        heading_path = tuple(chunk.heading_path)
+        section_path = " > ".join(heading_path) if heading_path else None
         return RagChunk(
             chunk_id=chunk.chunk_id,
             revision_id=None,
@@ -96,10 +98,10 @@ class RagIngestionService:
             chunk_strategy=chunk.chunk_strategy,
             text=chunk.text,
             chunk_sha256=hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
-            heading_path=tuple(chunk.heading_path),
-            section_path=None,
-            char_start=None,
-            char_end=None,
+            heading_path=heading_path,
+            section_path=section_path,
+            char_start=chunk.char_start,
+            char_end=chunk.char_end,
             source_url=chunk.source_url or request.source_url,
             final_url=chunk.final_url or request.final_url,
             content_sha256=chunk.content_sha256 or request.content_sha256,

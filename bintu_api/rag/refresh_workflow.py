@@ -7,19 +7,17 @@ import asyncio
 from fastapi import HTTPException, Request
 
 from bintu_api.api import scrape_adapter as routes_common
-from bintu_api.api.scrape_adapter import fetch_and_extract
-from bintu_api.extraction.output import sanitize_url
-from bintu_api.extraction.rag_chunking import split_semantic_chunks
-from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
-from bintu_api.rag.models import IngestedRevision
-from bintu_api.rag.supabase import (
-    SupabaseChunkRepository,
-    SupabaseDocumentDetailRepository,
+from bintu_api.rag.ingestion_workflow import (
+    DEFAULT_INGEST_MAX_TOKENS,
+    DEFAULT_INGEST_OVERLAP_TOKENS,
+    ingest_url_to_knowledge_core,
 )
+from bintu_api.rag.models import IngestedRevision
+from bintu_api.rag.supabase import SupabaseDocumentDetailRepository
 from bintu_api.settings import Settings
 
-DEFAULT_REFRESH_MAX_TOKENS = 6000
-DEFAULT_REFRESH_OVERLAP_TOKENS = 1200
+DEFAULT_REFRESH_MAX_TOKENS = DEFAULT_INGEST_MAX_TOKENS
+DEFAULT_REFRESH_OVERLAP_TOKENS = DEFAULT_INGEST_OVERLAP_TOKENS
 
 
 async def refresh_user_knowledge(
@@ -27,6 +25,8 @@ async def refresh_user_knowledge(
     settings: Settings,
     user_id: str,
     document_id: str,
+    *,
+    skip_cache: bool = False,
 ) -> IngestedRevision:
     """Refresh one user-owned document using its stored canonical URL."""
     supabase_client = getattr(request.app.state, "supabase_client", None)
@@ -63,60 +63,13 @@ async def refresh_user_knowledge(
         )
 
     canonical_url = details["document"]["canonical_url"]
-
-    document, result, _cache_layer, _revalidated = await fetch_and_extract(
+    return await ingest_url_to_knowledge_core(
         request,
+        settings,
         canonical_url,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        render_js=False,
-        links="inline",
-        skip_cache=False,
-        persist=True,
-        mode="chunk",
-        max_tokens=DEFAULT_REFRESH_MAX_TOKENS,
-        main_content_only=False,
-    )
-
-    source_url = sanitize_url(canonical_url)
-    final_url = document.final_url if document else source_url
-    chunks = split_semantic_chunks(
-        result.markdown,
+        owner_identity=user_id,
+        access_labels=(),
         max_tokens=DEFAULT_REFRESH_MAX_TOKENS,
         overlap_tokens=DEFAULT_REFRESH_OVERLAP_TOKENS,
-        source_url=source_url,
-        final_url=final_url,
-        content_sha256=result.content_hash,
-        extracted_at=result.extracted_at,
-    )
-
-    if not chunks:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "no_ingestable_content",
-                "message": "The page did not contain ingestable readable content.",
-                "hint": "Check that the target page contains extractable text or try a different URL.",
-            },
-        )
-
-    repository = SupabaseChunkRepository(supabase_client)
-    ingestion = RagIngestionService(repository)
-    return await ingestion.ingest(
-        ExtractionIngestionRequest(
-            canonical_url=source_url,
-            title=result.page_title,
-            source_type="web",
-            owner_identity=user_id,
-            source_url=source_url,
-            final_url=final_url,
-            content_sha256=result.content_hash,
-            content_fingerprint=result.content_fingerprint,
-            extracted_at=result.extracted_at,
-            language=None,
-            status="active",
-            chunks=chunks,
-            access_labels=(),
-        )
+        skip_cache=skip_cache,
     )

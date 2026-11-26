@@ -122,12 +122,17 @@ class RagAnswerService:
             )
             return answer
 
+        citations: list[RagCitation] = []
+        seen_citation_chunks: set[str] = set()
+        for chunk, _, _ in evidence:
+            if chunk.chunk_id in seen_citation_chunks:
+                continue
+            seen_citation_chunks.add(chunk.chunk_id)
+            citations.append(self._to_citation(chunk))
+
         answer = RagAnswer(
             answer=" ".join(statement for _, statement, _ in evidence),
-            citations=tuple(
-                self._to_citation(chunk)
-                for chunk, _, _ in evidence
-            ),
+            citations=tuple(citations),
             retrieved_chunks=tuple(chunks),
             insufficient_evidence=False,
         )
@@ -177,10 +182,11 @@ class RagAnswerService:
                     )
                 )
 
+        min_matches = 2 if len(query_terms) >= 3 else 1
         matching = [
             candidate
             for candidate in candidates
-            if candidate[0] < 0
+            if -candidate[0] >= min_matches
         ]
 
         if not matching:

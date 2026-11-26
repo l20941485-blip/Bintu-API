@@ -57,10 +57,33 @@ class RagRetrievalService:
         if limit <= 0:
             raise ValueError("limit must be positive")
 
-        return await self._repository.search_chunks(
+        rows = await self._repository.search_chunks(
             query=query.strip(),
             limit=limit,
             access_labels=access_labels,
             owner_identity=owner_identity,
             document_id=document_id,
         )
+        return self._deduplicate_chunks(rows, limit=limit)
+
+    def _deduplicate_chunks(
+        self,
+        chunks: list[RetrievedChunk],
+        *,
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        deduped: list[RetrievedChunk] = []
+        seen_ids: set[str] = set()
+        seen_texts: set[str] = set()
+
+        for chunk in chunks:
+            normalized_text = " ".join(chunk.text.split()).casefold()
+            if chunk.chunk_id in seen_ids or normalized_text in seen_texts:
+                continue
+            seen_ids.add(chunk.chunk_id)
+            seen_texts.add(normalized_text)
+            deduped.append(chunk)
+            if len(deduped) >= limit:
+                break
+
+        return deduped
