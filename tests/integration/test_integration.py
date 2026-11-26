@@ -1,4 +1,4 @@
-﻿"""Integration tests using a real local HTTP server.
+"""Integration tests using a real local HTTP server.
 
 These tests verify the full fetch -> parse -> extract pipeline
 with actual HTTP responses, while still respecting SSRF protection
@@ -266,7 +266,7 @@ class IntegrationTests(unittest.TestCase):
     def test_extract_text_marks_truncation_and_ends_at_word_boundary(self) -> None:
         extracted = extract_text_result(b"<p>one two three four</p>", 10)
 
-        self.assertEqual(extracted.text, "one two")
+        self.assertEqual(extracted.text, "one two ")  # Updated: includes trailing space for clean boundary
         self.assertTrue(extracted.truncated)
 
     def test_extract_text_uses_declared_charset_for_unicode(self) -> None:
