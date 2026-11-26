@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from bintu_api.mcp.assistant import (
@@ -207,4 +209,259 @@ def test_assistant_forbids_extra_fields_and_validates_manage_knowledge() -> None
                 "document_id": "doc_123",
             }
         )
+
+def test_knowledge_auth_error_surfaces_code_and_message(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from bintu_api.mcp import assistant as assistant_module
+
+    async def _fail_auth(_request, _settings):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "session_expired", "message": "Sign in again."},
+        )
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _fail_auth)
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=object()))
+    )
+    result = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            SimpleNamespace(),
+            "req_auth",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "list",
+                }
+            },
+        )
+    )
+
+    assert result["isError"] is True
+    assert "session_expired: Sign in again." in result["content"][0]["text"]
+
+
+def test_manage_knowledge_list_delete_refresh_and_inspect(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from bintu_api.mcp import assistant as assistant_module
+
+    async def _fake_user(_request, _settings):
+        return "user_42"
+
+    doc_record = SimpleNamespace(
+        document_id="doc_1",
+        title="Doc One",
+        canonical_url="https://example.com/1",
+        source_type="web",
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-02T00:00:00Z",
+        revision_count=1,
+    )
+
+    class _FakeDocRepo:
+        def __init__(self, _client) -> None:
+            pass
+
+        async def list_documents(self, *, owner_identity: str, limit: int):
+            assert owner_identity == "user_42"
+            assert limit == 5
+            return [doc_record], 1
+
+    class _FakeDeleteRepo:
+        def __init__(self, _client) -> None:
+            pass
+
+        async def delete_document(self, *, owner_identity: str, document_id: str) -> bool:
+            assert owner_identity == "user_42"
+            return document_id == "doc_1"
+
+    async def _fake_refresh(*, request, settings, user_id: str, document_id: str):
+        assert user_id == "user_42"
+        assert document_id == "doc_1"
+        return SimpleNamespace(
+            document=SimpleNamespace(document_id="doc_1", title="Doc One"),
+            revision_id="rev_2",
+            revision=SimpleNamespace(source_url="https://example.com/1"),
+            chunks=[{"index": 0}],
+        )
+
+    class _FakeDetailRepo:
+        def __init__(self, _client) -> None:
+            pass
+
+        async def get_document_details(self, *, owner_identity: str, document_id: str):
+            assert owner_identity == "user_42"
+            if document_id != "doc_1":
+                return None
+            return {
+                "document": {
+                    "document_id": "doc_1",
+                    "title": "Doc One",
+                    "canonical_url": "https://example.com/1",
+                    "source_type": "web",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": "2026-01-02T00:00:00Z",
+                },
+                "revision": {
+                    "revision_id": "rev_2",
+                    "source_url": "https://example.com/1",
+                    "final_url": "https://example.com/1",
+                    "status": "ready",
+                    "extracted_at": "2026-01-02T00:00:00Z",
+                },
+                "chunks": [{"index": 0}],
+            }
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _fake_user)
+    monkeypatch.setattr(assistant_module, "SupabaseDocumentRepository", _FakeDocRepo)
+    monkeypatch.setattr(assistant_module, "SupabaseDocumentDeletionRepository", _FakeDeleteRepo)
+    monkeypatch.setattr(assistant_module, "refresh_user_knowledge", _fake_refresh)
+    monkeypatch.setattr(assistant_module, "SupabaseDocumentDetailRepository", _FakeDetailRepo)
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=object()))
+    )
+    settings = SimpleNamespace()
+
+    list_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            settings,
+            "req_list",
+            {"arguments": {"domain": "knowledge", "action": "manage_knowledge", "operation": "list"}},
+        )
+    )
+    list_payload = json.loads(list_res["content"][0]["text"])
+    assert list_payload["total"] == 1
+    assert list_payload["documents"][0]["document_id"] == "doc_1"
+
+    missing_del = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            settings,
+            "req_del_missing",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "delete",
+                    "document_id": "missing_doc",
+                    "confirm": True,
+                }
+            },
+        )
+    )
+    assert missing_del["isError"] is True
+    assert "document_not_found:" in missing_del["content"][0]["text"]
+
+    del_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            settings,
+            "req_del_ok",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "delete",
+                    "document_id": "doc_1",
+                    "confirm": True,
+                }
+            },
+        )
+    )
+    assert json.loads(del_res["content"][0]["text"])["deleted"] is True
+
+    refresh_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            settings,
+            "req_refresh",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "refresh",
+                    "document_id": "doc_1",
+                }
+            },
+        )
+    )
+    refresh_payload = json.loads(refresh_res["content"][0]["text"])
+    assert refresh_payload["revision_id"] == "rev_2"
+    assert refresh_payload["chunk_count"] == 1
+
+    inspect_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            settings,
+            "req_inspect",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "inspect",
+                    "document_id": "doc_1",
+                }
+            },
+        )
+    )
+    inspect_payload = json.loads(inspect_res["content"][0]["text"])
+    assert inspect_payload["document"]["document_id"] == "doc_1"
+    assert inspect_payload["chunk_count"] == 1
+
+
+def test_add_knowledge_returns_ingested_summary(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from bintu_api.mcp import assistant as assistant_module
+
+    async def _fake_user(_request, _settings):
+        return "user_42"
+
+    async def _fake_ingest(*, request, settings, user_id: str, url: str, max_tokens: int):
+        assert user_id == "user_42"
+        assert url == "https://example.com/guide"
+        assert max_tokens == 6000
+        return SimpleNamespace(
+            document=SimpleNamespace(document_id="doc_9", title="Guide"),
+            revision_id="rev_1",
+            revision=SimpleNamespace(source_url="https://example.com/guide"),
+            chunks=[{"index": 0}, {"index": 1}],
+        )
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _fake_user)
+    monkeypatch.setattr(assistant_module, "ingest_public_knowledge", _fake_ingest)
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=object()))
+    )
+    res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            request,
+            SimpleNamespace(),
+            "req_add",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "add_knowledge",
+                    "url": "https://example.com/guide",
+                }
+            },
+        )
+    )
+    payload = json.loads(res["content"][0]["text"])
+    assert payload["document_id"] == "doc_9"
+    assert payload["revision_id"] == "rev_1"
+    assert payload["chunk_count"] == 2
+    assert payload["status"] == "ready"
 
