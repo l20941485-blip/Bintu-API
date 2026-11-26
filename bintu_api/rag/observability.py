@@ -27,6 +27,10 @@ class RagAnswerObservability:
     citation_chunk_ids: tuple[str, ...]
     access_label_count: int
     has_owner_identity: bool
+    query_term_count: int = 0
+    min_matches_required: int = 1
+    max_statement_matches: int = 0
+    abstention_reason: str | None = None
 
 
 class RagAnswerObserver(Protocol):
