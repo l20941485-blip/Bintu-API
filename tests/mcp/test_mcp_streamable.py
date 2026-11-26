@@ -711,6 +711,7 @@ class McpStreamableTests(unittest.TestCase):
     def test_tools_call_maps_fetch_exceptions_and_run_extraction_http_exception(self) -> None:
         from types import SimpleNamespace
         from unittest.mock import AsyncMock, patch
+
         from fastapi import HTTPException
 
         from bintu_api.mcp import streamable as streamable_module
