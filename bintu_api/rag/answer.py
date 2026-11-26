@@ -182,7 +182,7 @@ class RagAnswerService:
                     )
                 )
 
-        min_matches = 2 if len(query_terms) >= 2 else 1
+        min_matches = 2 if len(query_terms) >= 3 else 1
         matching = [
             candidate
             for candidate in candidates
