@@ -28,10 +28,10 @@ from bintu_api.api.schemas import (
     RagDocsIngestRequest,
 )
 from bintu_api.api.scrape_adapter import fetch_and_extract
-from bintu_api.extraction.output import sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.rag.answer import RagAnswerService
-from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
+from bintu_api.rag.ingestion import RagIngestionService
+from bintu_api.rag.ingestion_workflow import ingest_url_to_knowledge_core
 from bintu_api.rag.observability import LoggingRagAnswerObserver
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase import (
@@ -226,67 +226,19 @@ async def mobile_ingest_knowledge(
             },
         )
 
-    identity = routes_common.rate_limit_identity(request, settings)
-    await asyncio.to_thread(
-        request.app.state.rate_limiter.check,
-        identity,
-    )
-
-    document, result, _cache_layer, _revalidated = await fetch_and_extract(
+    ingested = await ingest_url_to_knowledge_core(
         request,
+        settings,
         payload.url,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        render_js=False,
-        links="inline",
-        skip_cache=False,
-        persist=True,
-        mode="chunk",
-        max_tokens=payload.max_tokens,
-        main_content_only=False,
-    )
-
-    source_url = sanitize_url(payload.url)
-    final_url = document.final_url if document else source_url
-    chunks = split_semantic_chunks(
-        result.markdown,
+        owner_identity=user_id,
+        access_labels=tuple(payload.access_labels),
         max_tokens=payload.max_tokens,
         overlap_tokens=payload.overlap_tokens,
-        source_url=source_url,
-        final_url=final_url,
-        content_sha256=result.content_hash,
-        extracted_at=result.extracted_at,
-    )
-
-    if not chunks:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "no_ingestable_content",
-                "message": "The page did not contain ingestable readable content.",
-                "hint": "Check that the target page contains extractable text or try a different URL.",
-            },
-        )
-
-    repository = SupabaseChunkRepository(supabase_client)
-    ingestion = RagIngestionService(repository)
-    ingested = await ingestion.ingest(
-        ExtractionIngestionRequest(
-            canonical_url=source_url,
-            title=result.page_title,
-            source_type="web",
-            owner_identity=user_id,
-            source_url=source_url,
-            final_url=final_url,
-            content_sha256=result.content_hash,
-            content_fingerprint=result.content_fingerprint,
-            extracted_at=result.extracted_at,
-            language=None,
-            status="active",
-            chunks=chunks,
-            access_labels=tuple(payload.access_labels),
-        )
+        skip_cache=False,
+        extract_fn=fetch_and_extract,
+        chunk_fn=split_semantic_chunks,
+        chunk_repository_cls=SupabaseChunkRepository,
+        ingestion_service_cls=RagIngestionService,
     )
 
     return MobileRagIngestResponse(
@@ -405,67 +357,19 @@ async def ingest_documentation(
             },
         )
 
-    identity = routes_common.rate_limit_identity(request, settings)
-    await asyncio.to_thread(
-        request.app.state.rate_limiter.check,
-        identity,
-    )
-
-    document, result, _cache_layer, _revalidated = await fetch_and_extract(
+    ingested = await ingest_url_to_knowledge_core(
         request,
+        settings,
         payload.url,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        render_js=False,
-        links="inline",
-        skip_cache=False,
-        persist=True,
-        mode="chunk",
-        max_tokens=payload.max_tokens,
-        main_content_only=False,
-    )
-
-    source_url = sanitize_url(payload.url)
-    final_url = document.final_url if document else source_url
-    chunks = split_semantic_chunks(
-        result.markdown,
+        owner_identity=None,
+        access_labels=("docs",),
         max_tokens=payload.max_tokens,
         overlap_tokens=payload.overlap_tokens,
-        source_url=source_url,
-        final_url=final_url,
-        content_sha256=result.content_hash,
-        extracted_at=result.extracted_at,
-    )
-
-    if not chunks:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "no_ingestable_content",
-                "message": "The page did not contain ingestable readable content.",
-                "hint": "Check that the target page contains extractable text or try a different URL.",
-            },
-        )
-
-    repository = SupabaseChunkRepository(supabase_client)
-    ingestion = RagIngestionService(repository)
-    ingested = await ingestion.ingest(
-        ExtractionIngestionRequest(
-            canonical_url=source_url,
-            title=result.page_title,
-            source_type="web",
-            owner_identity=None,
-            source_url=source_url,
-            final_url=final_url,
-            content_sha256=result.content_hash,
-            content_fingerprint=result.content_fingerprint,
-            extracted_at=result.extracted_at,
-            language=None,
-            status="active",
-            chunks=chunks,
-            access_labels=("docs",),
-        )
+        skip_cache=False,
+        extract_fn=fetch_and_extract,
+        chunk_fn=split_semantic_chunks,
+        chunk_repository_cls=SupabaseChunkRepository,
+        ingestion_service_cls=RagIngestionService,
     )
 
     return MobileRagIngestResponse(
@@ -788,61 +692,19 @@ async def refresh_mobile_rag_document(
 
     canonical_url = details["document"]["canonical_url"]
 
-    document, result, _cache_layer, _revalidated = await fetch_and_extract(
+    ingested = await ingest_url_to_knowledge_core(
         request,
+        settings,
         canonical_url,
-        include_nav=False,
-        include_header=False,
-        include_footer=False,
-        render_js=False,
-        links="inline",
-        skip_cache=False,
-        persist=True,
-        mode="chunk",
-        max_tokens=payload.max_tokens,
-        main_content_only=False,
-    )
-
-    source_url = sanitize_url(canonical_url)
-    final_url = document.final_url if document else source_url
-    chunks = split_semantic_chunks(
-        result.markdown,
+        owner_identity=user_id,
+        access_labels=tuple(payload.access_labels),
         max_tokens=payload.max_tokens,
         overlap_tokens=payload.overlap_tokens,
-        source_url=source_url,
-        final_url=final_url,
-        content_sha256=result.content_hash,
-        extracted_at=result.extracted_at,
-    )
-
-    if not chunks:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "no_ingestable_content",
-                "message": "The page did not contain ingestable readable content.",
-                "hint": "Check that the target page contains extractable text or try a different URL.",
-            },
-        )
-
-    repository = SupabaseChunkRepository(supabase_client)
-    ingestion = RagIngestionService(repository)
-    ingested = await ingestion.ingest(
-        ExtractionIngestionRequest(
-            canonical_url=source_url,
-            title=result.page_title,
-            source_type="web",
-            owner_identity=user_id,
-            source_url=source_url,
-            final_url=final_url,
-            content_sha256=result.content_hash,
-            content_fingerprint=result.content_fingerprint,
-            extracted_at=result.extracted_at,
-            language=None,
-            status="active",
-            chunks=chunks,
-            access_labels=tuple(payload.access_labels),
-        )
+        skip_cache=getattr(payload, "skip_cache", False),
+        extract_fn=fetch_and_extract,
+        chunk_fn=split_semantic_chunks,
+        chunk_repository_cls=SupabaseChunkRepository,
+        ingestion_service_cls=RagIngestionService,
     )
 
     return MobileRagIngestResponse(

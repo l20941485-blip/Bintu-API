@@ -1,4 +1,4 @@
-"""Public-URL ingestion workflow for user-owned RAG knowledge."""
+"""Shared URL ingestion helpers and public-URL ingestion workflow."""
 
 from __future__ import annotations
 
@@ -19,15 +19,22 @@ DEFAULT_INGEST_MAX_TOKENS = 6000
 DEFAULT_INGEST_OVERLAP_TOKENS = 1200
 
 
-async def ingest_public_knowledge(
+async def ingest_url_to_knowledge_core(
     request: Request,
     settings: Settings,
-    user_id: str,
     url: str,
     *,
+    owner_identity: str | None,
+    access_labels: tuple[str, ...] = (),
     max_tokens: int = DEFAULT_INGEST_MAX_TOKENS,
+    overlap_tokens: int = DEFAULT_INGEST_OVERLAP_TOKENS,
+    skip_cache: bool = False,
+    extract_fn=fetch_and_extract,
+    chunk_fn=split_semantic_chunks,
+    chunk_repository_cls=SupabaseChunkRepository,
+    ingestion_service_cls=RagIngestionService,
 ) -> IngestedRevision:
-    """Fetch, extract, chunk, and persist a public page for one user."""
+    """Fetch, extract, chunk, and persist a public URL into the RAG store."""
     supabase_client = getattr(request.app.state, "supabase_client", None)
     if supabase_client is None:
         raise HTTPException(
@@ -45,7 +52,7 @@ async def ingest_public_knowledge(
         identity,
     )
 
-    document, result, _cache_layer, _revalidated = await fetch_and_extract(
+    document, result, _cache_layer, _revalidated = await extract_fn(
         request,
         url,
         include_nav=False,
@@ -53,7 +60,7 @@ async def ingest_public_knowledge(
         include_footer=False,
         render_js=False,
         links="inline",
-        skip_cache=False,
+        skip_cache=skip_cache,
         persist=True,
         mode="chunk",
         max_tokens=max_tokens,
@@ -62,10 +69,10 @@ async def ingest_public_knowledge(
 
     source_url = sanitize_url(url)
     final_url = document.final_url if document else source_url
-    chunks = split_semantic_chunks(
+    chunks = chunk_fn(
         result.markdown,
         max_tokens=max_tokens,
-        overlap_tokens=DEFAULT_INGEST_OVERLAP_TOKENS,
+        overlap_tokens=overlap_tokens,
         source_url=source_url,
         final_url=final_url,
         content_sha256=result.content_hash,
@@ -82,14 +89,14 @@ async def ingest_public_knowledge(
             },
         )
 
-    repository = SupabaseChunkRepository(supabase_client)
-    ingestion = RagIngestionService(repository)
+    repository = chunk_repository_cls(supabase_client)
+    ingestion = ingestion_service_cls(repository)
     return await ingestion.ingest(
         ExtractionIngestionRequest(
             canonical_url=source_url,
             title=result.page_title,
             source_type="web",
-            owner_identity=user_id,
+            owner_identity=owner_identity,
             source_url=source_url,
             final_url=final_url,
             content_sha256=result.content_hash,
@@ -98,6 +105,30 @@ async def ingest_public_knowledge(
             language=None,
             status="active",
             chunks=chunks,
-            access_labels=(),
+            access_labels=access_labels,
         )
+    )
+
+
+async def ingest_public_knowledge(
+    request: Request,
+    settings: Settings,
+    user_id: str,
+    url: str,
+    *,
+    max_tokens: int = DEFAULT_INGEST_MAX_TOKENS,
+    overlap_tokens: int = DEFAULT_INGEST_OVERLAP_TOKENS,
+    access_labels: tuple[str, ...] = (),
+    skip_cache: bool = False,
+) -> IngestedRevision:
+    """Fetch, extract, chunk, and persist a public page for one user."""
+    return await ingest_url_to_knowledge_core(
+        request,
+        settings,
+        url,
+        owner_identity=user_id,
+        access_labels=access_labels,
+        max_tokens=max_tokens,
+        overlap_tokens=overlap_tokens,
+        skip_cache=skip_cache,
     )
