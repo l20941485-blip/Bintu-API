@@ -32,6 +32,7 @@ from bintu_api.extraction.output import sanitize_url
 from bintu_api.extraction.rag_chunking import split_semantic_chunks
 from bintu_api.rag.answer import RagAnswerService
 from bintu_api.rag.ingestion import ExtractionIngestionRequest, RagIngestionService
+from bintu_api.rag.observability import LoggingRagAnswerObserver
 from bintu_api.rag.retrieval import RagRetrievalService
 from bintu_api.rag.supabase import (
     SupabaseChunkRepository,
@@ -85,7 +86,10 @@ async def answer_question(
 
     repository = SupabaseRetrievalRepository(supabase_client)
     retrieval = RagRetrievalService(repository)
-    answer_service = RagAnswerService(retrieval)
+    answer_service = RagAnswerService(
+        retrieval,
+        observer=LoggingRagAnswerObserver(),
+    )
 
     answer = await answer_service.answer(
         query=payload.query,
@@ -156,7 +160,10 @@ async def mobile_answer_question(
 
     repository = SupabaseRetrievalRepository(supabase_client)
     retrieval = RagRetrievalService(repository)
-    answer_service = RagAnswerService(retrieval)
+    answer_service = RagAnswerService(
+        retrieval,
+        observer=LoggingRagAnswerObserver(),
+    )
 
     answer = await answer_service.answer(
         query=payload.query,
@@ -337,7 +344,10 @@ async def answer_documentation_question(
 
     repository = SupabaseRetrievalRepository(supabase_client)
     retrieval = RagRetrievalService(repository)
-    answer_service = RagAnswerService(retrieval)
+    answer_service = RagAnswerService(
+        retrieval,
+        observer=LoggingRagAnswerObserver(),
+    )
 
     answer = await answer_service.answer(
         query=payload.query,
