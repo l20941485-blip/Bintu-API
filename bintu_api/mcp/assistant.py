@@ -256,6 +256,7 @@ async def call_assistant_tool(
             return _tool_error(
                 "knowledge_core_unavailable",
                 "The knowledge core is not configured.",
+                "Use domain=extraction with action=scrape for stateless public extraction, or configure Supabase knowledge storage.",
             )
 
         try:
@@ -398,6 +399,7 @@ async def call_assistant_tool(
             return _tool_error(
                 "knowledge_core_unavailable",
                 "The knowledge core is not configured.",
+                "Use domain=extraction with action=scrape for stateless public extraction, or configure Supabase knowledge storage.",
             )
 
         try:
@@ -459,6 +461,7 @@ async def call_assistant_tool(
         return _tool_error(
             "knowledge_core_unavailable",
             "The knowledge core is not configured.",
+            "Use domain=extraction with action=scrape for stateless public extraction, or configure Supabase knowledge storage.",
         )
 
     try:

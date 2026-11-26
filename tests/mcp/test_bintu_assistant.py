@@ -103,3 +103,35 @@ def test_knowledge_rejects_scrape_action() -> None:
                 "document_id": "doc_123",
             }
         )
+
+
+def test_knowledge_core_unavailable_includes_recovery_hint() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from bintu_api.mcp.assistant import call_assistant_tool
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=None))
+    )
+    settings = SimpleNamespace()
+    result = asyncio.run(
+        call_assistant_tool(
+            request,
+            settings,
+            "req_test",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "ask_knowledge",
+                    "query": "What does this document say?",
+                    "document_id": "doc_123",
+                }
+            },
+        )
+    )
+
+    assert result["isError"] is True
+    error_text = result["content"][0]["text"]
+    assert "knowledge_core_unavailable: The knowledge core is not configured." in error_text
+    assert "domain=extraction" in error_text
