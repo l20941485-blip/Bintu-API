@@ -708,6 +708,80 @@ class McpStreamableTests(unittest.TestCase):
             self.assertIn("invalid_arguments:", result["content"][0]["text"])
 
 
+    def test_tools_call_maps_fetch_exceptions_and_run_extraction_http_exception(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+
+        from fastapi import HTTPException
+
+        from bintu_api.mcp import streamable as streamable_module
+
+        for exc in (
+            streamable_module.mcp_adapter.PayloadTooLarge("too large"),
+            TimeoutError("timed out"),
+        ):
+            with patch(
+                "bintu_api.mcp.streamable.routes_common_fetch_and_extract",
+                new=AsyncMock(side_effect=exc),
+            ):
+                resp = self.rpc(
+                    "tools/call",
+                    {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+                    request_id=30,
+                )
+            self.assertEqual(resp.status_code, 200)
+            result = resp.json()["result"]
+            self.assertTrue(result["isError"])
+
+        async def _fake_fetch(_request, _url, **_kwargs):
+            doc = SimpleNamespace(
+                text="Hello world.",
+                title="Sample",
+                final_url="https://example.com",
+                content_cleaning={"applied": False, "strategy": "standard"},
+                content_quality=None,
+                deduplicated_count=0,
+            )
+            cached = SimpleNamespace(
+                markdown="Hello world.",
+                truncated=False,
+                extracted_at="2026-01-01T00:00:00Z",
+                content_cleaning={"applied": False, "strategy": "standard"},
+            )
+            return doc, cached, "none", False
+
+        with (
+            patch(
+                "bintu_api.mcp.streamable.routes_common_fetch_and_extract",
+                new=AsyncMock(side_effect=_fake_fetch),
+            ),
+            patch.object(
+                streamable_module.mcp_adapter,
+                "decode_source_text",
+                return_value="<html><body>Hello world.</body></html>",
+            ),
+            patch.object(
+                streamable_module.mcp_adapter,
+                "build_cache_economics",
+                return_value={},
+            ),
+            patch.object(
+                streamable_module.mcp_adapter,
+                "run_extraction",
+                new=AsyncMock(side_effect=HTTPException(status_code=503, detail="Extractor busy")),
+            ),
+        ):
+            http_resp = self.rpc(
+                "tools/call",
+                {"name": TOOL_NAME, "arguments": {"url": "https://example.com"}},
+                request_id=31,
+            )
+
+        self.assertEqual(http_resp.status_code, 200)
+        http_result = http_resp.json()["result"]
+        self.assertTrue(http_result["isError"])
+
+
 class McpScopedApiKeyTests(unittest.TestCase):
     """MCP_API_KEY unlocks the MCP surfaces only, never REST or /metrics."""
 
