@@ -159,5 +159,52 @@ class RagAnswerObservabilityTests(unittest.IsolatedAsyncioTestCase):
         LoggingRagAnswerObserver().record_answer(event)
 
 
+
+
+    async def test_records_below_term_threshold_abstention_diagnostics(
+        self,
+    ) -> None:
+        observer = RecordingObserver()
+        repository = FakeAnswerRepository(
+            [
+                make_chunk(
+                    "chunk-auth",
+                    "## Authentication\n\nUse an API key.",
+                    1.0,
+                )
+            ]
+        )
+        service = RagAnswerService(
+            RagRetrievalService(repository),
+            observer=observer,
+        )
+
+        result = await service.answer(
+            query="kubernetes ingress tls certificate",
+        )
+
+        self.assertTrue(result.insufficient_evidence)
+        event = observer.events[0]
+        self.assertEqual(event.retrieved_chunk_count, 1)
+        self.assertEqual(event.query_term_count, 4)
+        self.assertEqual(event.min_matches_required, 2)
+        self.assertEqual(event.max_statement_matches, 0)
+        self.assertEqual(event.abstention_reason, "below_term_threshold")
+
+    async def test_records_no_chunks_abstention_reason(self) -> None:
+        observer = RecordingObserver()
+        service = RagAnswerService(
+            RagRetrievalService(FakeAnswerRepository([])),
+            observer=observer,
+        )
+
+        result = await service.answer(query="How do I authenticate?")
+
+        self.assertTrue(result.insufficient_evidence)
+        event = observer.events[0]
+        self.assertEqual(event.abstention_reason, "no_chunks")
+        self.assertEqual(event.max_statement_matches, 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

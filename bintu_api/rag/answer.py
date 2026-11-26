@@ -145,11 +145,11 @@ class RagAnswerService:
         )
         return answer
 
-    def _select_evidence(
+    def _score_candidates(
         self,
         chunks: tuple[RetrievedChunk, ...],
         query_terms: frozenset[str],
-    ) -> list[tuple[RetrievedChunk, str, int]]:
+    ) -> list[tuple[int, int, int, RetrievedChunk, str]]:
         candidates: list[tuple[int, int, int, RetrievedChunk, str]] = []
         seen_statements: set[str] = set()
 
@@ -182,7 +182,15 @@ class RagAnswerService:
                     )
                 )
 
-        min_matches = 2 if len(query_terms) >= 3 else 1
+        return candidates
+
+    def _select_evidence(
+        self,
+        chunks: tuple[RetrievedChunk, ...],
+        query_terms: frozenset[str],
+    ) -> list[tuple[RetrievedChunk, str, int]]:
+        candidates = self._score_candidates(chunks, query_terms)
+        min_matches = self._min_matches_required(query_terms)
         matching = [
             candidate
             for candidate in candidates
@@ -209,6 +217,10 @@ class RagAnswerService:
                 break
 
         return selected
+
+    @staticmethod
+    def _min_matches_required(query_terms: frozenset[str]) -> int:
+        return 2 if len(query_terms) >= 3 else 1
 
     def _candidate_statements(self, text: str) -> list[str]:
         statements: list[str] = []
@@ -278,6 +290,22 @@ class RagAnswerService:
             return
 
         latency_ms = (time.perf_counter() - started_at) * 1000
+        query_terms = self._query_terms(query)
+        candidates = self._score_candidates(
+            answer.retrieved_chunks,
+            query_terms,
+        )
+        max_statement_matches = max(
+            (-candidate[0] for candidate in candidates),
+            default=0,
+        )
+
+        if not answer.insufficient_evidence:
+            abstention_reason: str | None = None
+        elif not answer.retrieved_chunks:
+            abstention_reason = "no_chunks"
+        else:
+            abstention_reason = "below_term_threshold"
 
         self._observer.record_answer(
             RagAnswerObservability(
@@ -297,5 +325,9 @@ class RagAnswerService:
                 ),
                 access_label_count=len(access_labels),
                 has_owner_identity=owner_identity is not None,
+                query_term_count=len(query_terms),
+                min_matches_required=self._min_matches_required(query_terms),
+                max_statement_matches=max_statement_matches,
+                abstention_reason=abstention_reason,
             )
         )
