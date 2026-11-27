@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bintu_api.api.discovery import router as discovery_router
 from bintu_api.api.routes import router
+from bintu_api.extraction.cache_store import verify_scrape_cache_schema
 from bintu_api.integrations.supabase import DATABASE_TIMEOUT_SECONDS, close_supabase_client, create_supabase_client
 from bintu_api.mcp import router as mcp_router
 from bintu_api.mcp.streamable import router as mcp_streamable_router
@@ -53,6 +54,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 type(error).__name__,
             )
             application.state.supabase_client = None
+
+        if application.state.supabase_client is not None:
+            try:
+                application.state.scrape_cache_schema = await asyncio.wait_for(
+                    verify_scrape_cache_schema(application.state.supabase_client),
+                    timeout=DATABASE_TIMEOUT_SECONDS,
+                )
+            except Exception as error:
+                logging.getLogger("bintu_api.database").warning(
+                    "scrape_cache_schema_verification_failed error_type=%s",
+                    type(error).__name__,
+                )
+                application.state.scrape_cache_schema = {
+                    "ok": False,
+                    "checked_columns": 0,
+                    "missing_columns": [],
+                    "error": type(error).__name__,
+                }
         try:
             yield
         finally:
@@ -112,10 +131,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.middleware("http")
     async def add_security_headers(request: Request, call_next):
         response = await call_next(request)
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
+
     application.include_router(discovery_router)
     application.include_router(router)
     application.include_router(reader_router)
@@ -142,6 +160,3 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
-
-
-

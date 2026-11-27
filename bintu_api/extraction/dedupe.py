@@ -1,4 +1,4 @@
-﻿"""Duplicate-story removal for extracted Markdown.
+"""Duplicate-story removal for extracted Markdown.
 
 This module owns URL normalization and duplicate-block detection so the
 extraction pipeline can deduplicate repeated stories without coupling to
@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-__all__ = ["dedupe_blocks", "normalize_url"]
+__all__ = ["dedupe_blocks", "dedupe_paragraphs", "normalize_url"]
 
 _TRACKING_PARAMS = {
     "fbclid",
@@ -98,3 +98,45 @@ def dedupe_blocks(text: str) -> tuple[str, int]:
         kept.extend(block)
 
     return "\n".join(kept), removed
+
+
+def _normalize_paragraph(paragraph: str) -> str:
+    """Normalize whitespace and case for duplicate paragraph comparison."""
+    return re.sub(r"\s+", " ", paragraph.strip()).casefold()
+
+
+def dedupe_paragraphs(text: str, *, min_chars: int = 40) -> tuple[str, int]:
+    """Remove repeated non-heading paragraphs outside fenced code blocks."""
+    paragraphs = text.split("\n\n")
+    seen: set[str] = set()
+    kept: list[str] = []
+    removed = 0
+    in_fence = False
+
+    for para in paragraphs:
+        fence_toggles = para.count("```")
+        if in_fence:
+            kept.append(para)
+            if fence_toggles % 2 == 1:
+                in_fence = False
+            continue
+
+        if fence_toggles % 2 == 1:
+            in_fence = True
+            kept.append(para)
+            continue
+
+        stripped = para.strip()
+        if not stripped or _HEADING_RE.match(stripped) or len(stripped) < min_chars:
+            kept.append(para)
+            continue
+
+        key = _normalize_paragraph(stripped)
+        if key in seen:
+            removed += 1
+            continue
+
+        seen.add(key)
+        kept.append(para)
+
+    return "\n\n".join(kept), removed

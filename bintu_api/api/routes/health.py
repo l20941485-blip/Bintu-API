@@ -10,7 +10,8 @@ Important boundaries, invariants, or compatibility notes:
 
 import os
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, status
+from fastapi.responses import JSONResponse
 
 from bintu_api.api.schemas import (
     GatewayResponse,
@@ -58,4 +59,41 @@ def version_info(request: Request) -> VersionResponse:
         rate_limit_requests=settings.rate_limit_requests,
         rate_limit_window_seconds=settings.rate_limit_window_seconds,
         cache_ttl_seconds=settings.cache_ttl_seconds,
+    )
+
+
+@router.get("/healthz/deep", include_in_schema=False)
+async def deep_health_check(request: Request):
+    """Verify scrape_cache schema readiness for persistent caching."""
+    from bintu_api.extraction.cache_store import verify_scrape_cache_schema
+
+    schema_status = getattr(request.app.state, "scrape_cache_schema", None)
+    client = getattr(request.app.state, "supabase_client", None)
+
+    if schema_status is None:
+        if client is None:
+            payload = {
+                "status": "degraded",
+                "scrape_cache_schema": {
+                    "ok": False,
+                    "checked_columns": 0,
+                    "missing_columns": [],
+                    "error": "supabase_client_unavailable",
+                },
+            }
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=payload,
+            )
+        schema_status = await verify_scrape_cache_schema(client)
+        request.app.state.scrape_cache_schema = schema_status
+
+    healthy = bool(isinstance(schema_status, dict) and schema_status.get("ok"))
+    payload = {
+        "status": "ok" if healthy else "degraded",
+        "scrape_cache_schema": schema_status,
+    }
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=payload,
     )

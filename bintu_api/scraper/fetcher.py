@@ -365,13 +365,6 @@ def _parse_target(
             try:
                 host = idna.encode(host, uts46=True).decode("ascii")
             except idna.IDNAError as error:
-                logger.warning(
-                    "idn_normalization_debug host=%r idna_version=%r python=%r error=%r",
-                    host,
-                    getattr(idna, "__version__", "unknown"),
-                    __import__("sys").version.split()[0],
-                    error,
-                )
                 raise TargetURLRejected("The target URL is malformed") from error
 
             _validate_punycode_host(host)
@@ -544,15 +537,11 @@ def fetch_html_document(
             if current_scheme == "https" and parsed.scheme == "http":
                 allowed_domains = settings.https_to_http_redirect_allowed_domains
                 is_allowed_downgrade = any(
-                    host == allowed_domain
-                    or host.endswith(f".{allowed_domain}")
-                    for allowed_domain in allowed_domains
+                    host == allowed_domain or host.endswith(f".{allowed_domain}") for allowed_domain in allowed_domains
                 )
 
                 if not is_allowed_downgrade:
-                    raise TargetURLRejected(
-                        "Redirects from HTTPS to HTTP are not allowed"
-                    )
+                    raise TargetURLRejected("Redirects from HTTPS to HTTP are not allowed")
             current_scheme = parsed.scheme
 
         try:
