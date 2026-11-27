@@ -186,6 +186,11 @@ class SupabaseDocumentRepository:
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[DocumentSummary], int]:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        if offset < 0:
+            raise ValueError("offset must be >= 0")
+
         response = await execute_supabase_rpc(
             self._supabase_client,
             "list_rag_documents",

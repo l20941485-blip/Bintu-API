@@ -40,12 +40,6 @@ async def refresh_user_knowledge(
             },
         )
 
-    identity = routes_common.rate_limit_identity(request, settings)
-    await asyncio.to_thread(
-        request.app.state.rate_limiter.check,
-        identity,
-    )
-
     detail_repository = SupabaseDocumentDetailRepository(supabase_client)
     details = await detail_repository.get_document_details(
         owner_identity=user_id,
@@ -71,6 +65,14 @@ async def refresh_user_knowledge(
                 "message": "The stored knowledge document is missing a valid canonical URL.",
                 "hint": "Re-ingest the document from a valid source URL.",
             },
+        )
+
+    rate_limiter = getattr(request.app.state, "rate_limiter", None)
+    if rate_limiter is not None:
+        identity = routes_common.rate_limit_identity(request, settings)
+        await asyncio.to_thread(
+            rate_limiter.check,
+            identity,
         )
 
     return await ingest_url_to_knowledge_core(

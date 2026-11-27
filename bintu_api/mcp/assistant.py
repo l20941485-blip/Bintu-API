@@ -67,6 +67,7 @@ class AssistantArguments(BaseModel):
     confirm: bool = False
     max_tokens: int = Field(default=6000, ge=100, le=50000)
     limit: int = Field(default=5, ge=1, le=20)
+    offset: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _validate_action(self) -> AssistantArguments:
@@ -191,7 +192,13 @@ ASSISTANT_INPUT_SCHEMA = {
             "minimum": 1,
             "maximum": 20,
             "default": 5,
-            "description": "Maximum number of knowledge chunks considered for an answer.",
+            "description": "Maximum number of knowledge chunks or listed documents returned.",
+        },
+        "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Zero-based offset when listing knowledge documents.",
         },
     },
     "required": ["domain", "action"],
@@ -303,6 +310,7 @@ async def call_assistant_tool(
                 documents, total = await repository.list_documents(
                     owner_identity=user_id,
                     limit=arguments.limit,
+                    offset=arguments.offset,
                 )
             except TimeoutError:
                 return _timeout_tool_error("document listing")
@@ -313,6 +321,9 @@ async def call_assistant_tool(
                     "action": "manage_knowledge",
                     "operation": "list",
                     "total": total,
+                    "limit": arguments.limit,
+                    "offset": arguments.offset,
+                    "has_more": (arguments.offset + len(documents)) < total,
                     "documents": [
                         {
                             "document_id": document.document_id,

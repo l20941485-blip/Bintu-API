@@ -270,9 +270,10 @@ def test_manage_knowledge_list_delete_refresh_and_inspect(monkeypatch) -> None:
         def __init__(self, _client) -> None:
             pass
 
-        async def list_documents(self, *, owner_identity: str, limit: int):
+        async def list_documents(self, *, owner_identity: str, limit: int, offset: int = 0):
             assert owner_identity == "user_42"
             assert limit == 5
+            assert offset == 0
             return [doc_record], 1
 
     class _FakeDeleteRepo:

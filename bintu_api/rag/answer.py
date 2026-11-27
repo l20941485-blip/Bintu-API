@@ -98,6 +98,7 @@ class RagAnswerService:
             self._record(
                 query=query,
                 answer=answer,
+                selected_evidence_count=0,
                 access_labels=access_labels,
                 owner_identity=owner_identity,
                 started_at=started_at,
@@ -116,6 +117,7 @@ class RagAnswerService:
             self._record(
                 query=query,
                 answer=answer,
+                selected_evidence_count=len(evidence),
                 access_labels=access_labels,
                 owner_identity=owner_identity,
                 started_at=started_at,
@@ -139,6 +141,7 @@ class RagAnswerService:
         self._record(
             query=query,
             answer=answer,
+            selected_evidence_count=len(evidence),
             access_labels=access_labels,
             owner_identity=owner_identity,
             started_at=started_at,
@@ -282,6 +285,7 @@ class RagAnswerService:
         *,
         query: str,
         answer: RagAnswer,
+        selected_evidence_count: int,
         access_labels: tuple[str, ...],
         owner_identity: str | None,
         started_at: float,
@@ -311,7 +315,7 @@ class RagAnswerService:
             RagAnswerObservability(
                 query_length=len(query.strip()),
                 retrieved_chunk_count=len(answer.retrieved_chunks),
-                selected_evidence_count=len(answer.citations),
+                selected_evidence_count=selected_evidence_count,
                 citation_count=len(answer.citations),
                 insufficient_evidence=answer.insufficient_evidence,
                 latency_ms=latency_ms,
