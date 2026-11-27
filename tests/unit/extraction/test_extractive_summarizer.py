@@ -225,3 +225,22 @@ def test_key_sentences_deduplicates_redundant_statements_in_order() -> None:
     assert len(sentence_texts) == len(set(sentence_texts))
     assert any("Worker threads isolate blocking database calls" in s for s in sentence_texts)
     assert any("Explicit two-second timeouts prevent stalled requests" in s for s in sentence_texts)
+
+def test_extractive_summary_preserves_version_numbers_and_abbreviations() -> None:
+    markdown = (
+        "## Release Notes\n\n"
+        "Version 1.4.0 improves extraction speed across documents. "
+        "It supports e.g. HTML and Markdown inputs reliably. "
+        "2026 benchmarks confirm steady throughput across retrieval runs."
+    )
+
+    summary = build_extractive_summary(
+        markdown,
+        mode="leading",
+        sentence_count=3,
+    )
+
+    texts = [sentence.text for sentence in summary.sentences]
+    assert texts[0] == "Version 1.4.0 improves extraction speed across documents."
+    assert texts[1].strip() == "It supports e.g. HTML and Markdown inputs reliably."
+    assert texts[2].strip() == "2026 benchmarks confirm steady throughput across retrieval runs."
