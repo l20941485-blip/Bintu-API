@@ -62,7 +62,17 @@ async def refresh_user_knowledge(
             },
         )
 
-    canonical_url = details["document"]["canonical_url"]
+    canonical_url = (details["document"].get("canonical_url") or "").strip()
+    if not canonical_url:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_document_source",
+                "message": "The stored knowledge document is missing a valid canonical URL.",
+                "hint": "Re-ingest the document from a valid source URL.",
+            },
+        )
+
     return await ingest_url_to_knowledge_core(
         request,
         settings,

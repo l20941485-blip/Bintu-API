@@ -52,9 +52,25 @@ async def ingest_url_to_knowledge_core(
         identity,
     )
 
+    if max_tokens < 1:
+        raise ValueError("max_tokens must be at least 1")
+    if overlap_tokens < 0 or overlap_tokens >= max_tokens:
+        raise ValueError("overlap_tokens must be >= 0 and less than max_tokens")
+
+    clean_url = (url or "").strip()
+    if not clean_url:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_url",
+                "message": "A non-empty URL is required for ingestion.",
+                "hint": "Provide a valid HTTP or HTTPS URL and retry.",
+            },
+        )
+
     document, result, _cache_layer, _revalidated = await extract_fn(
         request,
-        url,
+        clean_url,
         include_nav=False,
         include_header=False,
         include_footer=False,
@@ -67,10 +83,21 @@ async def ingest_url_to_knowledge_core(
         main_content_only=False,
     )
 
-    source_url = sanitize_url(url)
+    markdown_text = getattr(result, "markdown", "") or ""
+    if not markdown_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "no_ingestable_content",
+                "message": "The page did not contain ingestable readable content.",
+                "hint": "Check that the target page contains extractable text or try a different URL.",
+            },
+        )
+
+    source_url = sanitize_url(clean_url)
     final_url = document.final_url if document else source_url
     chunks = chunk_fn(
-        result.markdown,
+        markdown_text,
         max_tokens=max_tokens,
         overlap_tokens=overlap_tokens,
         source_url=source_url,
