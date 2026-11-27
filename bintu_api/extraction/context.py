@@ -354,6 +354,7 @@ async def extract_context(
     include_heading_path: bool = True,
     include_page_context: bool = True,
     chunk_selection_policy: Literal["all", "first"] = "all",
+    compact_chunks: bool = False,
 ) -> ContextResult:
     """Fetch, extract, and transform a page into a context-ready document.
 
@@ -675,6 +676,18 @@ async def extract_context(
                 )
                 for chunk in chunks:
                     for key in optional_metadata_keys:
+                        chunk.pop(key, None)
+
+            if compact_chunks:
+                compact_stripped_keys = (
+                    "source_url",
+                    "final_url",
+                    "content_sha256",
+                    "extracted_at",
+                    "page_context",
+                )
+                for chunk in chunks:
+                    for key in compact_stripped_keys:
                         chunk.pop(key, None)
 
         elif mode == "summarize" and chunks:

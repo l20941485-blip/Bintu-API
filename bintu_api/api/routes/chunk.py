@@ -95,6 +95,7 @@ async def scrape_chunks(
     return_metadata: bool = True,
     include_heading_path: bool = True,
     include_page_context: bool = True,
+    compact_chunks: bool = False,
 ) -> ScrapeChunksResponse:
     settings = request.app.state.settings
     request_id = getattr(getattr(request, "state", None), "request_id", None) or uuid.uuid4().hex
@@ -195,10 +196,10 @@ async def scrape_chunks(
                     contains_table=chunk.contains_table if return_metadata else None,
                     contains_links=chunk.contains_links if return_metadata else None,
                     link_count=chunk.link_count if return_metadata else None,
-                    source_url=chunk.source_url,
-                    final_url=chunk.final_url,
-                    content_sha256=result.content_hash,
-                    extracted_at=chunk.extracted_at,
+                    source_url=None if compact_chunks else chunk.source_url,
+                    final_url=None if compact_chunks else chunk.final_url,
+                    content_sha256=None if compact_chunks else result.content_hash,
+                    extracted_at=None if compact_chunks else chunk.extracted_at,
                     page_title=result.page_title if return_metadata else None,
                     content_fingerprint=result.content_fingerprint if return_metadata else None,
                     chunk_sha256=hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
@@ -214,7 +215,7 @@ async def scrape_chunks(
                             )
                             or "No additional page context available."
                         )
-                        if include_page_context
+                        if (include_page_context and not compact_chunks)
                         else None
                     ),
                 )
@@ -243,7 +244,7 @@ async def scrape_chunks(
                 heading_path=None if not include_heading_path else [],
                 page_context=(
                     (f"Page: {result.page_title}" if result.page_title else "No additional page context available.")
-                    if include_page_context
+                    if (include_page_context and not compact_chunks)
                     else None
                 ),
             )
