@@ -405,9 +405,15 @@ async def call_assistant_tool(
                 "The requested knowledge document was not found.",
             )
 
-        document = details["document"]
-        revision = details["revision"]
-        chunks = details.get("chunks", [])
+        document = details.get("document")
+        revision = details.get("revision")
+        if not isinstance(document, dict) or not isinstance(revision, dict):
+            return _tool_error(
+                "document_not_found",
+                "The requested knowledge document metadata is incomplete.",
+            )
+        raw_chunks = details.get("chunks")
+        chunks = raw_chunks if isinstance(raw_chunks, list) else []
 
         return _tool_result(
             {
@@ -461,6 +467,8 @@ async def call_assistant_tool(
                 url=arguments.url or "",
                 max_tokens=arguments.max_tokens,
             )
+        except TimeoutError:
+            return _timeout_tool_error("ingestion")
         except HTTPException as error:
             detail = error.detail if isinstance(error.detail, dict) else {}
             return _tool_error(

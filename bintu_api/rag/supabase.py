@@ -52,9 +52,12 @@ class SupabaseChunkRepository:
         )
 
         data = response.data
+        if not isinstance(data, dict) or not data.get("document_id") or not data.get("revision_id"):
+            raise ValueError("Invalid RPC response from ingest_rag_revision: missing document_id or revision_id")
         document_id = data["document_id"]
         revision_id = data["revision_id"]
-        chunk_results = data.get("chunks", [])
+        raw_chunk_results = data.get("chunks")
+        chunk_results = raw_chunk_results if isinstance(raw_chunk_results, list) else []
 
         persisted_document = Document(
             document_id=document_id,
@@ -81,7 +84,7 @@ class SupabaseChunkRepository:
                 document=persisted_document,
                 revision=persisted_revision,
                 chunk=chunk,
-                result=chunk_results[index],
+                result=chunk_results[index] if index < len(chunk_results) and isinstance(chunk_results[index], dict) else {},
             )
             for index, chunk in enumerate(chunks)
         )
@@ -128,15 +131,22 @@ class SupabaseChunkRepository:
         chunk: RagChunk,
         result: dict[str, Any],
     ) -> RagChunk:
+        fallback_chunk_id = chunk.chunk_id or make_chunk_id(
+            source_url=chunk.source_url,
+            content_sha256=chunk.content_sha256,
+            chunk_strategy=chunk.chunk_strategy,
+            chunk_index=chunk.chunk_index,
+        )
+        fallback_sha256 = chunk.chunk_sha256 or hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()
         return RagChunk(
-            chunk_id=result["chunk_id"],
+            chunk_id=str(result.get("chunk_id") or fallback_chunk_id),
             revision_id=revision.revision_id,
             document_id=document.document_id,
             owner_identity=document.owner_identity,
             chunk_index=chunk.chunk_index,
             chunk_strategy=chunk.chunk_strategy,
             text=chunk.text,
-            chunk_sha256=result["chunk_sha256"],
+            chunk_sha256=str(result.get("chunk_sha256") or fallback_sha256),
             heading_path=chunk.heading_path,
             section_path=chunk.section_path,
             char_start=chunk.char_start,
@@ -201,7 +211,7 @@ class SupabaseDocumentRepository:
             for row in rows
         ]
 
-        total = int(rows[0]["total"]) if rows else 0
+        total = int(rows[0].get("total", len(rows))) if rows else 0
 
         return documents, total
 
@@ -227,7 +237,10 @@ class SupabaseDocumentDeletionRepository:
             },
         )
 
-        return bool(response.data)
+        payload = response.data
+        if isinstance(payload, dict) and "deleted" in payload:
+            return bool(payload["deleted"])
+        return bool(payload)
 
 
 class SupabaseDocumentDetailRepository:
