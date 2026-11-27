@@ -7,7 +7,7 @@ from bintu_api.extraction.cache_store import (
     REQUIRED_SCRAPE_CACHE_COLUMNS,
     verify_scrape_cache_schema,
 )
-from bintu_api.extraction.dedupe import dedupe_paragraphs
+from bintu_api.extraction.dedupe import dedupe_lines, dedupe_paragraphs
 from bintu_api.settings import Settings
 from main import create_app
 
@@ -83,3 +83,25 @@ def test_healthz_deep_reflects_schema_state(monkeypatch: pytest.MonkeyPatch) -> 
         res = client.get("/healthz/deep")
         assert res.status_code == 503
         assert res.json()["status"] == "degraded"
+
+
+
+def test_dedupe_lines_removes_duplicates_and_preserves_structure() -> None:
+    repeated_line = "Repeated standalone scrape line across sections."
+    sample = (
+        "# Repeated Heading\n"
+        f"{repeated_line}\n"
+        "# Repeated Heading\n"
+        f"{repeated_line}\n"
+        "```text\n"
+        f"{repeated_line}\n"
+        "```\n"
+        "| col1 | col2 |\n"
+        "| --- | --- |\n"
+        "| val1 | val2 |"
+    )
+    cleaned, removed = dedupe_lines(sample, min_chars=24)
+    assert removed == 1
+    assert cleaned.count(repeated_line) == 2
+    assert cleaned.count("# Repeated Heading") == 2
+    assert "| --- | --- |" in cleaned

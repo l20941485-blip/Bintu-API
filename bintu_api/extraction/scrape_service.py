@@ -38,7 +38,7 @@ from bintu_api.extraction.cleaner import (
     suppress_boilerplate_lines,
 )
 from bintu_api.extraction.context import decode_source_text
-from bintu_api.extraction.dedupe import dedupe_blocks, dedupe_paragraphs
+from bintu_api.extraction.dedupe import dedupe_blocks, dedupe_lines, dedupe_paragraphs
 from bintu_api.extraction.html_extract import ExtractedText, extract_main_content
 from bintu_api.extraction.memory_cache import (
     is_memory_cache_fresh,
@@ -386,7 +386,8 @@ class ScrapeService:
         cleaned_text = normalize_markdown(cleaned_text)
         cleaned_text, deduplicated_count = dedupe_blocks(cleaned_text)
         cleaned_text, repeated_paragraphs_removed = dedupe_paragraphs(cleaned_text)
-        deduplicated_count += repeated_paragraphs_removed
+        cleaned_text, repeated_lines_removed = dedupe_lines(cleaned_text)
+        deduplicated_count += repeated_paragraphs_removed + repeated_lines_removed
         cleaned_text, boilerplate_lines_removed = suppress_boilerplate_lines(cleaned_text)
         record_stage_trace(
             request_id=request_id,

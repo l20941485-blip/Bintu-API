@@ -24,16 +24,17 @@ class McpModeContractTests(unittest.TestCase):
         self.addCleanup(robots_patcher.stop)
         robots_patcher.start()
         self.url = "https://example.com/article"
-        paragraph = (
-            "<p>Bintu provides a stable extraction contract for AI agents. "
-            "This paragraph adds enough readable content to exceed a small "
-            "summarization budget. Each sentence contributes additional "
-            "characters and approximate tokens to the resulting document.</p>"
+        paragraphs = "".join(
+            f"<p>Section {idx} explains how Bintu maintains a stable extraction contract "
+            f"for autonomous AI agents operating across diverse documentation sites. "
+            f"Entry {idx} provides distinct readable prose, context tokens, and structural "
+            f"detail so summarization budgets are genuinely exercised.</p>"
+            for idx in range(1, 11)
         )
         self.document = FetchedHTML(
             final_url=self.url,
             body=(
-                b"<html><body><main><h1>Bintu mode contract</h1>" + (paragraph.encode() * 10) + b"</main></body></html>"
+                f"<html><body><main><h1>Bintu mode contract</h1>{paragraphs}</main></body></html>".encode()
             ),
             charset="utf-8",
         )

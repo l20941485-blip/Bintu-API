@@ -14,6 +14,8 @@ SETTINGS = Settings(api_key="", rapidapi_proxy_secret="")
         "https://xn--e1afmkfd.xn--p1ai/",
         "https://münchen.de/",
         "https://XN--MNCHEN-3YA.DE/",
+        "https://🐴.example/",
+        "https://✪df.ws/",
     ],
 )
 def test_valid_punycode_urls_parse(url):

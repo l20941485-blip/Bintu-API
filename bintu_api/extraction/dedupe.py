@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-__all__ = ["dedupe_blocks", "dedupe_paragraphs", "normalize_url"]
+__all__ = ["dedupe_blocks", "dedupe_lines", "dedupe_paragraphs", "normalize_url"]
 
 _TRACKING_PARAMS = {
     "fbclid",
@@ -140,3 +140,45 @@ def dedupe_paragraphs(text: str, *, min_chars: int = 40) -> tuple[str, int]:
         kept.append(para)
 
     return "\n\n".join(kept), removed
+
+
+_TABLE_SEP_RE = re.compile(r"^[|: -]+$")
+
+
+def dedupe_lines(text: str, *, min_chars: int = 24) -> tuple[str, int]:
+    """Remove repeated standalone non-heading lines outside fenced code blocks."""
+    lines = text.split("\n")
+    seen: set[str] = set()
+    kept: list[str] = []
+    removed = 0
+    in_fence = False
+
+    for line in lines:
+        stripped_line = line.strip()
+        if stripped_line.startswith("```"):
+            in_fence = not in_fence
+            kept.append(line)
+            continue
+
+        if in_fence:
+            kept.append(line)
+            continue
+
+        if (
+            not stripped_line
+            or len(stripped_line) < min_chars
+            or _HEADING_RE.match(stripped_line)
+            or _TABLE_SEP_RE.fullmatch(stripped_line)
+        ):
+            kept.append(line)
+            continue
+
+        normalized = re.sub(r"\s+", " ", stripped_line).casefold()
+        if normalized in seen:
+            removed += 1
+            continue
+
+        seen.add(normalized)
+        kept.append(line)
+
+    return "\n".join(kept), removed

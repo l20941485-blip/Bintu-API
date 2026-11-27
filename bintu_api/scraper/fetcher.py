@@ -25,6 +25,7 @@ import idna
 
 from bintu_api.common.fetch import FetchedHTML, RedirectHop
 from bintu_api.extraction.html_extract import extract_html_metadata
+from bintu_api.scraper.host_norm import normalize_idn_host
 from bintu_api.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -333,14 +334,21 @@ def _validate_punycode_host(host: str) -> None:
 
         try:
             idna.decode(label)
+        except idna.core.InvalidCodepoint:
+            # Allow emoji/symbol punycode labels that decode cleanly via punycode
+            # even when IDNA2008 marks the symbol/emoji codepoint outside PVALID.
+            punycode_part = label[4:]
+            if len(punycode_part) < 2 or punycode_part.endswith("-"):
+                raise TargetURLRejected("The URL contains malformed Punycode") from None
+            try:
+                decoded = punycode_part.encode("ascii").decode("punycode")
+                reencoded = decoded.encode("punycode").decode("ascii")
+            except (UnicodeError, ValueError) as error:
+                raise TargetURLRejected("The URL contains malformed Punycode") from error
+            # Reject strings that decode to themselves (no non-ASCII codepoints encoded, e.g. xn--a)
+            if decoded == punycode_part.lower() or reencoded != punycode_part.lower():
+                raise TargetURLRejected("The URL contains malformed Punycode") from None
         except idna.IDNAError as error:
-            logger.warning(
-                "punycode_validation_debug label=%r idna_version=%r python=%r error=%r",
-                label,
-                getattr(idna, "__version__", "unknown"),
-                __import__("sys").version.split()[0],
-                error,
-            )
             raise TargetURLRejected("The URL contains malformed Punycode") from error
 
 
@@ -363,7 +371,7 @@ def _parse_target(
             ipaddress.ip_address(host)
         except ValueError:
             try:
-                host = idna.encode(host, uts46=True).decode("ascii")
+                host = normalize_idn_host(host)
             except idna.IDNAError as error:
                 raise TargetURLRejected("The target URL is malformed") from error
 
