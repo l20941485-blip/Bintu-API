@@ -46,7 +46,7 @@ def test_unknown_tool_uses_error_contract(client):
     detail = response.json()["detail"]
     assert detail["code"] == "unknown_tool"
     assert detail["message"] == "Unknown MCP tool: not_a_real_tool."
-    assert detail["hint"] == f"Use the supported tool: {TOOL_NAME}."
+    assert detail["hint"] == "Use a supported tool: bintu_scrape_text or bintu_assistant."
 
 
 def test_invalid_arguments_uses_error_contract(client):

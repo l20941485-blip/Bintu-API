@@ -424,12 +424,6 @@ async def list_mobile_rag_documents(
             },
         )
 
-    identity = routes_common.rate_limit_identity(request, settings)
-    await asyncio.to_thread(
-        request.app.state.rate_limiter.check,
-        identity,
-    )
-
     if limit < 1 or limit > 100:
         raise HTTPException(
             status_code=422,
@@ -449,6 +443,12 @@ async def list_mobile_rag_documents(
                 "hint": "Pass a non-negative offset (0 or greater).",
             },
         )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
 
     repository = SupabaseDocumentRepository(supabase_client)
     documents, total = await repository.list_documents(
@@ -668,12 +668,6 @@ async def refresh_mobile_rag_document(
             },
         )
 
-    identity = routes_common.rate_limit_identity(request, settings)
-    await asyncio.to_thread(
-        request.app.state.rate_limiter.check,
-        identity,
-    )
-
     detail_repository = SupabaseDocumentDetailRepository(supabase_client)
     details = await detail_repository.get_document_details(
         owner_identity=user_id,
@@ -690,7 +684,23 @@ async def refresh_mobile_rag_document(
             },
         )
 
-    canonical_url = details["document"]["canonical_url"]
+    raw_canonical_url = details.get("document", {}).get("canonical_url")
+    canonical_url = raw_canonical_url.strip() if isinstance(raw_canonical_url, str) else ""
+    if not canonical_url:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_canonical_url",
+                "message": "Document does not have a valid canonical_url to refresh.",
+                "hint": "Re-ingest the document with a valid URL before refreshing.",
+            },
+        )
+
+    identity = routes_common.rate_limit_identity(request, settings)
+    await asyncio.to_thread(
+        request.app.state.rate_limiter.check,
+        identity,
+    )
 
     ingested = await ingest_url_to_knowledge_core(
         request,

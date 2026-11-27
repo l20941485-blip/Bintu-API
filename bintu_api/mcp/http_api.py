@@ -23,7 +23,11 @@ from pydantic import ValidationError
 
 from bintu_api.api import mcp_adapter
 from bintu_api.errors.tool_errors import ToolError, build_mcp_tool_error_result, retry_policy_for_code
-from bintu_api.mcp.assistant import assistant_tool_definition
+from bintu_api.mcp.assistant import (
+    ASSISTANT_TOOL_NAME,
+    assistant_tool_definition,
+    call_assistant_tool,
+)
 from bintu_api.mcp.schemas import (
     TOOL_ANNOTATIONS,
     TOOL_DESCRIPTION,
@@ -93,14 +97,22 @@ async def call_tool(
     settings: Settings = request.app.state.settings
     verify_mcp_api_access(request, settings)
 
-    if payload.name != TOOL_NAME:
+    if payload.name not in (TOOL_NAME, ASSISTANT_TOOL_NAME):
         raise HTTPException(
             status_code=400,
             detail={
                 "code": "unknown_tool",
                 "message": f"Unknown MCP tool: {payload.name}.",
-                "hint": f"Use the supported tool: {TOOL_NAME}.",
+                "hint": f"Use a supported tool: {TOOL_NAME} or {ASSISTANT_TOOL_NAME}.",
             },
+        )
+
+    if payload.name == ASSISTANT_TOOL_NAME:
+        return await call_assistant_tool(
+            request=request,
+            settings=settings,
+            request_id=None,
+            params={"name": payload.name, "arguments": payload.arguments},
         )
 
     try:
