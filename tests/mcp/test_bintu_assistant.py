@@ -780,3 +780,68 @@ def test_knowledge_timeout_handling_and_off_loop_auth(monkeypatch) -> None:
     )
     assert timeout_res["isError"] is True
     assert "upstream_timeout:" in timeout_res["content"][0]["text"]
+
+def test_whitespace_arguments_and_refresh_timeout(monkeypatch) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from bintu_api.mcp import assistant as assistant_module
+
+    req = SimpleNamespace(
+        headers={},
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=object())),
+    )
+
+    for bad_args in (
+        {"domain": "extraction", "action": "scrape", "url": "   "},
+        {"domain": "knowledge", "action": "add_knowledge", "url": "   "},
+        {
+            "domain": "knowledge",
+            "action": "ask_knowledge",
+            "query": "   ",
+            "document_id": "doc_1",
+        },
+        {
+            "domain": "knowledge",
+            "action": "manage_knowledge",
+            "operation": "inspect",
+            "document_id": "   ",
+        },
+    ):
+        res = asyncio.run(
+            assistant_module.call_assistant_tool(
+                req,
+                SimpleNamespace(),
+                "req_whitespace",
+                {"arguments": bad_args},
+            )
+        )
+        assert res["isError"] is True
+        assert "invalid_arguments:" in res["content"][0]["text"]
+
+    async def _auth(_request, _settings):
+        return "user_refresh_timeout"
+
+    async def _slow_refresh(**_kwargs):
+        raise TimeoutError("refresh timed out")
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _auth)
+    monkeypatch.setattr(assistant_module, "refresh_user_knowledge", _slow_refresh)
+
+    timeout_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            req,
+            SimpleNamespace(),
+            "req_refresh_timeout",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "manage_knowledge",
+                    "operation": "refresh",
+                    "document_id": "doc_1",
+                }
+            },
+        )
+    )
+    assert timeout_res["isError"] is True
+    assert "upstream_timeout:" in timeout_res["content"][0]["text"]

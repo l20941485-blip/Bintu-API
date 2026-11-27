@@ -70,6 +70,13 @@ class AssistantArguments(BaseModel):
 
     @model_validator(mode="after")
     def _validate_action(self) -> AssistantArguments:
+        if self.url is not None:
+            self.url = self.url.strip()
+        if self.query is not None:
+            self.query = self.query.strip()
+        if self.document_id is not None:
+            self.document_id = self.document_id.strip()
+
         if self.domain == "extraction":
             if self.action != "scrape":
                 raise ValueError("extraction supports only action=scrape")
@@ -355,6 +362,8 @@ async def call_assistant_tool(
                     user_id=user_id,
                     document_id=arguments.document_id or "",
                 )
+            except TimeoutError:
+                return _timeout_tool_error("document refresh")
             except HTTPException as error:
                 detail = error.detail if isinstance(error.detail, dict) else {}
                 return _tool_error(
