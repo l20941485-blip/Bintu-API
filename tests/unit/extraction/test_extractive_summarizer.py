@@ -195,3 +195,33 @@ def test_key_sentences_supports_unicode_uppercase_boundaries():
         "Également, cette phrase doit être séparée correctement.",
         "Cette dernière phrase explique les décalages source.",
     ]
+
+
+
+
+
+def test_key_sentences_deduplicates_redundant_statements_in_order() -> None:
+    from bintu_api.extraction.summarizer import build_extractive_summary
+
+    markdown = (
+        "## Overview\n\n"
+        "Worker threads isolate blocking database calls from the asyncio event loop. "
+        "Worker threads isolate blocking database calls from the asyncio event loop.\n\n"
+        "## Timeouts\n\n"
+        "Explicit two-second timeouts prevent stalled requests from exhausting connection pools. "
+        "Explicit two-second timeouts prevent stalled requests from exhausting connection pools.\n\n"
+        "## Observability\n\n"
+        "Structured timeout metrics record upstream latency across retrieval endpoints."
+    )
+    summary = build_extractive_summary(
+        markdown,
+        mode="key_sentences",
+        sentence_count=3,
+    )
+
+    sentence_texts = [sentence.text for sentence in summary.sentences]
+    assert summary.mode == "key_sentences"
+    assert len(sentence_texts) <= 3
+    assert len(sentence_texts) == len(set(sentence_texts))
+    assert any("Worker threads isolate blocking database calls" in s for s in sentence_texts)
+    assert any("Explicit two-second timeouts prevent stalled requests" in s for s in sentence_texts)
