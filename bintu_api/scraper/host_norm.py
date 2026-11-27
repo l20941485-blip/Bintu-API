@@ -29,6 +29,8 @@ def normalize_idn_host(host: str) -> str:
                     raise idna.IDNAError(f"Invalid ASCII label: {raw_label!r}") from None
                 if raw_label.startswith("-") or raw_label.endswith("-"):
                     raise idna.IDNAError(f"Invalid hyphen placement in label: {raw_label!r}") from None
+                if raw_label.startswith("xn--"):
+                    raise idna.IDNAError(f"Invalid ACE label: {raw_label!r}") from None
                 encoded_labels.append(raw_label)
             else:
                 folded = unicodedata.normalize("NFC", raw_label.casefold())

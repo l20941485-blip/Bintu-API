@@ -48,5 +48,11 @@ class SanitizeUrlTests(unittest.TestCase):
         result = sanitize_url("https://example.com/page?")
         self.assertEqual(result, "https://example.com/page")
 
+    def test_sanitizes_case_insensitive_sensitive_and_utm_params(self) -> None:
+        """Sanitize strips mixed-case sensitive keys and UTM parameters."""
+        from bintu_api.security.url_safety import sanitize_url
 
-
+        result = sanitize_url(
+            "https://example.com/docs?API_KEY=secret123&Token=abc&UTM_SOURCE=news&page=2"
+        )
+        self.assertEqual(result, "https://example.com/docs?page=2")

@@ -132,11 +132,11 @@ _CJK_SENTENCE_BOUNDARY_RE = re.compile(
 _SENTENCE_BOUNDARY_RE = re.compile(rf"(?:{_LATIN_SENTENCE_BOUNDARY_RE.pattern}|{_CJK_SENTENCE_BOUNDARY_RE.pattern})")
 
 _ABBREVIATION_SUFFIX_RE = re.compile(
-    r"(?:\b(?:e\.g|i\.e|etc|vs|dr|mr|mrs|ms|prof|fig|no|vol|pp|st)\.|(?:\b[a-zA-Z]\.){2,})$",
+    r"(?:\b(?:e\.g|i\.e|etc|vs|dr|mr|mrs|ms|prof|fig|no|vol|pp|st|approx|al|eq|sec|ch|ref|min|max|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.|(?:\b[a-zA-Z]\.){2,})$",
     re.IGNORECASE,
 )
-_DECIMAL_OR_VERSION_RE = re.compile(r"(?:\d+\.\d+|\d+\.)$")
-_NEXT_TOKEN_LOWER_RE = re.compile(r"^[\"')\]]*\s+[a-z0-9]")
+_DECIMAL_OR_VERSION_RE = re.compile(r"(?:\d+(?:\.\d+)+|\d+\.)$")
+_NEXT_TOKEN_LOWER_RE = re.compile(r"^[\"')\]]*\s+[a-z]")
 
 
 _TRAILING_CLOSERS = "\"')]}”’）】"

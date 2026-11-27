@@ -64,3 +64,26 @@ def test_invalid_punycode_maps_to_invalid_or_unsafe_url(client):
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "invalid_or_unsafe_url"
+
+def test_normalize_idn_host_boundaries_and_rejections():
+    import idna
+
+    from bintu_api.scraper.host_norm import normalize_idn_host
+
+    assert normalize_idn_host("  Example.COM.  ") == "example.com"
+    assert normalize_idn_host("🐴.example") == "xn--8o8h.example"
+
+    max_label = "a" * 63
+    assert normalize_idn_host(f"{max_label}.example.com") == f"{max_label}.example.com"
+
+    with pytest.raises(idna.IDNAError):
+        normalize_idn_host(f"{'a' * 64}.example.com")
+
+    with pytest.raises(idna.IDNAError):
+        normalize_idn_host("-bad.example.com")
+
+    with pytest.raises(idna.IDNAError):
+        normalize_idn_host("bad-.example.com")
+
+    with pytest.raises(idna.IDNAError):
+        normalize_idn_host("xn--invalid-ace.example.com")
