@@ -7,6 +7,8 @@ operations are scoped to the authenticated Supabase user.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 from typing import Any, Literal
 
@@ -213,6 +215,24 @@ def _tool_result(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _resolve_supabase_user(request: Request, settings: Settings) -> str:
+    """Resolve user identity without blocking the event loop on synchronous I/O."""
+    if inspect.iscoroutinefunction(verify_supabase_user):
+        return await verify_supabase_user(request, settings)
+    result = await asyncio.to_thread(verify_supabase_user, request, settings)
+    if inspect.isawaitable(result):
+        return await result
+    return str(result)
+
+
+def _timeout_tool_error(operation_label: str) -> dict[str, Any]:
+    return _tool_error(
+        "upstream_timeout",
+        f"Knowledge {operation_label} timed out while waiting for the backend.",
+        "Retry the request or verify Supabase connectivity and database latency.",
+    )
+
+
 def _tool_error(code: str, message: str, hint: str = "") -> dict[str, Any]:
     text = f"{code}: {message}"
     if hint:
@@ -260,7 +280,9 @@ async def call_assistant_tool(
             )
 
         try:
-            user_id = await verify_supabase_user(request, settings)
+            user_id = await _resolve_supabase_user(request, settings)
+        except TimeoutError:
+            return _timeout_tool_error("authentication")
         except HTTPException as error:
             detail = error.detail if isinstance(error.detail, dict) else {}
             return _tool_error(
@@ -270,10 +292,13 @@ async def call_assistant_tool(
 
         if arguments.operation == "list":
             repository = SupabaseDocumentRepository(supabase_client)
-            documents, total = await repository.list_documents(
-                owner_identity=user_id,
-                limit=arguments.limit,
-            )
+            try:
+                documents, total = await repository.list_documents(
+                    owner_identity=user_id,
+                    limit=arguments.limit,
+                )
+            except TimeoutError:
+                return _timeout_tool_error("document listing")
 
             return _tool_result(
                 {
@@ -298,10 +323,13 @@ async def call_assistant_tool(
 
         if arguments.operation == "delete":
             repository = SupabaseDocumentDeletionRepository(supabase_client)
-            deleted = await repository.delete_document(
-                owner_identity=user_id,
-                document_id=arguments.document_id or "",
-            )
+            try:
+                deleted = await repository.delete_document(
+                    owner_identity=user_id,
+                    document_id=arguments.document_id or "",
+                )
+            except TimeoutError:
+                return _timeout_tool_error("document deletion")
 
             if not deleted:
                 return _tool_error(
@@ -354,10 +382,13 @@ async def call_assistant_tool(
             )
 
         repository = SupabaseDocumentDetailRepository(supabase_client)
-        details = await repository.get_document_details(
-            owner_identity=user_id,
-            document_id=arguments.document_id or "",
-        )
+        try:
+            details = await repository.get_document_details(
+                owner_identity=user_id,
+                document_id=arguments.document_id or "",
+            )
+        except TimeoutError:
+            return _timeout_tool_error("document inspection")
 
         if not details:
             return _tool_error(
@@ -403,7 +434,9 @@ async def call_assistant_tool(
             )
 
         try:
-            user_id = await verify_supabase_user(request, settings)
+            user_id = await _resolve_supabase_user(request, settings)
+        except TimeoutError:
+            return _timeout_tool_error("authentication")
         except HTTPException as error:
             detail = error.detail if isinstance(error.detail, dict) else {}
             return _tool_error(
@@ -465,7 +498,9 @@ async def call_assistant_tool(
         )
 
     try:
-        user_id = await verify_supabase_user(request, settings)
+        user_id = await _resolve_supabase_user(request, settings)
+    except TimeoutError:
+        return _timeout_tool_error("authentication")
     except HTTPException as error:
         detail = error.detail if isinstance(error.detail, dict) else {}
         return _tool_error(
@@ -477,12 +512,15 @@ async def call_assistant_tool(
     retrieval = RagRetrievalService(repository)
     answer_service = RagAnswerService(retrieval)
 
-    answer = await answer_service.answer(
-        query=arguments.query or "",
-        limit=arguments.limit,
-        owner_identity=user_id,
-        document_id=arguments.document_id,
-    )
+    try:
+        answer = await answer_service.answer(
+            query=arguments.query or "",
+            limit=arguments.limit,
+            owner_identity=user_id,
+            document_id=arguments.document_id,
+        )
+    except TimeoutError:
+        return _timeout_tool_error("retrieval")
 
     return _tool_result(
         {

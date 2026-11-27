@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from bintu_api.integrations.supabase import execute_supabase_rpc
 from bintu_api.rag.retrieval import RetrievedChunk
 
 
@@ -22,7 +23,8 @@ class SupabaseRetrievalRepository:
         owner_identity: str | None,
         document_id: str | None = None,
     ) -> list[RetrievedChunk]:
-        response = await self._supabase_client.rpc(
+        response = await execute_supabase_rpc(
+            self._supabase_client,
             "search_rag_chunks",
             {
                 "p_query": query,
@@ -31,7 +33,7 @@ class SupabaseRetrievalRepository:
                 "p_owner_identity": owner_identity,
                 "p_document_id": document_id,
             },
-        ).execute()
+        )
 
         return [self._to_retrieved_chunk(row) for row in response.data or []]
 

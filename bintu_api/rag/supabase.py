@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from bintu_api.extraction.rag_chunking import make_chunk_id
+from bintu_api.integrations.supabase import execute_supabase_rpc
 from bintu_api.rag.models import (
     Document,
     DocumentRevision,
@@ -27,7 +28,8 @@ class SupabaseChunkRepository:
         revision: DocumentRevision,
         chunks: list[RagChunk],
     ) -> IngestedRevision:
-        response = await self._supabase_client.rpc(
+        response = await execute_supabase_rpc(
+            self._supabase_client,
             "ingest_rag_revision",
             {
                 "p_document": {
@@ -47,7 +49,7 @@ class SupabaseChunkRepository:
                 },
                 "p_chunks": [self._chunk_payload(chunk) for chunk in chunks],
             },
-        ).execute()
+        )
 
         data = response.data
         document_id = data["document_id"]
@@ -174,14 +176,15 @@ class SupabaseDocumentRepository:
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[DocumentSummary], int]:
-        response = await self._supabase_client.rpc(
+        response = await execute_supabase_rpc(
+            self._supabase_client,
             "list_rag_documents",
             {
                 "p_owner_identity": owner_identity,
                 "p_limit": limit,
                 "p_offset": offset,
             },
-        ).execute()
+        )
 
         rows = response.data or []
 
@@ -215,13 +218,14 @@ class SupabaseDocumentDeletionRepository:
         owner_identity: str,
         document_id: str,
     ) -> bool:
-        response = await self._supabase_client.rpc(
+        response = await execute_supabase_rpc(
+            self._supabase_client,
             "delete_rag_document",
             {
                 "p_owner_identity": owner_identity,
                 "p_document_id": document_id,
             },
-        ).execute()
+        )
 
         return bool(response.data)
 
@@ -238,12 +242,13 @@ class SupabaseDocumentDetailRepository:
         owner_identity: str,
         document_id: str,
     ) -> dict[str, Any] | None:
-        response = await self._supabase_client.rpc(
+        response = await execute_supabase_rpc(
+            self._supabase_client,
             "get_rag_document_details",
             {
                 "p_owner_identity": owner_identity,
                 "p_document_id": document_id,
             },
-        ).execute()
+        )
 
         return response.data

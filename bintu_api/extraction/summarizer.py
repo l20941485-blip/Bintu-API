@@ -419,7 +419,10 @@ def _select_key_sentences(
                 item,
                 _selected_token_sets=selected_token_sets,
             ):
-                maximum = max(_jaccard_similarity(item[6], token_set) for token_set in _selected_token_sets)
+                maximum = max(
+                    _jaccard_similarity(item[6], token_set)
+                    for token_set in _selected_token_sets
+                )
                 return -(item[0] - 0.80 * maximum)
 
             best = min(

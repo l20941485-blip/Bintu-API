@@ -5,6 +5,7 @@ This module isolates upstream integration code so application logic does not dir
 Important boundaries, invariants, and compatibility notes are documented here so the module stays focused on its owned behavior without drifting into unrelated routing or storage concerns.
 """
 
+import asyncio
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from bintu_api.settings import Settings
@@ -45,3 +46,26 @@ async def close_supabase_client(client: AsyncClient) -> None:
 
     if hasattr(result, "__await__"):
         await result
+
+
+class SupabaseRpcTimeoutError(TimeoutError):
+    """Raised when a Supabase RPC call exceeds its configured timeout."""
+
+
+async def execute_supabase_rpc(
+    client: Any,
+    rpc_name: str,
+    params: dict[str, Any],
+    *,
+    timeout_seconds: float = DATABASE_TIMEOUT_SECONDS,
+) -> Any:
+    """Execute a Supabase RPC with an explicit async timeout."""
+    try:
+        return await asyncio.wait_for(
+            client.rpc(rpc_name, params).execute(),
+            timeout=timeout_seconds,
+        )
+    except TimeoutError as exc:
+        raise SupabaseRpcTimeoutError(
+            f"Supabase RPC '{rpc_name}' timed out after {timeout_seconds}s"
+        ) from exc

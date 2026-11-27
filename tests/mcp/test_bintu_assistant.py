@@ -696,3 +696,87 @@ def test_manage_knowledge_refresh_error_and_inspect_not_found(monkeypatch) -> No
     assert "document_not_found:" in payload_text
     if payload_text.startswith("{"):
         assert json.loads(payload_text)["error"]["code"] == "document_not_found"
+
+
+
+def test_knowledge_timeout_handling_and_off_loop_auth(monkeypatch) -> None:
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+
+    from bintu_api.integrations.supabase import (
+        SupabaseRpcTimeoutError,
+        execute_supabase_rpc,
+    )
+    from bintu_api.mcp import assistant as assistant_module
+
+    class _SlowExecute:
+        async def execute(self):
+            await asyncio.sleep(0.2)
+            return SimpleNamespace(data=[])
+
+    class _SlowRpcClient:
+        def rpc(self, *_args, **_kwargs):
+            return _SlowExecute()
+
+    async def _run_rpc_timeout():
+        try:
+            await execute_supabase_rpc(
+                _SlowRpcClient(),
+                "search_rag_chunks",
+                {},
+                timeout_seconds=0.01,
+            )
+        except SupabaseRpcTimeoutError:
+            return
+        raise AssertionError("Expected SupabaseRpcTimeoutError")
+
+    asyncio.run(_run_rpc_timeout())
+
+    observed_threads: list[int] = []
+    main_thread_id = threading.get_ident()
+
+    def _sync_auth(_request, _settings):
+        observed_threads.append(threading.get_ident())
+        return "user_timeout_test"
+
+    monkeypatch.setattr(assistant_module, "verify_supabase_user", _sync_auth)
+
+    async def _run_off_loop():
+        req = SimpleNamespace(headers={})
+        user_id = await assistant_module._resolve_supabase_user(req, SimpleNamespace())
+        assert user_id == "user_timeout_test"
+
+    asyncio.run(_run_off_loop())
+    assert observed_threads and observed_threads[0] != main_thread_id
+
+    class _TimeoutRepo:
+        def __init__(self, _client):
+            pass
+
+        async def search_chunks(self, **_kwargs):
+            raise SupabaseRpcTimeoutError("timed out")
+
+    monkeypatch.setattr(assistant_module, "SupabaseRetrievalRepository", _TimeoutRepo)
+
+    req = SimpleNamespace(
+        headers={},
+        app=SimpleNamespace(state=SimpleNamespace(supabase_client=object())),
+    )
+    timeout_res = asyncio.run(
+        assistant_module.call_assistant_tool(
+            req,
+            SimpleNamespace(),
+            "req_timeout_ask",
+            {
+                "arguments": {
+                    "domain": "knowledge",
+                    "action": "ask_knowledge",
+                    "query": "how does auth work",
+                    "document_id": "doc_1",
+                }
+            },
+        )
+    )
+    assert timeout_res["isError"] is True
+    assert "upstream_timeout:" in timeout_res["content"][0]["text"]
