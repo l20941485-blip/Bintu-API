@@ -302,11 +302,14 @@ def _apply_overlap(
     return result
 
 
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
-
-
 def _split_by_sentences(text: str, max_tokens: int) -> list[str]:
-    sentences = [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
+    from bintu_api.extraction.summarizer import _split_line_sentences
+
+    sentences: list[str] = []
+    for line in text.splitlines():
+        line_stripped = line.strip()
+        if line_stripped:
+            sentences.extend(_split_line_sentences(line_stripped))
     pieces: list[str] = []
     current: list[str] = []
 
@@ -377,9 +380,9 @@ def _split_section(
     *,
     max_tokens: int,
     overlap_tokens: int,
-) -> list[str]:
+) -> tuple[list[str], set[int]]:
     if count_tokens(section) <= max_tokens:
-        return [section]
+        return [section], set()
 
     pieces: list[str] = []
     cursor = 0
@@ -396,8 +399,14 @@ def _split_section(
     if remainder.strip():
         pieces.extend(_split_prose(remainder, max_tokens))
 
-    chunks = _pack_pieces(pieces, max_tokens)
-    return _apply_overlap(chunks, max_tokens, overlap_tokens)
+    packed = _pack_pieces(pieces, max_tokens)
+    overlapped = _apply_overlap(packed, max_tokens, overlap_tokens)
+    overlapped_indices = {
+        idx
+        for idx, (base, final) in enumerate(zip(packed, overlapped, strict=True))
+        if idx > 0 and final != base
+    }
+    return overlapped, overlapped_indices
 
 
 def split_semantic_chunks(
@@ -431,23 +440,34 @@ def split_semantic_chunks(
         if not section:
             continue
 
-        pieces = _split_section(
+        pieces, overlapped_indices = _split_section(
             section,
             max_tokens=max_tokens,
             overlap_tokens=overlap_tokens,
         )
+        search_cursor = 0
 
-        for piece in pieces:
+        for piece_idx, piece in enumerate(pieces):
             chunk_index = len(chunks)
             links = _URL.findall(piece)
 
             # Compute per-chunk hash for stability and integrity
             chunk_text_hash = hashlib.sha256(piece.encode("utf-8")).hexdigest()
 
-            # Approximate char offsets within the original document
-            rel_offset = section.find(piece)
-            char_start = start + rel_offset if rel_offset >= 0 else start
-            char_end = char_start + len(piece)
+            rel_offset = section.find(piece, search_cursor)
+            if rel_offset < 0:
+                rel_offset = section.find(piece)
+
+            if rel_offset >= 0:
+                char_start = start + rel_offset
+                search_cursor = rel_offset + len(piece)
+                char_end = min(end, char_start + len(piece))
+            elif piece_idx in overlapped_indices:
+                char_start = start + search_cursor
+                char_end = min(end, char_start + len(piece))
+            else:
+                char_start = start
+                char_end = min(end, char_start + len(piece))
 
             chunks.append(
                 SemanticChunk(

@@ -393,3 +393,22 @@ def test_semantic_chunks_overlap_preserves_valid_char_offsets() -> None:
     for chunk in chunks:
         assert chunk.char_start >= 0
         assert chunk.char_end == chunk.char_start + len(chunk.text)
+
+
+
+def test_semantic_chunking_preserves_abbreviations_and_versions() -> None:
+    from bintu_api.extraction.rag_chunking import split_semantic_chunks
+
+    doc = (
+        "## Releases\n\n"
+        "Version 3.14 ships e.g. faster parsing and i.e. cleaner offsets across modules. "
+        "Release v2.1 also kept backward compatibility for existing callers."
+    )
+    chunks = split_semantic_chunks(doc, max_tokens=22)
+
+    assert len(chunks) >= 2
+    joined = " ".join(c.text for c in chunks)
+    assert "3.14" in joined
+    assert "v2.1" in joined
+    assert not any(c.text.rstrip().endswith("e.g.") for c in chunks)
+    assert not any(c.text.rstrip().endswith("i.e.") for c in chunks)
