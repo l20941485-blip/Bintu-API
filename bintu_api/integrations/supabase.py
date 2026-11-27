@@ -16,7 +16,21 @@ else:
     AsyncClient: TypeAlias = Any
 
 
-DATABASE_TIMEOUT_SECONDS = 2.0
+import os
+
+
+def _default_database_timeout_seconds() -> float:
+    raw = os.getenv("SUPABASE_RPC_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return 15.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 15.0
+    return value if value > 0 else 15.0
+
+
+DATABASE_TIMEOUT_SECONDS = _default_database_timeout_seconds()
 
 
 async def create_supabase_client(settings: Settings) -> AsyncClient | None:
