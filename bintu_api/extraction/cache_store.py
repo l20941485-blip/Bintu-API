@@ -113,21 +113,9 @@ async def get_cached_markdown(
         extracted_at=(extracted_at if isinstance(extracted_at, str) and extracted_at else ""),
         content_hash=(content_hash if isinstance(content_hash, str) and content_hash else ""),
         page_title=page_title if isinstance(page_title, str) else None,
-        page_title_source=(
-            page_title_source
-            if isinstance(page_title_source, str) and page_title_source
-            else "none"
-        ),
-        content_fingerprint=(
-            content_fingerprint
-            if isinstance(content_fingerprint, str)
-            else None
-        ),
-        content_cleaning=(
-            content_cleaning
-            if isinstance(content_cleaning, dict)
-            else None
-        ),
+        page_title_source=(page_title_source if isinstance(page_title_source, str) and page_title_source else "none"),
+        content_fingerprint=(content_fingerprint if isinstance(content_fingerprint, str) else None),
+        content_cleaning=(content_cleaning if isinstance(content_cleaning, dict) else None),
     )
 
 
@@ -209,3 +197,52 @@ def _safe_int(value: Any, *, default: int = 0) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return default
     return max(0, int(value))
+
+
+REQUIRED_SCRAPE_CACHE_COLUMNS: tuple[str, ...] = (
+    "url",
+    "render_js",
+    "include_nav",
+    "include_header",
+    "include_footer",
+    "extractor_version",
+    "markdown",
+    "truncated",
+    "html_tokens",
+    "tokens_saved_estimate",
+    "limiting_factor",
+    "extracted_at",
+    "content_hash",
+    "page_title",
+    "page_title_source",
+    "content_fingerprint",
+    "content_cleaning",
+    "created_at",
+)
+
+
+async def verify_scrape_cache_schema(client: Any) -> dict[str, Any]:
+    """Verify required scrape_cache columns exist in Supabase / PostgREST."""
+    columns_csv = ",".join(REQUIRED_SCRAPE_CACHE_COLUMNS)
+    try:
+        await client.table("scrape_cache").select(columns_csv).limit(1).execute()
+        return {
+            "ok": True,
+            "checked_columns": len(REQUIRED_SCRAPE_CACHE_COLUMNS),
+            "missing_columns": [],
+            "error": None,
+        }
+    except Exception as exc:
+        message = str(exc)
+        missing = [col for col in REQUIRED_SCRAPE_CACHE_COLUMNS if col in message]
+        logger.warning(
+            "scrape_cache_schema_check_failed missing=%s error=%s",
+            missing,
+            message,
+        )
+        return {
+            "ok": False,
+            "checked_columns": len(REQUIRED_SCRAPE_CACHE_COLUMNS),
+            "missing_columns": missing,
+            "error": message,
+        }
