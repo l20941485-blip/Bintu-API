@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -79,6 +81,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "serve":
+        repo_root = str(Path(__file__).resolve().parents[2])
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+
+        current_pythonpath = os.environ.get("PYTHONPATH", "")
+        pythonpath_parts = [p for p in current_pythonpath.split(os.pathsep) if p]
+        if repo_root not in pythonpath_parts:
+            os.environ["PYTHONPATH"] = os.pathsep.join([repo_root, *pythonpath_parts])
+
         uvicorn.run(
             "main:app",
             host=args.host,
