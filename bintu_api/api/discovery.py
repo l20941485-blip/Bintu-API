@@ -1,7 +1,8 @@
 """Public discovery documentation; extraction remains authenticated."""
 
 from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
+from fastapi import Request
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 router = APIRouter()
 
@@ -74,3 +75,34 @@ def robots_txt():
 @router.get("/llms.txt", response_class=PlainTextResponse, include_in_schema=False)
 def llms_txt():
     return PlainTextResponse(LLMS_TEXT)
+
+
+
+
+def protected_resource_metadata_url(request: Request) -> str:
+    settings = getattr(request.app.state, "settings", None)
+    configured = (getattr(settings, "oauth_resource_url", "") or "").strip().rstrip("/")
+    if configured:
+        return f"{configured}/.well-known/oauth-protected-resource"
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/.well-known/oauth-protected-resource"
+
+
+@router.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+def oauth_protected_resource_metadata(request: Request) -> JSONResponse:
+    settings = getattr(request.app.state, "settings", None)
+    configured_resource = (getattr(settings, "oauth_resource_url", "") or "").strip().rstrip("/")
+    resource_uri = configured_resource or str(request.base_url).rstrip("/")
+    raw_servers = (getattr(settings, "oauth_authorization_servers", "") or "").strip()
+    servers = [item.strip() for item in raw_servers.split(",") if item.strip()]
+    if not servers:
+        supabase_url = (getattr(settings, "supabase_url", "") or "").strip().rstrip("/")
+        if supabase_url:
+            servers = [f"{supabase_url}/auth/v1"]
+    payload = {
+        "resource": resource_uri,
+        "authorization_servers": servers,
+        "bearer_methods_supported": ["header"],
+        "resource_documentation": f"{resource_uri}/llms.txt",
+    }
+    return JSONResponse(content=payload)

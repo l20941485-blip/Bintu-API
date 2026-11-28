@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bintu-api"
+version = "1.4.0"
+description = "Standalone FastAPI extraction, semantic chunking, RAG, and MCP service."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+]
+
+[project.scripts]
+bintu = "bintu_api.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["bintu_api*"]

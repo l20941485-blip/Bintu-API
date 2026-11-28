@@ -37,6 +37,15 @@ api_key_scheme = APIKeyHeader(
 bearer_scheme = HTTPBearer(scheme_name="BearerAuth", description="Supabase session token.", auto_error=False)
 
 
+
+def _bearer_challenge_header(request: Request, fallback_scheme: str = "Bearer") -> str:
+    configured = (getattr(getattr(request.app.state, "settings", None), "oauth_resource_url", "") or "").strip().rstrip("/")
+    base = configured or str(request.base_url).rstrip("/")
+    metadata_url = f"{base}/.well-known/oauth-protected-resource"
+    if fallback_scheme == "Bearer":
+        return f'Bearer resource_metadata="{metadata_url}"'
+    return f'Bearer realm="bintu", resource_metadata="{metadata_url}", {fallback_scheme}'
+
 def _secret_matches(provided: str, expected: str) -> bool:
     return bool(expected) and hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
@@ -162,7 +171,7 @@ def verify_mcp_execution_access(request: Request, settings: Settings) -> None:
         raise HTTPException(
             status_code=401,
             detail=mcp_execution_forbidden_detail(settings),
-            headers={"WWW-Authenticate": 'Bearer realm="bintu", ApiKey'},
+            headers={"WWW-Authenticate": _bearer_challenge_header(request, "ApiKey")},
         ) from error
 
 
@@ -183,7 +192,7 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
                 "code": "invalid_session",
                 "message": "A valid sign-in session is required.",
             },
-            headers={"WWW-Authenticate": "Bearer"},
+            headers={"WWW-Authenticate": _bearer_challenge_header(request, "Bearer")},
         )
 
     if not settings.supabase_url or not settings.supabase_anon_key:
@@ -263,7 +272,7 @@ def verify_supabase_user(request: Request, settings: Settings) -> str:
                     "code": "invalid_session",
                     "message": "Your sign-in session is invalid or expired.",
                 },
-                headers={"WWW-Authenticate": "Bearer"},
+                headers={"WWW-Authenticate": _bearer_challenge_header(request, "Bearer")},
             ) from error
         logger.warning("supabase_auth_unavailable status=%d", error.code)
         raise HTTPException(

@@ -198,6 +198,8 @@ class Settings:
     # clickable subscribe link in-chat. Override with BINTU_UPGRADE_URL.
     # No tier caps are enforced in code; dashboards own quota.
     upgrade_url: str = "https://mcpize.com"
+    oauth_resource_url: str = ""
+    oauth_authorization_servers: str = ""
     # Keep JavaScript rendering disabled until browser connection targeting,
     # redirects, and subresource requests are hardened and tested.
     # Paid infrastructure does not resolve its DNS-rebinding risk.
@@ -283,6 +285,8 @@ class Settings:
             ),
             redis_url=os.getenv("REDIS_URL", "").strip(),
             upgrade_url=os.getenv("BINTU_UPGRADE_URL", "https://mcpize.com").strip() or "https://mcpize.com",
+            oauth_resource_url=os.getenv("OAUTH_RESOURCE_URL", "").strip().rstrip("/"),
+            oauth_authorization_servers=os.getenv("OAUTH_AUTHORIZATION_SERVERS", "").strip(),
             render_js_enabled=_bool_env("RENDER_JS_ENABLED", default=False),
             require_auth=_bool_env("REQUIRE_AUTH", default=False),
             https_to_http_redirect_allowed_domains=_https_to_http_redirect_allowed_domains_env(),
