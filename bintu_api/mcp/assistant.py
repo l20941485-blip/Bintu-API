@@ -242,7 +242,8 @@ async def _resolve_supabase_user(request: Request, settings: Settings) -> str:
 
 async def _resolve_knowledge_owner(request: Request, settings: Settings) -> str:
     """Resolve owner identity for non-mobile API-key callers or mobile Bearer sessions."""
-    if request.headers.get("X-API-Key"):
+    headers = getattr(request, "headers", None)
+    if headers is not None and headers.get("X-API-Key"):
         principal = authenticate_non_mobile_rag(
             request,
             settings,
