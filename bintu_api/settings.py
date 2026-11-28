@@ -113,10 +113,7 @@ def _https_to_http_redirect_allowed_domains_env() -> frozenset[str]:
                 domain,
             )
             continue
-        if not all(
-            character.isalnum() or character in "-._"
-            for character in domain
-        ):
+        if not all(character.isalnum() or character in "-._" for character in domain):
             logger.warning(
                 "invalid_https_downgrade_allowlist_domain domain=%r",
                 domain,

@@ -52,13 +52,9 @@ router = APIRouter(tags=["RAG"])
     response_model=RagAnswerResponse,
     summary="Answer a question from retrieved knowledge",
     description=(
-        "Retrieves authorized knowledge chunks and returns a grounded, "
-        "extractive answer with chunk-level citations."
+        "Retrieves authorized knowledge chunks and returns a grounded, extractive answer with chunk-level citations."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 422, 429, 503)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 422, 429, 503)},
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def answer_question(
@@ -126,10 +122,7 @@ async def answer_question(
         "project. Returns public knowledge and knowledge owned by the "
         "authenticated user, with chunk-level citations."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 422, 429, 503)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 422, 429, 503)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def mobile_answer_question(
@@ -200,10 +193,7 @@ async def mobile_answer_question(
         "Fetches a public page, extracts readable content, creates semantic "
         "chunks, and persists an immutable revision for the authenticated user."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 422, 429, 502, 503, 504)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 422, 429, 502, 503, 504)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def mobile_ingest_knowledge(
@@ -266,10 +256,7 @@ async def mobile_ingest_knowledge(
         "Retrieves authorized Bintu documentation chunks and returns a "
         "grounded, extractive answer with chunk-level citations."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 422, 429, 503)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 422, 429, 503)},
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def answer_documentation_question(
@@ -335,10 +322,7 @@ async def answer_documentation_question(
         "creates semantic chunks, and persists an immutable revision in the "
         "docs knowledge collection."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (400, 401, 403, 422, 429, 502, 503, 504)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (400, 401, 403, 422, 429, 502, 503, 504)},
     dependencies=[Security(api_key_scheme, scopes=[])],
 )
 async def ingest_documentation(
@@ -393,14 +377,8 @@ async def ingest_documentation(
     "/api/v1/mobile/rag/documents",
     response_model=MobileRagDocumentsResponse,
     summary="List the signed-in user's knowledge documents",
-    description=(
-        "Returns a paginated list of knowledge documents owned by the "
-        "authenticated Supabase user."
-    ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (401, 403, 429, 503)
-    },
+    description=("Returns a paginated list of knowledge documents owned by the authenticated Supabase user."),
+    responses={status_code: {"model": ErrorResponse} for status_code in (401, 403, 429, 503)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def list_mobile_rag_documents(
@@ -483,13 +461,9 @@ async def list_mobile_rag_documents(
     response_model=MobileRagDocumentDeleteResponse,
     summary="Delete a signed-in user's knowledge document",
     description=(
-        "Deletes a knowledge document owned by the authenticated Supabase "
-        "user, including its revisions and chunks."
+        "Deletes a knowledge document owned by the authenticated Supabase user, including its revisions and chunks."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (401, 403, 404, 429, 503)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (401, 403, 404, 429, 503)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def delete_mobile_rag_document(
@@ -547,13 +521,9 @@ async def delete_mobile_rag_document(
     response_model=MobileRagDocumentDetailResponse,
     summary="Get a signed-in user's knowledge document",
     description=(
-        "Returns metadata and bounded chunk previews for a knowledge "
-        "document owned by the authenticated Supabase user."
+        "Returns metadata and bounded chunk previews for a knowledge document owned by the authenticated Supabase user."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (401, 403, 404, 429, 503)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (401, 403, 404, 429, 503)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def get_mobile_rag_document(
@@ -641,10 +611,7 @@ async def get_mobile_rag_document(
         "Re-fetches the document's canonical URL, extracts current content, "
         "creates a new immutable revision, and replaces the active chunk set."
     ),
-    responses={
-        status_code: {"model": ErrorResponse}
-        for status_code in (401, 403, 404, 422, 429, 502, 503, 504)
-    },
+    responses={status_code: {"model": ErrorResponse} for status_code in (401, 403, 404, 422, 429, 502, 503, 504)},
     dependencies=[Security(bearer_scheme, scopes=[])],
 )
 async def refresh_mobile_rag_document(

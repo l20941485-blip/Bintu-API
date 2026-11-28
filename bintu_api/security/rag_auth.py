@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import HTTPException, Request
@@ -63,7 +63,7 @@ def _signing_key(settings: Settings) -> bytes:
         or getattr(settings, "rapidapi_proxy_secret", "")
     )
     if configured:
-        return hashlib.sha256(f"bintu-rag-jwt:{configured}".encode("utf-8")).digest()
+        return hashlib.sha256(f"bintu-rag-jwt:{configured}".encode()).digest()
     return hashlib.sha256(b"bintu-rag-ephemeral-local-key").digest()
 
 
@@ -75,10 +75,10 @@ def mint_server_rag_jwt(
     ttl_seconds: int = _RAG_JWT_TTL_SECONDS,
 ) -> str:
     """Mint a short-lived, server-signed HS256 JWT bound to owner_identity and scope."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     iat = int(now.timestamp())
     exp = int((now + timedelta(seconds=max(ttl_seconds, 30))).timestamp())
-    jti_seed = f"{owner_identity or 'docs'}:{scope}:{iat}:{exp}".encode("utf-8")
+    jti_seed = f"{owner_identity or 'docs'}:{scope}:{iat}:{exp}".encode()
     jti = hashlib.sha256(jti_seed).hexdigest()[:24]
 
     header = {"alg": "HS256", "typ": "JWT"}
@@ -140,7 +140,7 @@ def verify_server_rag_jwt(token: str, *, settings: Settings, required_scope: Rag
             detail={"code": "invalid_rag_token", "message": "Invalid internal RAG token claims."},
         )
 
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    now_ts = int(datetime.now(UTC).timestamp())
     exp = payload.get("exp")
     iat = payload.get("iat")
     if not isinstance(exp, (int, float)) or not isinstance(iat, (int, float)):
