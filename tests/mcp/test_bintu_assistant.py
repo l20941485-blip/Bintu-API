@@ -846,3 +846,107 @@ def test_whitespace_arguments_and_refresh_timeout(monkeypatch) -> None:
     )
     assert timeout_res["isError"] is True
     assert "upstream_timeout:" in timeout_res["content"][0]["text"]
+
+
+def _make_settings(**overrides: object):
+    from types import SimpleNamespace
+
+    defaults = {
+        "require_auth": True,
+        "api_key": "master-secret-key",
+        "mcp_api_key": "mcp-scoped-key",
+        "rapidapi_proxy_secret": "rapidapi-proxy-secret",
+        "rag_api_key_owners_json": json.dumps({"mcp-scoped-key": "owner-mcp-1"}),
+        "rag_default_owner": "owner-master-default",
+        "rag_jwt_secret": "test-rag-jwt-secret",
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _make_request(headers: dict[str, str] | None = None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(headers=headers or {})
+
+
+def test_resolve_knowledge_owner_accepts_mapped_mcp_api_key() -> None:
+    import asyncio
+    from bintu_api.mcp.assistant import _resolve_knowledge_owner
+
+    settings = _make_settings()
+    request = _make_request({"X-API-Key": "mcp-scoped-key"})
+
+    owner = asyncio.run(_resolve_knowledge_owner(request, settings))
+    assert owner == "owner-mcp-1"
+
+
+def test_resolve_knowledge_owner_rejects_unmapped_mcp_api_key() -> None:
+    import asyncio
+    from fastapi import HTTPException
+    from bintu_api.mcp.assistant import _resolve_knowledge_owner
+
+    settings = _make_settings(rag_api_key_owners_json="{}")
+    request = _make_request({"X-API-Key": "mcp-scoped-key"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_resolve_knowledge_owner(request, settings))
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "knowledge_owner_unconfigured"
+
+
+def test_resolve_knowledge_owner_accepts_master_key_with_default_owner() -> None:
+    import asyncio
+    from bintu_api.mcp.assistant import _resolve_knowledge_owner
+
+    settings = _make_settings(rag_api_key_owners_json="{}")
+    request = _make_request({"X-API-Key": "master-secret-key"})
+
+    owner = asyncio.run(_resolve_knowledge_owner(request, settings))
+    assert owner == "owner-master-default"
+
+
+def test_resolve_knowledge_owner_routes_rapidapi_secret_without_api_key() -> None:
+    import asyncio
+    from bintu_api.mcp.assistant import _resolve_knowledge_owner
+
+    settings = _make_settings(
+        rag_api_key_owners_json=json.dumps({"rapidapi-proxy-secret": "owner-rapidapi-1"})
+    )
+    request = _make_request({"X-RapidAPI-Proxy-Secret": "rapidapi-proxy-secret"})
+
+    owner = asyncio.run(_resolve_knowledge_owner(request, settings))
+    assert owner == "owner-rapidapi-1"
+
+
+def test_resolve_knowledge_owner_rejects_invalid_api_key() -> None:
+    import asyncio
+    from fastapi import HTTPException
+    from bintu_api.mcp.assistant import _resolve_knowledge_owner
+
+    settings = _make_settings()
+    request = _make_request({"X-API-Key": "wrong-key"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_resolve_knowledge_owner(request, settings))
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail["code"] == "invalid_api_key"
+
+
+def test_resolve_knowledge_owner_falls_back_to_supabase_without_api_or_rapidapi_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+    from bintu_api.mcp import assistant as assistant_mod
+
+    async def fake_verify_supabase_user(request, settings):
+        return "supabase-user-42"
+
+    monkeypatch.setattr(assistant_mod, "verify_supabase_user", fake_verify_supabase_user)
+    settings = _make_settings()
+    request = _make_request({})
+
+    owner = asyncio.run(assistant_mod._resolve_knowledge_owner(request, settings))
+    assert owner == "supabase-user-42"

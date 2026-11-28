@@ -8,6 +8,7 @@ import hmac
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
 from typing import Any, Literal
 
 from fastapi import HTTPException, Request
@@ -179,17 +180,29 @@ def verify_server_rag_jwt(token: str, *, settings: Settings, required_scope: Rag
     return RagPrincipal(owner_identity=owner_identity, scope=scope, token_jti=jti)
 
 
-def authenticate_non_mobile_rag(request: Request, settings: Settings, *, required_scope: RagScope) -> RagPrincipal:
+def authenticate_non_mobile_rag(
+    request: Request,
+    settings: Settings,
+    *,
+    required_scope: RagScope,
+    access_verifier: Callable[[Request, Settings], None] = verify_api_access,
+) -> RagPrincipal:
     """Authenticate caller once via X-API-Key/gateway and authorize via server-controlled JWT."""
-    verify_api_access(request, settings)
+    access_verifier(request, settings)
 
     provided_key = request.headers.get("X-API-Key", "").strip()
+    provided_rapidapi_secret = request.headers.get("X-RapidAPI-Proxy-Secret", "").strip()
     key_owners = _parse_key_owner_map(getattr(settings, "rag_api_key_owners_json", ""))
 
     resolved_owner: str | None = None
-    for configured_key, owner_id in key_owners.items():
-        if _secret_matches(provided_key, configured_key):
-            resolved_owner = owner_id
+    for credential in (provided_key, provided_rapidapi_secret):
+        if not credential:
+            continue
+        for configured_key, owner_id in key_owners.items():
+            if _secret_matches(credential, configured_key):
+                resolved_owner = owner_id
+                break
+        if resolved_owner is not None:
             break
 
     if resolved_owner is None and provided_key and _secret_matches(provided_key, settings.api_key):

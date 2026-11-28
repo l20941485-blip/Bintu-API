@@ -26,7 +26,7 @@ from bintu_api.rag.supabase import (
     SupabaseDocumentRepository,
 )
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
-from bintu_api.security.auth import verify_supabase_user
+from bintu_api.security.auth import verify_mcp_api_access, verify_supabase_user
 from bintu_api.security.rag_auth import authenticate_non_mobile_rag
 from bintu_api.settings import Settings
 
@@ -241,15 +241,26 @@ async def _resolve_supabase_user(request: Request, settings: Settings) -> str:
 
 
 async def _resolve_knowledge_owner(request: Request, settings: Settings) -> str:
-    """Resolve owner identity for non-mobile API-key callers or mobile Bearer sessions."""
+    """Resolve owner identity for non-mobile API-key/gateway callers or Supabase sessions."""
     headers = getattr(request, "headers", None)
-    if headers is not None and headers.get("X-API-Key"):
+    has_api_key = bool(headers is not None and headers.get("X-API-Key"))
+    has_rapidapi_secret = bool(headers is not None and headers.get("X-RapidAPI-Proxy-Secret"))
+    if has_api_key or has_rapidapi_secret:
         principal = authenticate_non_mobile_rag(
             request,
             settings,
             required_scope="rag:tenant",
+            access_verifier=verify_mcp_api_access,
         )
-        return principal.owner_identity or ""
+        if not principal.owner_identity:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "knowledge_owner_unconfigured",
+                    "message": "This API key is not mapped to a knowledge owner.",
+                },
+            )
+        return principal.owner_identity
     return await _resolve_supabase_user(request, settings)
 
 
