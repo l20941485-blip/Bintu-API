@@ -1,6 +1,6 @@
 import json
 
-from bintu_api import cli
+from bintu_api.api import cli
 from bintu_api.settings import Settings
 
 

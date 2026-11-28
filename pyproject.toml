@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-bintu = "bintu_api.cli:main"
+bintu = "bintu_api.api.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["bintu_api*"]
