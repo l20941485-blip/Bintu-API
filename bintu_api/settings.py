@@ -183,6 +183,9 @@ class Settings:
     # custom connectors) get a shareable, independently rotatable credential
     # that can never unlock the REST routes or /metrics.
     mcp_api_key: str = ""
+    rag_api_key_owners_json: str = ""
+    rag_default_owner: str = ""
+    rag_jwt_secret: str = ""
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
@@ -277,6 +280,9 @@ class Settings:
             api_key=os.getenv("API_KEY", "").strip(),
             rapidapi_proxy_secret=os.getenv("RAPIDAPI_PROXY_SECRET", "").strip(),
             mcp_api_key=os.getenv("MCP_API_KEY", "").strip(),
+            rag_api_key_owners_json=os.getenv("RAG_API_KEY_OWNERS", "").strip(),
+            rag_default_owner=os.getenv("RAG_DEFAULT_OWNER", "").strip(),
+            rag_jwt_secret=os.getenv("RAG_JWT_SECRET", "").strip(),
             supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
             supabase_anon_key=os.getenv("SUPABASE_ANON_KEY", "").strip(),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip(),

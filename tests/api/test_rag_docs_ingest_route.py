@@ -56,6 +56,12 @@ class RagDocsIngestRouteTests(unittest.TestCase):
         self.app = FastAPI()
         self.app.include_router(rag_routes.router)
         self.app.state.settings = Mock()
+        self.app.state.settings.api_key = "docs-ingest-test-key"
+        self.app.state.settings.rapidapi_proxy_secret = ""
+        self.app.state.settings.require_auth = True
+        self.app.state.settings.rag_jwt_secret = "docs-ingest-test-jwt-secret"
+        self.app.state.settings.rag_api_key_owners_json = ""
+        self.app.state.settings.rag_default_owner = ""
         self.app.state.rate_limiter = Mock()
         self.app.state.supabase_client = Mock()
         self.client = TestClient(self.app)
@@ -108,6 +114,7 @@ class RagDocsIngestRouteTests(unittest.TestCase):
         ):
             response = self.client.post(
                 "/api/v1/rag/docs/ingest",
+                headers={"X-API-Key": "docs-ingest-test-key"},
                 json={
                     "url": "https://docs.example.com/authentication",
                     "max_tokens": 1000,

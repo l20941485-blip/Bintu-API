@@ -42,6 +42,7 @@ from bintu_api.rag.supabase import (
 )
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import api_key_scheme, bearer_scheme, verify_supabase_user
+from bintu_api.security.rag_auth import authenticate_non_mobile_rag
 
 router = APIRouter(tags=["RAG"])
 
@@ -65,7 +66,7 @@ async def answer_question(
     payload: RagAnswerRequest,
 ) -> RagAnswerResponse:
     settings = request.app.state.settings
-    routes_common.verify_api_access(request, settings)
+    principal = authenticate_non_mobile_rag(request, settings, required_scope="rag:tenant")
 
     supabase_client = getattr(request.app.state, "supabase_client", None)
     if supabase_client is None:
@@ -95,6 +96,7 @@ async def answer_question(
         query=payload.query,
         limit=payload.limit,
         access_labels=tuple(payload.access_labels),
+        owner_identity=principal.owner_identity,
         document_id=payload.document_id,
     )
 
@@ -275,7 +277,7 @@ async def answer_documentation_question(
     payload: RagDocsAnswerRequest,
 ) -> RagAnswerResponse:
     settings = request.app.state.settings
-    routes_common.verify_api_access(request, settings)
+    authenticate_non_mobile_rag(request, settings, required_scope="rag:docs")
 
     supabase_client = getattr(request.app.state, "supabase_client", None)
     if supabase_client is None:
@@ -344,7 +346,7 @@ async def ingest_documentation(
     payload: RagDocsIngestRequest,
 ) -> MobileRagIngestResponse:
     settings = request.app.state.settings
-    routes_common.verify_api_access(request, settings)
+    authenticate_non_mobile_rag(request, settings, required_scope="rag:docs")
 
     supabase_client = getattr(request.app.state, "supabase_client", None)
     if supabase_client is None:
