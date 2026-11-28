@@ -27,6 +27,7 @@ from bintu_api.rag.supabase import (
 )
 from bintu_api.rag.supabase_retrieval import SupabaseRetrievalRepository
 from bintu_api.security.auth import verify_supabase_user
+from bintu_api.security.rag_auth import authenticate_non_mobile_rag
 from bintu_api.settings import Settings
 
 ASSISTANT_TOOL_NAME = "bintu_assistant"
@@ -239,6 +240,18 @@ async def _resolve_supabase_user(request: Request, settings: Settings) -> str:
     return str(result)
 
 
+async def _resolve_knowledge_owner(request: Request, settings: Settings) -> str:
+    """Resolve owner identity for non-mobile API-key callers or mobile Bearer sessions."""
+    if request.headers.get("X-API-Key"):
+        principal = authenticate_non_mobile_rag(
+            request,
+            settings,
+            required_scope="rag:tenant",
+        )
+        return principal.owner_identity or ""
+    return await _resolve_supabase_user(request, settings)
+
+
 def _timeout_tool_error(operation_label: str) -> dict[str, Any]:
     return _tool_error(
         "upstream_timeout",
@@ -294,7 +307,7 @@ async def call_assistant_tool(
             )
 
         try:
-            user_id = await _resolve_supabase_user(request, settings)
+            user_id = await _resolve_knowledge_owner(request, settings)
         except TimeoutError:
             return _timeout_tool_error("authentication")
         except HTTPException as error:
@@ -460,7 +473,7 @@ async def call_assistant_tool(
             )
 
         try:
-            user_id = await _resolve_supabase_user(request, settings)
+            user_id = await _resolve_knowledge_owner(request, settings)
         except TimeoutError:
             return _timeout_tool_error("authentication")
         except HTTPException as error:
@@ -526,7 +539,7 @@ async def call_assistant_tool(
         )
 
     try:
-        user_id = await _resolve_supabase_user(request, settings)
+        user_id = await _resolve_knowledge_owner(request, settings)
     except TimeoutError:
         return _timeout_tool_error("authentication")
     except HTTPException as error:
